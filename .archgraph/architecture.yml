@@ -7394,10 +7394,10 @@ nodes:
             the partial unique identity index predicated on is_deleted = false.
           inferenceReason: The model plus its migration are the authoritative definition
             of the stock report's central aggregate row.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:08:12.901Z
   - id: table-stock-task-assignment
     type: table
     name: stock_task_assignments
@@ -7419,16 +7419,30 @@ nodes:
             two active-uniqueness partial indexes.
           inferenceReason: The active/terminal partition and the two uniqueness slots are
             the core invariant every later stock-report phase writes against.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:08:12.901Z
   - id: table-stock-report-history-record
     type: table
     name: stock_report_history_records
-    description: "Append-only history for a stock_report_items row:
-      quantity-requested changes and goal records carrying quantity_awaiting,
-      from which the goal total is recomputed."
+    description: "History rows for a stock_report_items row, in three types:
+      quantity_requested_change (written when demand increases), priority_change
+      and priority_order_change. Not append-only, and the exception is the
+      mechanism: the row's current goal record - the non-deleted
+      quantity_requested_change with the greatest (created_at, client_id) -
+      carries a mutable quantity_awaiting that every assignment entering
+      awaiting or resolved_early credits and every un-credit subtracts, so the
+      target a board row is measured against survives later demand changes.
+      Because that counter is mutated in place it can drift, which is why the
+      truth is kept elsewhere: the goal total is recomputed by summing the
+      quantity of the assignments whose credited_history_record_id points at the
+      record, never by summing history rows, and a CHECK holds quantity_awaiting
+      >= 0 so an over-subtraction matches no row and triggers the self-heal
+      instead of going negative. Rows are soft-deleted (is_deleted / deleted_at
+      / deleted_by_id) by the row-deletion cascade rather than removed, because
+      an assignment can still reference one through credited_history_record_id
+      under ON DELETE RESTRICT."
     tags:
       - stock_report
       - batch_A
@@ -7444,14 +7458,22 @@ nodes:
     origin: ai_inferred
     confidence: 0.9
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:12:20.713Z
   - id: table-stock-report-repair-record
     type: table
     name: stock_report_repair_records
-    description: "Audit trail written by the stock-report repair: one row per
-      (target, field) net change, with target_kind (stock_report_item, group,
-      task, history_record), the stored and recomputed values as contract text,
-      the trigger, the actor and the operation's now."
+    description: "Audit trail for every stock-report correction, written both by the
+      manual repair and by the inline self-heals that fix a row or a goal record
+      mid-request: one row per (target, field) NET change - not per intermediate
+      step - with target_kind (stock_report_item, history_record, task, group),
+      target_client_id, field, the stored and recomputed values rendered as
+      text, the trigger (manual for the repair command, inline:<caller> for a
+      self-heal), created_by_id (NULL on the inline paths, which have no actor)
+      and the operation's own now as created_at. The two values are text rather
+      than typed columns because one table has to record an integer counter, a
+      NULL priority_order and a boolean task flag. There is no is_deleted and no
+      updated_at: a repair record is never edited or removed, so the trail of
+      what the system silently corrected cannot be rewritten after the fact."
     tags:
       - stock_report
       - batch_A
@@ -7467,15 +7489,27 @@ nodes:
     origin: ai_inferred
     confidence: 0.9
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:12:20.713Z
   - id: domain-stock-criteria-normalization
     type: domain
     name: stock criteria normalization and signature
-    description: Normalizes a Scanner criteria payload to the MC-3 value table
-      (strings stripped and lower-cased, understood lists sorted, deduplicated
-      and stripped of blank elements, keys preserved verbatim) and derives
-      properties_signature from it. CRITERIA_NORMALIZATION_VERSION is 1; the
-      version exists to force a re-signing migration when the recipe changes.
+    description: Normalizes a Scanner criteria payload to the MC-3 value table and
+      derives properties_signature from it. A non-blank string becomes a
+      one-element list holding its stripped, lower-cased value - that wrapping
+      is what makes a bare string and a one-element list one identity instead of
+      two. A list of strings with at least one non-blank element becomes its
+      stripped, lower-cased elements, deduplicated and sorted, so element order,
+      casing, padding and repeats cannot fork a row. Everything else is passed
+      through verbatim - a blank string, an all-blank or non-string list, a
+      number, a bool, null, a nested object - because the recipe only claims to
+      understand the shapes Scanner actually sends, and silently coercing the
+      rest would invent identities. Keys are never touched, so two keys
+      differing only in case or whitespace remain two criteria. Key order is
+      neutralized downstream instead, by compute_properties_signature's
+      sort_keys=True. CRITERIA_NORMALIZATION_VERSION is 1; the version exists to
+      force a re-signing migration when the recipe changes, because this
+      signature is the identity half of every stock_report_items row and a
+      changed recipe re-files all of them.
     tags:
       - stock_report
       - batch_A
@@ -7491,7 +7525,7 @@ nodes:
     origin: ai_inferred
     confidence: 0.95
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:11:38.547Z
   - id: domain-stock-criteria-matcher
     type: domain
     name: stock criteria matcher (Scanner mirror)
@@ -7519,18 +7553,30 @@ nodes:
             literal table.
           inferenceReason: The bag's values must equal what Scanner would produce, so the
             tables are part of the same mirrored contract.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - id: query-stock-report-consistency
     type: command
     name: compute_stock_report_divergences
-    description: Read-only workspace-wide consistency check. Recomputes the four
-      counters, the goal total, the task stock flag, the criteria signature,
-      priority-order density and priority-order nullness, and returns the
-      divergences sorted by (kind, client_id, field) with exact stored and
-      expected values. Every read is workspace-filtered; it writes nothing.
+    description: Read-only workspace-wide consistency check. It recomputes the three
+      assignment-derived counters (quantity_in_queue, quantity_in_progress,
+      quantity_awaiting) from the row's non-deleted assignments in the three
+      active states - quantity_requested is declared demand, not a derived
+      value, so it is never recomputed or checked - plus the goal total (summed
+      from the assignments crediting each quantity_requested_change record), the
+      task stock flag, the criteria signature, priority-order density and
+      priority-order nullness. It returns eight divergence kinds sorted by
+      (kind, client_id, field) with the exact stored and expected values, which
+      is what lets the repair close precisely what the check reports and assert
+      afterwards that nothing non-signature remains. Every read inside
+      compute_stock_report_divergences is workspace-filtered, including
+      expected_task_flag's assignment lookup - without that predicate a foreign
+      workspace's assignment could set a local task's flag. It writes nothing,
+      and its per-entity helpers (recompute_row_counters, recompute_goal_total)
+      are the same recomputations the inline self-heals call, which is what
+      keeps the manual and inline paths agreeing.
     tags:
       - stock_report
       - batch_A
@@ -7552,7 +7598,7 @@ nodes:
     origin: ai_inferred
     confidence: 0.95
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:12:20.713Z
   - id: command-repair-stock-report
     type: command
     name: repair_stock_report
@@ -7575,10 +7621,10 @@ nodes:
             re-checks before returning.
           inferenceReason: The lock order and the step order are the contract this command
             exists to hold, and later phases reuse both.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:08:12.901Z
   - id: infrastructure-stock-report-locks
     type: infrastructure
     name: stock report lock helpers
@@ -7599,16 +7645,24 @@ nodes:
           inferenceReason: Ascending client_id order across every class is what prevents
             deadlocks between the repair and the inline self-heal paths added in
             later phases.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - id: endpoint-stock-report-consistency
     type: endpoint
     name: stock report consistency and repair endpoints
-    description: "Two manager-only API v1 routes: a GET returning the workspace's
-      consistency envelope and a POST running the manual repair. Both reject
-      WORKER and SELLER with 403 without reaching the service."
+    description: "Two API v1 routes under /api/v1/stock-report reserved to admin and
+      manager: GET /consistency returns the consistency envelope for the
+      caller's workspace (workspace_id, checked_at, divergences) and POST
+      /repair runs the manual repair and returns its repaired / not_repaired
+      lists. Both declare their role list as require_roles([ADMIN, MANAGER]) on
+      the dependency, so WORKER and SELLER are refused with 403 before the
+      handler body runs and the service is never reached - the authorization
+      boundary belongs to the router here, not to the command. Neither route
+      takes a body or a path parameter: the workspace is the caller's own from
+      the JWT claims, which is what makes a cross-workspace check or repair
+      unreachable from this surface."
     tags:
       - stock_report
       - batch_A
@@ -7623,21 +7677,29 @@ nodes:
     origin: ai_inferred
     confidence: 0.85
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:12:20.713Z
   - id: command-move-assignment
     type: command
     name: move_assignment
     description: "The single operation that moves a stock task assignment between
-      states — including creation, the two Scanner-only exits, and soft delete —
+      states - including creation, the two Scanner-only exits, and soft delete -
       and moves the row's unit counters with it. Asserts the move is legal
-      against a total six-state table read from the ACTIVE/TERMINAL frozensets,
-      writes its own columns and flushes, then issues one guarded
-      column-referencing UPDATE whose WHERE carries nothing but the
-      non-negativity guard. On a zero-row result it self-heals: fresh read of
-      the stored counters, recompute, one absolute UPDATE, one repair record per
-      diverging column, one warning carrying the delta. Returns events built
-      only from RETURNING, never from the ORM instance. Opens no transaction,
-      commits nothing, dispatches nothing — the caller owns all three."
+      against a total six-state table read from the ACTIVE/TERMINAL frozensets
+      plus the two named Scanner-only cells, never a hand-typed state list.
+      Writes its own columns and flushes, then issues one guarded
+      column-referencing UPDATE whose WHERE is the row's client_id and the three
+      non-negativity guards and nothing else - so a zero-row result means
+      exactly that a counter would have gone negative, never wrong row or row
+      gone. On that result it self-heals: a fresh read of the stored counters, a
+      recompute from the assignments, one absolute UPDATE, one repair record per
+      column whose stored+delta disagrees with the recomputed value, and one
+      warning carrying the delta. The row's :updated payload is built only from
+      RETURNING, never from the ORM row instance, which the Core UPDATE has just
+      made stale; the assignment event, by contrast, is built from the
+      assignment instance, whose own columns this function wrote and flushed
+      itself. Opens no transaction, commits nothing, dispatches nothing - the
+      caller owns all three, and the caller also owns the row and assignment
+      locks and the post-lock re-read."
     tags:
       - stock_report
       - batch_B1
@@ -7654,17 +7716,23 @@ nodes:
     origin: ai_inferred
     confidence: 0.95
     createdAt: 2026-09-21T00:52:45.640Z
-    updatedAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-22T09:11:38.547Z
   - id: command-remove-assignment
     type: command
     name: remove_assignment
-    description: Soft-deletes a stock task assignment by delegating to
+    description: "Soft-deletes a stock task assignment by delegating to
       move_assignment with the DELETE sentinel, then recomputes the owning
-      task's is_stock_assignment flag. Its write to tasks happens after the row
-      and assignment locks, which inverts the global lock order — it is safe
-      only under the contract that the caller already holds the task lock. That
-      premise is documented but, as of batch B1, provable only in phase 8 where
-      the first real caller is written.
+      task's is_stock_assignment flag from the assignments that remain. The flag
+      recompute is the whole reason this is an operation of its own: the
+      counters belong to the row, but the flag belongs to the task aggregate,
+      and removal is the only move that can turn it off. Its write to tasks
+      lands after the row and assignment locks, which inverts MC-1's global
+      order (items, tasks, rows, assignments), so it is safe only under the
+      contract that the caller already holds the task lock. That contract is now
+      discharged by every caller rather than merely asserted: delete_task,
+      remove_item_from_task, delete_item, delete_stock_task_assignments and the
+      row-deletion cascade each take the task lock before reaching this
+      function."
     tags:
       - stock_report
       - batch_B1
@@ -7680,19 +7748,26 @@ nodes:
     origin: ai_inferred
     confidence: 0.9
     createdAt: 2026-09-21T00:52:45.640Z
-    updatedAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-22T09:11:38.547Z
   - id: command-apply-goal-effect
     type: command
     name: apply_goal_effect
     description: "Maintains a stock report row's goal record running total as
-      assignments move. Credits the current goal record when an assignment
-      enters awaiting or resolves early, and un-credits the record the
-      assignment remembers when it leaves that state, clearing the memory before
-      issuing its own statement. Takes no lock on the row itself — the
-      protection is the moving assignment's row lock, held by every writer of
-      that row's goal totals. Self-heals only downward: a total that would go
-      below zero is repaired inline, while upward drift is left for the manual
-      repair so a human sees it."
+      assignments move. Credits the current goal record - the newest non-deleted
+      quantity_requested_change record - when an assignment enters awaiting, or
+      resolves early out of in_queue or in_progress, and records on the
+      assignment which record was credited. When an assignment leaves awaiting
+      it un-credits that remembered record, with one exception that carries the
+      whole meaning of the figure: the move to resolved keeps the credit,
+      because resolved work is work the goal asked for and must stay counted.
+      The credit memory is cleared and flushed before the subtraction statement,
+      so any recomputation later in the same transaction already excludes the
+      assignment being un-credited. Takes no lock on the row itself - the
+      protection is the moving assignment's row lock, which every writer of that
+      row's goal totals holds. Self-heals only downward: a total that would go
+      below zero is repaired inline against the recomputed sum and leaves a
+      repair record, while upward drift is left for the manual repair so a human
+      sees it."
     tags:
       - stock_report
       - batch_B1
@@ -7709,16 +7784,27 @@ nodes:
     origin: ai_inferred
     confidence: 0.9
     createdAt: 2026-09-21T00:52:45.640Z
-    updatedAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-22T09:11:38.547Z
   - id: domain-stock-report-events
     type: domain
     name: stock report event builders
-    description: "Builds the two workspace events the stock report emits: the
-      assignment event in its created/state-changed/deleted kinds, and the row
-      updated event whose payload is taken from the database's own RETURNING
-      values. Serializes the row's priority as its string value rather than the
-      enum member, because the payload travels to the audit writer and the
-      socket broadcast, neither of which can carry an internal object."
+    description: "Builds two of the stock report's four event names and holds the
+      coalescer that decides which of them a request actually emits. The
+      builders here are the assignment event in its
+      created/state-changed/deleted kinds and stock_report_item:updated, whose
+      payload is taken from the database's own RETURNING values;
+      stock_report_item:created is built inline in apply_stock_demand and
+      stock_report_item:deleted in the deletion cascade. Priority is serialized
+      as its string value rather than the enum member, because the payload
+      travels to the audit writer and the socket broadcast, neither of which can
+      carry an internal object - and because dispatch is monkeypatched away in
+      the tests, an enum here would pass every test and fail only in production.
+      coalesce_stock_report_events then applies the net-change rule one request
+      wide: per row keep only the last :updated, drop it when its payload equals
+      the row's initial snapshot or when the same row also carries a :created or
+      :deleted, and per assignment keep the last event of each kind - preserving
+      each key's first-seen position, never the position of the occurrence whose
+      payload was kept."
     tags:
       - stock_report
       - batch_B1
@@ -7735,7 +7821,7 @@ nodes:
     origin: ai_inferred
     confidence: 0.85
     createdAt: 2026-09-21T00:52:45.640Z
-    updatedAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-22T09:12:20.713Z
   - id: command-apply-stock-demand
     type: command
     name: apply_stock_demand
@@ -7745,11 +7831,19 @@ nodes:
       entry's category, finds or creates the identity row with a single INSERT
       ... ON CONFLICT DO NOTHING against the partial unique index, re-discovers
       every row by identity rather than by generated id, takes one sorted FOR
-      UPDATE, and writes the goal history. The whole path is Core statements
-      with an exact statement budget — eight for an all-new request, seven
-      all-changed, five all-unchanged — so a stray SELECT is a contract breach,
-      not an inefficiency. Deadline is checked against the caller's budget and a
-      replay of the same entries is a no-op.
+      UPDATE, and writes a goal history record for each entry whose requested
+      quantity went up. Every write is a Core statement; the one ORM entity load
+      on the path is the FOR UPDATE itself, which has to hand back comparable
+      rows, while discovery deliberately selects identity columns only - an
+      unlocked read may discover ids and nothing more. The lock is taken by
+      identity, never by the client_ids discovery and the insert happened to
+      see, because a concurrent insert can win an identity between them and ON
+      CONFLICT DO NOTHING then returns nothing for it. The statement budget is
+      exact rather than a bound - eight for an all-new request, seven
+      all-changed, five all-unchanged - so a stray SELECT is a contract breach,
+      not an inefficiency. Deadline is checked against the caller's budget as
+      the last action inside the block, and a replay of the same entries is a
+      no-op.
     tags:
       - stock_report
       - batch_B2
@@ -7767,7 +7861,7 @@ nodes:
     origin: ai_inferred
     confidence: 0.95
     createdAt: 2026-09-21T03:11:11.021Z
-    updatedAt: 2026-09-21T03:11:11.021Z
+    updatedAt: 2026-09-22T09:11:38.547Z
   - id: endpoint-stock-demand-webhook
     type: endpoint
     name: Scanner stock-demand webhook
@@ -7794,10 +7888,10 @@ nodes:
             configured workspace id.
           inferenceReason: Authentication for the webhook is a separate, shared surface
             that a second Scanner webhook will reuse.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T03:11:11.021Z
-    updatedAt: 2026-09-21T03:11:11.021Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - id: domain-stock-demand-request
     type: domain
     name: stock demand request parsing and identity
@@ -7820,10 +7914,10 @@ nodes:
             and rejects duplicate identities within a batch.
           inferenceReason: Identity convergence is the guarantee that keeps one Scanner
             rule from becoming two board rows, and it is decided here.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T03:11:11.021Z
-    updatedAt: 2026-09-21T03:11:11.021Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - id: endpoint-stock-assignment-match-preview
     type: endpoint
     name: stock assignment match preview
@@ -7902,10 +7996,10 @@ nodes:
             assignments ascending, decides each entry in request order on the
             re-read state, and resolves each row's group.
           inferenceReason: This command is the endpoint's whole implementation boundary.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.93
     createdAt: 2026-09-21T15:05:25.734Z
-    updatedAt: 2026-09-21T15:05:25.734Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - id: domain-processed-webhook-resolution
     type: domain
     name: processed webhook resolution
@@ -7928,10 +8022,10 @@ nodes:
             delta, then runs the goal-credit step per assignment.
           inferenceReason: The one function that performs the grouped move is the
             mechanism's implementation.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-09-21T15:05:25.734Z
-    updatedAt: 2026-09-21T15:05:25.734Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - id: domain-task-state-stock-sync
     type: domain
     name: task state to stock assignment sync
@@ -7956,20 +8050,31 @@ nodes:
             task_sync.
           inferenceReason: This is the one function every task-state-changing command
             calls to keep the board in sync.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.93
     createdAt: 2026-09-21T15:05:25.734Z
-    updatedAt: 2026-09-21T15:05:25.734Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - id: test-task-state-write-site-guard
     type: test
     name: task state write-site guard
-    description: An AST sweep of the whole application and scripts tree (excluding
-      tests/migrations) collecting every site that could write Task.state —
-      attribute assignments, setattr calls, update/insert(Task), the Task
-      constructor, and calls to the four sync-adjacent helpers — checked against
-      a hand-classified, checked-in registry. Fails on an unregistered site, a
-      stale registry entry, a task_write whose named function never calls the
-      sync, or a paused-driver whose new_state is not the literal PAUSED.
+    description: "An AST sweep of the application and scripts trees (excluding tests
+      and migrations) collecting every site that could write Task.state, in six
+      construct classes: an attribute assignment named state (including
+      annotated, tuple and for/with targets), a setattr call, an update(Task) or
+      insert(Task) call including the __table__ forms, a Task(...) constructor
+      carrying state= including a dict unpack, a call to one of the four
+      sync-adjacent helpers, and raw SQL whose literal argument names both tasks
+      and state. Classes are matched by construct rather than by spelling - each
+      file's import aliases are resolved first - so renaming an import cannot
+      hide a site. The 85 collected sites are checked against a hand-classified,
+      checked-in registry keyed by (path, lineno): 15 task_write, 7 no_sync, 3
+      paused_driver, 60 not_task. The guard fails on an unregistered site, on a
+      registry entry the collector no longer produces (a stale entry -
+      deliberately, so that touching code near one forces a fresh look), on an
+      unrecognized classification, on a task_write whose named function is
+      missing or never calls sync_task_stock_assignments, on a paused_driver
+      whose new_state is not literally PAUSED, and on a no_sync or not_task
+      entry missing its required reason field."
     tags:
       - stock_report
       - phase_10
@@ -7991,22 +8096,25 @@ nodes:
     origin: ai_inferred
     confidence: 0.9
     createdAt: 2026-09-21T15:05:25.734Z
-    updatedAt: 2026-09-21T15:05:25.734Z
+    updatedAt: 2026-09-22T09:11:38.547Z
   - id: domain-stock-report-dense-ordering
     type: domain
     name: stock report dense ordering
     description: "The board's ordering mechanism: a group is (workspace, priority)
       over non-deleted rows, orders are 1-based and dense, and null priority
       means null order. Every positional change is one column-referencing UPDATE
-      over a closed order band with RETURNING, never a read-then-assign, so each
+      over an order band with RETURNING, never a read-then-assign, so each
       shifted neighbour's post-state comes back from the database and becomes
-      one row-updated event. Three operations share it — close the gap a leaving
+      one row-updated event. Three operations share it - close the gap a leaving
       row vacated, append at max+1, and shift the band between a mover's current
-      and target position — and the direction and band are derived inside the
-      shift from the mover's own from/to, so both of the contract's cases reach
-      one statement. The leaving row is excluded from its own gap close by the
-      band starting one past it, which is what lets the deletion cascade keep
-      the deleted row's own order while its group renumbers."
+      and target position. The gap close is deliberately open above (everything
+      strictly after the vacated position moves down one), because a dense group
+      has no known upper bound to name; the in-group shift is a closed band
+      whose direction and ends are derived inside the shift from the mover's own
+      from/to, so both of the contract's cases reach one statement and a caller
+      cannot get the sign wrong. The leaving row is excluded from its own gap
+      close by the band starting one past it, which is what lets the deletion
+      cascade keep the deleted row's own order while its group renumbers."
     tags:
       - stock_report
       - ordering
@@ -8038,7 +8146,7 @@ nodes:
     origin: ai_inferred
     confidence: 0.92
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:11:38.547Z
   - id: command-set-stock-report-item-priority
     type: command
     name: set_stock_report_item_priority
@@ -8075,10 +8183,10 @@ nodes:
             raises NotFound otherwise.
           inferenceReason: Absent, soft-deleted and foreign rows are one indistinguishable
             answer, which is the tenancy boundary of this route.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - id: command-set-stock-report-item-priority-order
     type: command
     name: set_stock_report_item_priority_order
@@ -8105,10 +8213,10 @@ nodes:
           inferenceReason: Reading the group size only after the locks is what makes the
             range check race-free; the two refusals and the no-op are the
             contract's three non-moving outcomes.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - id: domain-stock-report-item-deletion-cascade
     type: domain
     name: stock report row deletion cascade
@@ -8154,10 +8262,10 @@ nodes:
           inferenceReason: The deleted event is where the coalescer learns to drop every
             row-updated event of the same row in the same request, so a deletion
             emits one lifecycle event instead of a burst.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.93
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - id: endpoint-stock-report-board-writes
     type: endpoint
     name: stock report board read and write endpoints
@@ -8271,10 +8379,10 @@ nodes:
           inferenceReason: Sharing the serializer with the creation endpoint is what makes
             the two surfaces' key sets agree by construction rather than by
             review.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - id: domain-stock-report-row-values-snapshot
     type: domain
     name: stock report row values snapshot
@@ -8299,21 +8407,31 @@ nodes:
           inferenceReason: One definition consumed by every command that coalesces events
             is what guarantees the comparison base and the event payload are
             built the same way.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:08:12.901Z
   - id: command-delete-stock-report-item
     type: command
     name: delete_stock_report_item
-    description: The user-facing row deletion. Discovers the row and its assignments
-      unlocked, then acquires the lock classes in the global order — advisory,
-      tasks, the row together with its priority group, assignments — and
-      re-reads before deciding, so an id that was deleted between discovery and
-      the lock is refused rather than cascaded twice. It delegates every effect
-      to the shared cascade with the acting user and its own trigger name, then
-      coalesces and dispatches after the transaction and answers with the
-      deleted row's id.
+    description: "The user-facing row deletion. Inside one transaction it takes the
+      ordering advisory lock FIRST, before it looks anything up: every path that
+      soft-deletes a board row holds that same lock, so the row and assignment
+      ids it then discovers unlocked cannot disappear underneath it before the
+      row locks are taken. Discovery is deliberately unlocked - it decides only
+      which ids to lock. The remaining classes follow the global order: tasks,
+      then the row together with every live row of its priority group in one
+      statement ordered by client_id, then the assignments. The task lock is
+      held for lock-order correctness alone; this command reads no task field.
+      That group select doubles as the post-lock re-read and as the command's
+      whole visibility boundary - workspace and is_deleted live in its
+      predicate, so an absent, soft-deleted or foreign id simply is not in the
+      locked result and the command answers NotFound instead of cascading a row
+      a concurrent delete already took. It then delegates every effect to the
+      shared cascade, passing the acting user from the request context and its
+      own trigger name rather than letting the cascade reach for either, and
+      once the transaction closes it coalesces the returned events, dispatches
+      them, and answers with the deleted row's id."
     tags:
       - stock_report
       - cascade
@@ -8337,7 +8455,7 @@ nodes:
     origin: ai_inferred
     confidence: 0.9
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:11:38.547Z
   - id: endpoint-stock-demand-deleted-webhook
     type: endpoint
     name: Scanner stock-demand-deleted webhook
@@ -8362,10 +8480,10 @@ nodes:
           inferenceReason: The empty identity is what makes the configured workspace the
             only workspace this surface can act on, which is the boundary
             property worth recording rather than the file.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-09-22T06:15:46.018Z
-    updatedAt: 2026-09-22T06:15:46.018Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - id: command-process-stock-demand-deleted
     type: command
     name: process_stock_demand_deleted
@@ -8410,10 +8528,10 @@ nodes:
           inferenceReason: Naming the groups by subquery rather than by a prior read is
             what keeps the class to one statement however many candidates the
             request carries.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-09-22T06:15:46.018Z
-    updatedAt: 2026-09-22T06:15:46.018Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - id: test-stock-report-contract-docs-guard
     type: test
     name: stock report documentation accuracy guard
@@ -8449,10 +8567,10 @@ nodes:
           inferenceReason: Rooting the event check in the whole command package rather
             than in the one events module is what makes it see the names built
             inline elsewhere.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-22T06:15:46.018Z
-    updatedAt: 2026-09-22T06:15:46.018Z
+    updatedAt: 2026-09-22T09:08:12.901Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -14608,10 +14726,10 @@ edges:
             repairing to assert nothing non-signature remains.
           inferenceReason: The repair is defined as closing exactly what the check
             reports, so the dependency is structural, not incidental.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:08:12.901Z
   - sourceNodeId: command-repair-stock-report
     relationshipType: depends_on
     targetNodeId: infrastructure-stock-report-locks
@@ -14622,10 +14740,10 @@ edges:
           summary: Acquires the advisory lock and then each class lock in the documented
             order before writing.
           inferenceReason: The lock ladder is the concurrency contract of the repair path.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:08:12.901Z
   - sourceNodeId: command-repair-stock-report
     relationshipType: writes_to
     targetNodeId: table-stock-report-repair-record
@@ -14636,10 +14754,10 @@ edges:
           summary: Writes one record per net change with the operation's now as
             created_at.
           inferenceReason: The repair record is the repair's audit outcome.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:08:12.901Z
   - sourceNodeId: command-repair-stock-report
     relationshipType: writes_to
     targetNodeId: table-stock-report-item
@@ -14650,10 +14768,10 @@ edges:
           summary: Updates counters and priority_order on diverging rows, stamping
             updated_at and updated_by_id only on rows it changes.
           inferenceReason: Counter and ordering repair is the command's primary write target.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:08:12.901Z
   - sourceNodeId: command-repair-stock-report
     relationshipType: writes_to
     targetNodeId: table-stock-report-history-record
@@ -14664,10 +14782,10 @@ edges:
           summary: Corrects a diverging goal record's quantity_awaiting under the
             history-record lock.
           inferenceReason: The goal total lives in these records, so repairing it writes here.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:08:12.901Z
   - sourceNodeId: query-stock-report-consistency
     relationshipType: reads_from
     targetNodeId: table-stock-report-item
@@ -14678,10 +14796,10 @@ edges:
           summary: Selects the workspace's rows and compares stored counters, signature
             and ordering against recomputed values.
           inferenceReason: The row is the primary subject of the check.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:08:12.901Z
   - sourceNodeId: query-stock-report-consistency
     relationshipType: reads_from
     targetNodeId: table-stock-task-assignment
@@ -14692,10 +14810,10 @@ edges:
           summary: Reads workspace-scoped, non-deleted assignments to derive both the
             counters and the expected task flag.
           inferenceReason: Assignments are the source of truth the counters are recomputed from.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:08:12.901Z
   - sourceNodeId: query-stock-report-consistency
     relationshipType: reads_from
     targetNodeId: table-stock-report-history-record
@@ -14705,10 +14823,10 @@ edges:
           symbol: compute_stock_report_divergences
           summary: Sums workspace-scoped goal records to recompute the goal total.
           inferenceReason: The goal_total divergence kind is derived entirely from these rows.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:08:12.901Z
   - sourceNodeId: query-stock-report-consistency
     relationshipType: depends_on
     targetNodeId: domain-stock-criteria-normalization
@@ -14720,10 +14838,10 @@ edges:
             detect signature drift.
           inferenceReason: Signature divergence is defined by the normalization recipe, so
             the check depends on it.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:08:12.901Z
   - sourceNodeId: domain-stock-criteria-matcher
     relationshipType: depends_on
     targetNodeId: domain-stock-criteria-normalization
@@ -14735,10 +14853,10 @@ edges:
             module produces and signs.
           inferenceReason: Matcher and signature must agree on the normalized form or a
             rule would match under one identity and be stored under another.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.8
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: endpoint-stock-report-consistency
     relationshipType: accepts
     targetNodeId: query-stock-report-consistency
@@ -14747,10 +14865,10 @@ edges:
         - path: app/beyo_manager/routers/api_v1/stock_report.py
           summary: The GET route delegates to the consistency query service.
           inferenceReason: The endpoint is the external surface of the check.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:08:12.901Z
   - sourceNodeId: endpoint-stock-report-consistency
     relationshipType: accepts
     targetNodeId: command-repair-stock-report
@@ -14759,10 +14877,10 @@ edges:
         - path: app/beyo_manager/routers/api_v1/stock_report.py
           summary: The POST route delegates to the repair command.
           inferenceReason: The endpoint is the external trigger of the manual repair.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-20T21:55:54.526Z
-    updatedAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-22T09:08:12.901Z
   - sourceNodeId: command-move-assignment
     relationshipType: writes_to
     targetNodeId: table-stock-report-item
@@ -14773,10 +14891,10 @@ edges:
           summary: Issues the guarded counter UPDATE against the row and, on self-heal, an
             absolute one.
           inferenceReason: Moving the unit counters is the operation's primary effect.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-21T00:52:45.640Z
-    updatedAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: command-move-assignment
     relationshipType: writes_to
     targetNodeId: table-stock-task-assignment
@@ -14788,10 +14906,10 @@ edges:
             before the counter statement.
           inferenceReason: The assignment is the entity whose state the operation exists
             to change.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-21T00:52:45.640Z
-    updatedAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: command-move-assignment
     relationshipType: writes_to
     targetNodeId: table-stock-report-repair-record
@@ -14803,10 +14921,10 @@ edges:
             statement matches no row.
           inferenceReason: The inline self-heal shares the repair-record audit trail with
             the manual repair.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T00:52:45.640Z
-    updatedAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: command-move-assignment
     relationshipType: calls
     targetNodeId: query-stock-report-consistency
@@ -14819,9 +14937,18 @@ edges:
           inferenceReason: The inline repair and the manual repair recompute from the same
             function, which is what keeps them consistent.
     origin: ai_inferred
-    confidence: 0.9
+    confidence: 0.3
     createdAt: 2026-09-21T00:52:45.640Z
-    updatedAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-22T09:12:47.798Z
+    description: "MISCATEGORISED - the relationship should be depends_on, not calls; edge
+      type cannot be edited in place, so this edge is left pending for that
+      reason. Shares the consistency module's per-row recompute helper rather
+      than calling the workspace-wide check: move_assignment's inline self-heal
+      reaches recompute_row_counters through its private _apply_counter_delta,
+      and never calls compute_stock_report_divergences. The coupling is still
+      worth recording, because the inline repair and the manual repair must be
+      unable to disagree about what a row's counters should be - if they forked,
+      a self-heal would move a divergence rather than close it."
   - sourceNodeId: command-move-assignment
     relationshipType: calls
     targetNodeId: domain-stock-report-events
@@ -14831,10 +14958,10 @@ edges:
           symbol: move_assignment
           summary: Builds its returned events through the two builders.
           inferenceReason: Events are the operation's output to the rest of the system.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T00:52:45.640Z
-    updatedAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: command-move-assignment
     relationshipType: calls
     targetNodeId: command-apply-goal-effect
@@ -14846,10 +14973,10 @@ edges:
             events.
           inferenceReason: The goal step's placement in the write order is a contract
             requirement, not an implementation detail.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T00:52:45.640Z
-    updatedAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: command-remove-assignment
     relationshipType: calls
     targetNodeId: command-move-assignment
@@ -14860,10 +14987,10 @@ edges:
           summary: Delegates the whole move to move_assignment with the DELETE sentinel.
           inferenceReason: Removal is defined as a move, so the counter and event
             semantics are inherited rather than duplicated.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-21T00:52:45.640Z
-    updatedAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-22T09:08:12.901Z
   - sourceNodeId: command-remove-assignment
     relationshipType: writes_to
     targetNodeId: table-stock-report-item
@@ -14874,10 +15001,10 @@ edges:
           summary: Through move_assignment, the delete moves the row's active counter
             down.
           inferenceReason: Removing live work has to be reflected in the row's counters.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.8
     createdAt: 2026-09-21T00:52:45.640Z
-    updatedAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-22T09:08:12.901Z
   - sourceNodeId: command-apply-goal-effect
     relationshipType: writes_to
     targetNodeId: table-stock-report-history-record
@@ -14889,10 +15016,10 @@ edges:
             quantity.
           inferenceReason: The goal record is the entity whose running total this
             operation maintains.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-21T00:52:45.640Z
-    updatedAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-22T09:08:12.901Z
   - sourceNodeId: command-apply-goal-effect
     relationshipType: writes_to
     targetNodeId: table-stock-task-assignment
@@ -14904,10 +15031,10 @@ edges:
             it before the subtraction statement.
           inferenceReason: The credit memory on the assignment is what makes the un-credit
             land on the right record rather than the current one.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.85
     createdAt: 2026-09-21T00:52:45.640Z
-    updatedAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-22T09:08:12.901Z
   - sourceNodeId: command-apply-goal-effect
     relationshipType: calls
     targetNodeId: query-stock-report-consistency
@@ -14919,9 +15046,18 @@ edges:
           inferenceReason: Same shared recomputation as the manual repair, which is what
             keeps the two paths agreeing.
     origin: ai_inferred
-    confidence: 0.85
+    confidence: 0.3
     createdAt: 2026-09-21T00:52:45.640Z
-    updatedAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-22T09:12:47.798Z
+    description: "MISCATEGORISED - the relationship should be depends_on, not calls; edge
+      type cannot be edited in place, so this edge is left pending for that
+      reason. Shares the consistency module's goal recompute helper rather than
+      calling the workspace-wide check: apply_goal_effect's downward self-heal
+      reaches recompute_goal_total through its private _uncredit, and never
+      calls compute_stock_report_divergences. It matters because the inline
+      repair has to land on exactly the number the manual repair would compute
+      from the same credited assignments - one sum, two callers - or the
+      repaired total would immediately re-register as a goal_total divergence."
   - sourceNodeId: endpoint-stock-demand-webhook
     relationshipType: accepts
     targetNodeId: command-apply-stock-demand
@@ -14932,10 +15068,10 @@ edges:
             transaction.
           inferenceReason: The webhook is the command's only caller and the command is the
             webhook's only writer.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-21T03:11:11.021Z
-    updatedAt: 2026-09-21T03:11:11.021Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: endpoint-stock-demand-webhook
     relationshipType: depends_on
     targetNodeId: domain-stock-demand-request
@@ -14946,10 +15082,10 @@ edges:
             attempted.
           inferenceReason: Parsing before applying is what makes a rejected batch leave no
             trace.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T03:11:11.021Z
-    updatedAt: 2026-09-21T03:11:11.021Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: domain-stock-demand-request
     relationshipType: depends_on
     targetNodeId: domain-stock-criteria-normalization
@@ -14959,10 +15095,10 @@ edges:
           summary: Derives each entry's signature from normalize_stock_criteria's output.
           inferenceReason: The demand path's identity and the stored row's identity must
             come from the same recipe or the same rule would land twice.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-21T03:11:11.021Z
-    updatedAt: 2026-09-21T03:11:11.021Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: command-apply-stock-demand
     relationshipType: writes_to
     targetNodeId: table-stock-report-item
@@ -14973,10 +15109,10 @@ edges:
           summary: Inserts new identity rows and updates the requested quantity of
             existing ones.
           inferenceReason: Creating and updating demand rows is the command's purpose.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-21T03:11:11.021Z
-    updatedAt: 2026-09-21T03:11:11.021Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: command-apply-stock-demand
     relationshipType: writes_to
     targetNodeId: table-stock-report-history-record
@@ -14991,7 +15127,12 @@ edges:
     origin: ai_inferred
     confidence: 0.9
     createdAt: 2026-09-21T03:11:11.021Z
-    updatedAt: 2026-09-21T03:11:11.021Z
+    updatedAt: 2026-09-22T09:12:47.798Z
+    description: Inserts one quantity_requested_change goal record per entry whose
+      requested quantity INCREASED. A decrease updates the row's
+      quantity_requested and writes no history record at all - the goal record
+      exists to be credited against as work is done, and lowering the target
+      does not create a new thing to work toward.
   - sourceNodeId: command-apply-stock-demand
     relationshipType: reads_from
     targetNodeId: table-stock-report-item
@@ -15003,10 +15144,10 @@ edges:
             SELECT FOR UPDATE.
           inferenceReason: Re-discovery by identity rather than by generated id is what
             keeps two concurrent deliveries on one lock order.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T03:11:11.021Z
-    updatedAt: 2026-09-21T03:11:11.021Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: command-apply-stock-demand
     relationshipType: depends_on
     targetNodeId: domain-stock-demand-request
@@ -15017,10 +15158,10 @@ edges:
           summary: Consumes the demand entries and their precomputed identity signatures.
           inferenceReason: The command never recomputes identity; it trusts the single
             value the request module produced.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T03:11:11.021Z
-    updatedAt: 2026-09-21T03:11:11.021Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: endpoint-stock-assignment-match-preview
     relationshipType: depends_on
     targetNodeId: domain-assignment-acceptability-evaluator
@@ -15051,10 +15192,10 @@ edges:
           summary: After deciding every entry, groups the assignments to move by row and
             calls resolve_processed_group once per row, ascending.
           inferenceReason: Direct call site demonstrating the dependency.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-09-21T15:05:25.734Z
-    updatedAt: 2026-09-21T15:05:25.734Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: domain-processed-webhook-resolution
     relationshipType: modifies
     targetNodeId: table-stock-task-assignment
@@ -15067,10 +15208,10 @@ edges:
             updated_by_id/updated_at for every assignment in the group before
             flushing.
           inferenceReason: Direct write to the table's mapped model.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T15:05:25.734Z
-    updatedAt: 2026-09-21T15:05:25.734Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: domain-processed-webhook-resolution
     relationshipType: modifies
     targetNodeId: table-stock-report-item
@@ -15082,10 +15223,10 @@ edges:
           summary: Calls the shared guarded counter UPDATE against the row after the
             assignments are flushed.
           inferenceReason: Direct write to the table's mapped model.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T15:05:25.734Z
-    updatedAt: 2026-09-21T15:05:25.734Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: domain-task-state-stock-sync
     relationshipType: modifies
     targetNodeId: table-stock-task-assignment
@@ -15098,16 +15239,20 @@ edges:
           summary: Locks the assignment and calls move_assignment with the mapped target
             when it differs from the current state.
           inferenceReason: Direct write path to the table's mapped model.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T15:05:25.734Z
-    updatedAt: 2026-09-21T15:05:25.734Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: test-task-state-write-site-guard
     relationshipType: verifies
     targetNodeId: domain-task-state-stock-sync
-    description: Proves every Task.state write site in the application is either
-      wired to call the sync, deliberately excluded with a reason, or is not a
-      Task write at all.
+    description: "Proves every Task.state write site in the application and scripts
+      trees is accounted for: wired to a function that calls the sync,
+      deliberately excluded with a written reason, a paused-driver that can
+      never reach a task-state helper, or not a Task write at all. It is a
+      completeness instrument and nothing more - it cannot show the sync is
+      correct, only that no write site escaped it, which is the failure mode a
+      command-level sync is actually exposed to."
     metadata:
       evidence:
         - path: app/tests/unit/services/commands/stock_report/test_task_state_write_sites_are_registered.py
@@ -15118,7 +15263,7 @@ edges:
     origin: ai_inferred
     confidence: 0.9
     createdAt: 2026-09-21T15:05:25.734Z
-    updatedAt: 2026-09-21T15:05:25.734Z
+    updatedAt: 2026-09-22T09:12:47.798Z
   - sourceNodeId: command-set-stock-report-item-priority
     relationshipType: calls
     targetNodeId: domain-stock-report-dense-ordering
@@ -15130,10 +15275,10 @@ edges:
             append_to_priority_group for the destination.
           inferenceReason: The command owns the transaction and the decision; the
             positional arithmetic belongs to the shared ordering mechanism.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: command-set-stock-report-item-priority-order
     relationshipType: calls
     targetNodeId: domain-stock-report-dense-ordering
@@ -15144,10 +15289,10 @@ edges:
           summary: Calls shift_within_group with the mover's current and target positions.
           inferenceReason: The in-group move is expressed entirely as one shared shift
             plus the mover's own write.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: domain-stock-report-item-deletion-cascade
     relationshipType: calls
     targetNodeId: domain-stock-report-dense-ordering
@@ -15160,10 +15305,10 @@ edges:
           inferenceReason: Deletion is an ordering operation as much as a lifecycle one,
             which is why it shares the same gap-closing statement as a priority
             change.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: command-set-stock-report-item-priority
     relationshipType: depends_on
     targetNodeId: infrastructure-stock-report-locks
@@ -15175,10 +15320,10 @@ edges:
             its transaction.
           inferenceReason: The advisory lock is what removes the phantom of another
             operation moving a row into a group after this one read it.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: command-set-stock-report-item-priority-order
     relationshipType: depends_on
     targetNodeId: infrastructure-stock-report-locks
@@ -15190,10 +15335,10 @@ edges:
             locking any row.
           inferenceReason: The group size it validates against is only meaningful once
             ordering operations are serialized.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: command-delete-stock-report-item
     relationshipType: depends_on
     targetNodeId: infrastructure-stock-report-locks
@@ -15205,10 +15350,10 @@ edges:
             the assignments, each ascending by client_id.
           inferenceReason: The deletion crosses four lock classes in one transaction, so
             it is the operation the global lock order exists for.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: command-delete-stock-report-item
     relationshipType: calls
     targetNodeId: domain-stock-report-item-deletion-cascade
@@ -15221,10 +15366,10 @@ edges:
           inferenceReason: The command owns the transaction, the locks and the response;
             the cascade owns the effects, so a second caller reuses them
             unchanged.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: domain-stock-report-item-deletion-cascade
     relationshipType: produces
     targetNodeId: domain-stock-report-events
@@ -15237,10 +15382,10 @@ edges:
           inferenceReason: The deleted event is the signal the coalescer uses to suppress
             every row-updated event of that row, so the event set of a deletion
             is a lifecycle event plus its neighbours.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.88
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: domain-stock-report-events
     relationshipType: depends_on
     targetNodeId: domain-stock-report-row-values-snapshot
@@ -15253,10 +15398,10 @@ edges:
           inferenceReason: The coalescer drops a row-updated event whose payload equals
             this snapshot, so the two must be built to the same field shape and
             the same priority rendering.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:08:12.901Z
   - sourceNodeId: query-list-stock-report-items
     relationshipType: reads_from
     targetNodeId: table-stock-report-item
@@ -15268,10 +15413,10 @@ edges:
             the priority rank and position.
           inferenceReason: This is the board's only read of the rows table and it is where
             the ordering contract becomes visible to a user.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: query-list-stock-task-assignments
     relationshipType: reads_from
     targetNodeId: table-stock-task-assignment
@@ -15284,10 +15429,10 @@ edges:
           inferenceReason: The read deliberately spans terminal states, which is what
             distinguishes this traceability read from the active-assignment
             lookups elsewhere.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: endpoint-stock-report-board-writes
     relationshipType: calls
     targetNodeId: command-set-stock-report-item-priority
@@ -15298,10 +15443,10 @@ edges:
           summary: Runs the priority command with the path id merged into the body.
           inferenceReason: "The router is thin: the id transport is its only contribution
             to the request."
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: endpoint-stock-report-board-writes
     relationshipType: calls
     targetNodeId: command-set-stock-report-item-priority-order
@@ -15313,10 +15458,10 @@ edges:
             body.
           inferenceReason: The strict integer body is what makes the refusal of a
             string-typed position a boundary decision rather than a service one.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: endpoint-stock-report-board-writes
     relationshipType: calls
     targetNodeId: command-delete-stock-report-item
@@ -15327,10 +15472,10 @@ edges:
           summary: Runs the delete command with only the path id as incoming data.
           inferenceReason: There is no body at all on this route, so the path is the
             entire request.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: endpoint-stock-report-board-writes
     relationshipType: calls
     targetNodeId: query-list-stock-report-items
@@ -15342,10 +15487,10 @@ edges:
           inferenceReason: The filter arrives as a raw string and is validated in the
             query service, so the refusal of an unknown token is a domain
             answer.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: endpoint-stock-report-board-writes
     relationshipType: calls
     targetNodeId: query-list-stock-task-assignments
@@ -15355,10 +15500,10 @@ edges:
           symbol: route_list_stock_task_assignments
           summary: Runs the assignment read with the path id.
           inferenceReason: Open to all four roles, unlike the delete on the same resource.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-21T20:28:53.547Z
-    updatedAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: endpoint-stock-demand-deleted-webhook
     relationshipType: calls
     targetNodeId: command-process-stock-demand-deleted
@@ -15369,10 +15514,10 @@ edges:
           summary: run_service(process_stock_demand_deleted, ServiceContext(...)).
           inferenceReason: The route is a thin adapter over the command, as the other two
             webhooks are.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-22T06:15:46.018Z
-    updatedAt: 2026-09-22T06:15:46.018Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: command-process-stock-demand-deleted
     relationshipType: calls
     targetNodeId: domain-stock-report-item-deletion-cascade
@@ -15385,10 +15530,10 @@ edges:
           inferenceReason: This is the cascade's second caller and the only one that
             stamps nobody, which is why the cascade takes its stamps as
             arguments.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-22T06:15:46.018Z
-    updatedAt: 2026-09-22T06:15:46.018Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: command-process-stock-demand-deleted
     relationshipType: calls
     targetNodeId: infrastructure-stock-report-locks
@@ -15400,10 +15545,10 @@ edges:
             lock_stock_task_assignments around its own row+group statement.
           inferenceReason: It participates in the shared lock ladder rather than inventing
             an order of its own.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.93
     createdAt: 2026-09-22T06:15:46.018Z
-    updatedAt: 2026-09-22T06:15:46.018Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: command-process-stock-demand-deleted
     relationshipType: writes_to
     targetNodeId: table-stock-report-item
@@ -15415,10 +15560,10 @@ edges:
             the command itself never inserts a row.
           inferenceReason: The webhook finds and removes; it is the one stock message that
             cannot create a row.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-22T06:15:46.018Z
-    updatedAt: 2026-09-22T06:15:46.018Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: command-process-stock-demand-deleted
     relationshipType: writes_to
     targetNodeId: table-stock-task-assignment
@@ -15430,10 +15575,10 @@ edges:
             cascade, in every state including terminal ones.
           inferenceReason: A Scanner rule change removes work a user may be holding, which
             is the behaviour the board has to explain to its users.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-09-22T06:15:46.018Z
-    updatedAt: 2026-09-22T06:15:46.018Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: command-process-stock-demand-deleted
     relationshipType: writes_to
     targetNodeId: table-stock-report-history-record
@@ -15445,10 +15590,10 @@ edges:
             on this path.
           inferenceReason: The goal record's history goes with the row, and nobody is
             recorded as having done it.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.88
     createdAt: 2026-09-22T06:15:46.018Z
-    updatedAt: 2026-09-22T06:15:46.018Z
+    updatedAt: 2026-09-22T09:07:42.307Z
   - sourceNodeId: test-stock-report-contract-docs-guard
     relationshipType: verifies
     targetNodeId: endpoint-stock-report-board-writes
@@ -15462,7 +15607,7 @@ edges:
           inferenceReason: The guard is what ties the documented surface to the mounted
             one, so it verifies the endpoint boundary rather than any single
             file.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.85
     createdAt: 2026-09-22T06:15:46.018Z
-    updatedAt: 2026-09-22T06:15:46.018Z
+    updatedAt: 2026-09-22T09:08:12.901Z

@@ -1,0 +1,272 @@
+reviewId: 2026-09-22T09-07-42-347Z--05d3f4
+reviewedItemIds:
+  - node:command-set-stock-report-item-priority
+  - node:command-set-stock-report-item-priority-order
+  - node:query-list-stock-task-assignments
+  - node:infrastructure-stock-report-locks
+  - edge:command-set-stock-report-item-priority--calls-->domain-stock-report-dense-ordering
+  - edge:command-set-stock-report-item-priority--depends_on-->infrastructure-stock-report-locks
+  - edge:command-set-stock-report-item-priority-order--calls-->domain-stock-report-dense-ordering
+  - edge:command-set-stock-report-item-priority-order--depends_on-->infrastructure-stock-report-locks
+  - edge:endpoint-stock-report-board-writes--calls-->command-delete-stock-report-item
+  - edge:endpoint-stock-report-board-writes--calls-->command-set-stock-report-item-priority
+  - edge:endpoint-stock-report-board-writes--calls-->command-set-stock-report-item-priority-order
+  - edge:endpoint-stock-report-board-writes--calls-->query-list-stock-report-items
+  - edge:endpoint-stock-report-board-writes--calls-->query-list-stock-task-assignments
+  - edge:query-list-stock-report-items--reads_from-->table-stock-report-item
+  - edge:query-list-stock-task-assignments--reads_from-->table-stock-task-assignment
+  - node:domain-stock-report-item-deletion-cascade
+  - node:command-process-stock-demand-deleted
+  - node:endpoint-stock-demand-deleted-webhook
+  - edge:command-delete-stock-report-item--calls-->domain-stock-report-item-deletion-cascade
+  - edge:command-delete-stock-report-item--depends_on-->infrastructure-stock-report-locks
+  - edge:domain-stock-report-item-deletion-cascade--calls-->domain-stock-report-dense-ordering
+  - edge:domain-stock-report-item-deletion-cascade--produces-->domain-stock-report-events
+  - edge:command-process-stock-demand-deleted--calls-->domain-stock-report-item-deletion-cascade
+  - edge:command-process-stock-demand-deleted--calls-->infrastructure-stock-report-locks
+  - edge:command-process-stock-demand-deleted--writes_to-->table-stock-report-history-record
+  - edge:command-process-stock-demand-deleted--writes_to-->table-stock-report-item
+  - edge:command-process-stock-demand-deleted--writes_to-->table-stock-task-assignment
+  - edge:endpoint-stock-demand-deleted-webhook--calls-->command-process-stock-demand-deleted
+  - node:domain-stock-demand-request
+  - node:endpoint-stock-demand-webhook
+  - node:domain-stock-criteria-matcher
+  - node:endpoint-items-processed-webhook
+  - node:domain-processed-webhook-resolution
+  - node:domain-task-state-stock-sync
+  - edge:command-apply-stock-demand--depends_on-->domain-stock-demand-request
+  - edge:command-apply-stock-demand--reads_from-->table-stock-report-item
+  - edge:command-apply-stock-demand--writes_to-->table-stock-report-item
+  - edge:domain-stock-demand-request--depends_on-->domain-stock-criteria-normalization
+  - edge:endpoint-stock-demand-webhook--accepts-->command-apply-stock-demand
+  - edge:endpoint-stock-demand-webhook--depends_on-->domain-stock-demand-request
+  - edge:domain-stock-criteria-matcher--depends_on-->domain-stock-criteria-normalization
+  - edge:domain-processed-webhook-resolution--modifies-->table-stock-report-item
+  - edge:domain-processed-webhook-resolution--modifies-->table-stock-task-assignment
+  - edge:endpoint-items-processed-webhook--depends_on-->domain-processed-webhook-resolution
+  - edge:domain-task-state-stock-sync--modifies-->table-stock-task-assignment
+  - edge:command-move-assignment--calls-->command-apply-goal-effect
+  - edge:command-move-assignment--calls-->domain-stock-report-events
+  - edge:command-move-assignment--writes_to-->table-stock-report-item
+  - edge:command-move-assignment--writes_to-->table-stock-report-repair-record
+  - edge:command-move-assignment--writes_to-->table-stock-task-assignment
+decisions:
+  - itemId: node:command-set-stock-report-item-priority
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: node:command-set-stock-report-item-priority-order
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: node:query-list-stock-task-assignments
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: node:infrastructure-stock-report-locks
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-set-stock-report-item-priority--calls-->domain-stock-report-dense-ordering
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-set-stock-report-item-priority--depends_on-->infrastructure-stock-report-locks
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-set-stock-report-item-priority-order--calls-->domain-stock-report-dense-ordering
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-set-stock-report-item-priority-order--depends_on-->infrastructure-stock-report-locks
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:endpoint-stock-report-board-writes--calls-->command-delete-stock-report-item
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:endpoint-stock-report-board-writes--calls-->command-set-stock-report-item-priority
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:endpoint-stock-report-board-writes--calls-->command-set-stock-report-item-priority-order
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:endpoint-stock-report-board-writes--calls-->query-list-stock-report-items
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:endpoint-stock-report-board-writes--calls-->query-list-stock-task-assignments
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:query-list-stock-report-items--reads_from-->table-stock-report-item
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:query-list-stock-task-assignments--reads_from-->table-stock-task-assignment
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: node:domain-stock-report-item-deletion-cascade
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: node:command-process-stock-demand-deleted
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: node:endpoint-stock-demand-deleted-webhook
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-delete-stock-report-item--calls-->domain-stock-report-item-deletion-cascade
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-delete-stock-report-item--depends_on-->infrastructure-stock-report-locks
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:domain-stock-report-item-deletion-cascade--calls-->domain-stock-report-dense-ordering
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:domain-stock-report-item-deletion-cascade--produces-->domain-stock-report-events
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-process-stock-demand-deleted--calls-->domain-stock-report-item-deletion-cascade
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-process-stock-demand-deleted--calls-->infrastructure-stock-report-locks
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-process-stock-demand-deleted--writes_to-->table-stock-report-history-record
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-process-stock-demand-deleted--writes_to-->table-stock-report-item
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-process-stock-demand-deleted--writes_to-->table-stock-task-assignment
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:endpoint-stock-demand-deleted-webhook--calls-->command-process-stock-demand-deleted
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: node:domain-stock-demand-request
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: node:endpoint-stock-demand-webhook
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: node:domain-stock-criteria-matcher
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: node:endpoint-items-processed-webhook
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: node:domain-processed-webhook-resolution
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: node:domain-task-state-stock-sync
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-apply-stock-demand--depends_on-->domain-stock-demand-request
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-apply-stock-demand--reads_from-->table-stock-report-item
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-apply-stock-demand--writes_to-->table-stock-report-item
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:domain-stock-demand-request--depends_on-->domain-stock-criteria-normalization
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:endpoint-stock-demand-webhook--accepts-->command-apply-stock-demand
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:endpoint-stock-demand-webhook--depends_on-->domain-stock-demand-request
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:domain-stock-criteria-matcher--depends_on-->domain-stock-criteria-normalization
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:domain-processed-webhook-resolution--modifies-->table-stock-report-item
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:domain-processed-webhook-resolution--modifies-->table-stock-task-assignment
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:endpoint-items-processed-webhook--depends_on-->domain-processed-webhook-resolution
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:domain-task-state-stock-sync--modifies-->table-stock-task-assignment
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-move-assignment--calls-->command-apply-goal-effect
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-move-assignment--calls-->domain-stock-report-events
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-move-assignment--writes_to-->table-stock-report-item
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-move-assignment--writes_to-->table-stock-report-repair-record
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-move-assignment--writes_to-->table-stock-task-assignment
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.276
+timestamp: 2026-09-22T09:07:42.347Z
+graphRevisionBefore: 554701caa04b4d8152439448e0c48cdd4e47edd39eea0d679a46809ce4afe95d
+graphRevisionAfter: 47da9047fa7af044d92d6d2c8afac3681216e59d7bce1ad00a237679df50db6c
+evidenceSummary: 58 evidence entries across 19 files; no drift detected
+humanInstruction: "Owner authorized promoting the stock_report graph tier to
+  human_confirmed (2026-09-22). Not applied blind: each item was verified
+  against the code by a reviewer that read the implementation, and the
+  orchestrator independently re-checked the highest-consequence claims. This
+  batch is 50 of 72 items whose every factual claim was confirmed true of the
+  tree at HEAD 7382fdd. A further 19 items were found to contain falsehoods and
+  are deliberately NOT promoted — they receive `edit` instead and stay pending.
+  14 items belonging to other projects (step-time settlement, item-economics)
+  are excluded entirely as unverified."
+reviewTokenCorrelation: 6424bcafabe2

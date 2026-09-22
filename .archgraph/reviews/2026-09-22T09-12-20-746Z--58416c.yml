@@ -1,0 +1,131 @@
+reviewId: 2026-09-22T09-12-20-746Z--58416c
+reviewedItemIds:
+  - node:table-stock-report-history-record
+  - node:table-stock-report-repair-record
+  - node:domain-stock-report-events
+  - node:query-stock-report-consistency
+  - node:endpoint-stock-report-consistency
+decisions:
+  - itemId: node:table-stock-report-history-record
+    decision: edit
+    editedFields:
+      description: "History rows for a stock_report_items row, in three types:
+        quantity_requested_change (written when demand increases),
+        priority_change and priority_order_change. Not append-only, and the
+        exception is the mechanism: the row's current goal record - the
+        non-deleted quantity_requested_change with the greatest (created_at,
+        client_id) - carries a mutable quantity_awaiting that every assignment
+        entering awaiting or resolved_early credits and every un-credit
+        subtracts, so the target a board row is measured against survives later
+        demand changes. Because that counter is mutated in place it can drift,
+        which is why the truth is kept elsewhere: the goal total is recomputed
+        by summing the quantity of the assignments whose
+        credited_history_record_id points at the record, never by summing
+        history rows, and a CHECK holds quantity_awaiting >= 0 so an
+        over-subtraction matches no row and triggers the self-heal instead of
+        going negative. Rows are soft-deleted (is_deleted / deleted_at /
+        deleted_by_id) by the row-deletion cascade rather than removed, because
+        an assignment can still reference one through credited_history_record_id
+        under ON DELETE RESTRICT."
+    rationale: '"Append-only" is false: quantity_awaiting on the current goal record
+      is mutated in place by _goal_credit and repair_stock_report, and rows are
+      soft-deleted by the cascade. Two of the three record types were also
+      omitted.'
+  - itemId: node:table-stock-report-repair-record
+    decision: edit
+    editedFields:
+      description: "Audit trail for every stock-report correction, written both by the
+        manual repair and by the inline self-heals that fix a row or a goal
+        record mid-request: one row per (target, field) NET change - not per
+        intermediate step - with target_kind (stock_report_item, history_record,
+        task, group), target_client_id, field, the stored and recomputed values
+        rendered as text, the trigger (manual for the repair command,
+        inline:<caller> for a self-heal), created_by_id (NULL on the inline
+        paths, which have no actor) and the operation's own now as created_at.
+        The two values are text rather than typed columns because one table has
+        to record an integer counter, a NULL priority_order and a boolean task
+        flag. There is no is_deleted and no updated_at: a repair record is never
+        edited or removed, so the trail of what the system silently corrected
+        cannot be rewritten after the fact."
+    rationale: '"Written by the stock-report repair" is under-inclusive:
+      _move_assignment.py:173 and _goal_credit.py:98 also write it, with
+      trigger=inline:<caller> and created_by_id=None.'
+  - itemId: node:domain-stock-report-events
+    decision: edit
+    editedFields:
+      description: "Builds two of the stock report's four event names and holds the
+        coalescer that decides which of them a request actually emits. The
+        builders here are the assignment event in its
+        created/state-changed/deleted kinds and stock_report_item:updated, whose
+        payload is taken from the database's own RETURNING values;
+        stock_report_item:created is built inline in apply_stock_demand and
+        stock_report_item:deleted in the deletion cascade. Priority is
+        serialized as its string value rather than the enum member, because the
+        payload travels to the audit writer and the socket broadcast, neither of
+        which can carry an internal object - and because dispatch is
+        monkeypatched away in the tests, an enum here would pass every test and
+        fail only in production. coalesce_stock_report_events then applies the
+        net-change rule one request wide: per row keep only the last :updated,
+        drop it when its payload equals the row's initial snapshot or when the
+        same row also carries a :created or :deleted, and per assignment keep
+        the last event of each kind - preserving each key's first-seen position,
+        never the position of the occurrence whose payload was kept."
+    rationale: '"The two workspace events the stock report emits" is wrong - four
+      names exist; :created is built in apply_stock_demand, :deleted in the
+      deletion cascade. Also omitted the coalescer, which is why this node has
+      its depends_on edge.'
+  - itemId: node:query-stock-report-consistency
+    decision: edit
+    editedFields:
+      description: Read-only workspace-wide consistency check. It recomputes the three
+        assignment-derived counters (quantity_in_queue, quantity_in_progress,
+        quantity_awaiting) from the row's non-deleted assignments in the three
+        active states - quantity_requested is declared demand, not a derived
+        value, so it is never recomputed or checked - plus the goal total
+        (summed from the assignments crediting each quantity_requested_change
+        record), the task stock flag, the criteria signature, priority-order
+        density and priority-order nullness. It returns eight divergence kinds
+        sorted by (kind, client_id, field) with the exact stored and expected
+        values, which is what lets the repair close precisely what the check
+        reports and assert afterwards that nothing non-signature remains. Every
+        read inside compute_stock_report_divergences is workspace-filtered,
+        including expected_task_flag's assignment lookup - without that
+        predicate a foreign workspace's assignment could set a local task's
+        flag. It writes nothing, and its per-entity helpers
+        (recompute_row_counters, recompute_goal_total) are the same
+        recomputations the inline self-heals call, which is what keeps the
+        manual and inline paths agreeing.
+    rationale: '"Recomputes the four counters" is false - three (in_queue,
+      in_progress, awaiting). quantity_requested is declared demand and never
+      recomputed. Re-verified independently against consistency.py.'
+  - itemId: node:endpoint-stock-report-consistency
+    decision: edit
+    editedFields:
+      description: "Two API v1 routes under /api/v1/stock-report reserved to admin and
+        manager: GET /consistency returns the consistency envelope for the
+        caller's workspace (workspace_id, checked_at, divergences) and POST
+        /repair runs the manual repair and returns its repaired / not_repaired
+        lists. Both declare their role list as require_roles([ADMIN, MANAGER])
+        on the dependency, so WORKER and SELLER are refused with 403 before the
+        handler body runs and the service is never reached - the authorization
+        boundary belongs to the router here, not to the command. Neither route
+        takes a body or a path parameter: the workspace is the caller's own from
+        the JWT claims, which is what makes a cross-workspace check or repair
+        unreachable from this surface."
+    rationale: '"Manager-only" is wrong - both routes declare require_roles([ADMIN,
+      MANAGER]). Re-verified independently in routers/api_v1/stock_report.py.'
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.276
+timestamp: 2026-09-22T09:12:20.746Z
+graphRevisionBefore: 85fb30b1ad426df0219a5644082ec317a2809707a6c30b43c0749d876a75519e
+graphRevisionAfter: 0ca883d2e5cb844c6dde6b2b00932ee1d3dde071e9a7a80f1531f2116a817680
+evidenceSummary: 6 evidence entries across 5 files; no drift detected
+humanInstruction: Corrections batch B. Five items found FALSE against the code
+  during the owner-authorized confirmation pass; corrected and left pending
+  rather than promoted. The "append-only" claim on stock_report_history_records
+  and the "manager-only" claim on the consistency endpoints were the two most
+  likely to be relied on as invariants.
+reviewTokenCorrelation: 608f0b36729a

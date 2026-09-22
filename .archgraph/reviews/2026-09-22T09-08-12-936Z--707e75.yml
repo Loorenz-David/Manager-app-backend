@@ -1,0 +1,131 @@
+reviewId: 2026-09-22T09-08-12-936Z--707e75
+reviewedItemIds:
+  - edge:command-remove-assignment--calls-->command-move-assignment
+  - edge:command-remove-assignment--writes_to-->table-stock-report-item
+  - edge:command-apply-goal-effect--writes_to-->table-stock-report-history-record
+  - edge:command-apply-goal-effect--writes_to-->table-stock-task-assignment
+  - node:table-stock-report-item
+  - node:table-stock-task-assignment
+  - node:domain-stock-report-row-values-snapshot
+  - node:command-repair-stock-report
+  - node:test-stock-report-contract-docs-guard
+  - edge:command-repair-stock-report--calls-->query-stock-report-consistency
+  - edge:command-repair-stock-report--depends_on-->infrastructure-stock-report-locks
+  - edge:command-repair-stock-report--writes_to-->table-stock-report-history-record
+  - edge:command-repair-stock-report--writes_to-->table-stock-report-item
+  - edge:command-repair-stock-report--writes_to-->table-stock-report-repair-record
+  - edge:endpoint-stock-report-consistency--accepts-->command-repair-stock-report
+  - edge:endpoint-stock-report-consistency--accepts-->query-stock-report-consistency
+  - edge:query-stock-report-consistency--depends_on-->domain-stock-criteria-normalization
+  - edge:query-stock-report-consistency--reads_from-->table-stock-report-history-record
+  - edge:query-stock-report-consistency--reads_from-->table-stock-report-item
+  - edge:query-stock-report-consistency--reads_from-->table-stock-task-assignment
+  - edge:domain-stock-report-events--depends_on-->domain-stock-report-row-values-snapshot
+  - edge:test-stock-report-contract-docs-guard--verifies-->endpoint-stock-report-board-writes
+decisions:
+  - itemId: edge:command-remove-assignment--calls-->command-move-assignment
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-remove-assignment--writes_to-->table-stock-report-item
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-apply-goal-effect--writes_to-->table-stock-report-history-record
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-apply-goal-effect--writes_to-->table-stock-task-assignment
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: node:table-stock-report-item
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: node:table-stock-task-assignment
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: node:domain-stock-report-row-values-snapshot
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: node:command-repair-stock-report
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: node:test-stock-report-contract-docs-guard
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-repair-stock-report--calls-->query-stock-report-consistency
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-repair-stock-report--depends_on-->infrastructure-stock-report-locks
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-repair-stock-report--writes_to-->table-stock-report-history-record
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-repair-stock-report--writes_to-->table-stock-report-item
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:command-repair-stock-report--writes_to-->table-stock-report-repair-record
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:endpoint-stock-report-consistency--accepts-->command-repair-stock-report
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:endpoint-stock-report-consistency--accepts-->query-stock-report-consistency
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:query-stock-report-consistency--depends_on-->domain-stock-criteria-normalization
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:query-stock-report-consistency--reads_from-->table-stock-report-history-record
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:query-stock-report-consistency--reads_from-->table-stock-report-item
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:query-stock-report-consistency--reads_from-->table-stock-task-assignment
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:domain-stock-report-events--depends_on-->domain-stock-report-row-values-snapshot
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+  - itemId: edge:test-stock-report-contract-docs-guard--verifies-->endpoint-stock-report-board-writes
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.276
+timestamp: 2026-09-22T09:08:12.936Z
+graphRevisionBefore: 47da9047fa7af044d92d6d2c8afac3681216e59d7bce1ad00a237679df50db6c
+graphRevisionAfter: 315bed5917b05a56ff547bdba91951f8a6b1304a4d263af9cbb8e8a1e039d564
+evidenceSummary: 23 evidence entries across 10 files; no drift detected
+humanInstruction: "Owner authorized promoting the stock_report graph tier to
+  human_confirmed (2026-09-22). Batch 2 of 2: the remaining 22 of 72 verified
+  items. Each was checked against the implementation at HEAD 7382fdd by a
+  reviewer that read the code, with the orchestrator independently re-verifying
+  the highest-consequence claims (counter count in
+  compute_stock_report_divergences, role lists on the consistency routes). 19
+  further items were found to contain factual errors and are excluded from
+  promotion."
+reviewTokenCorrelation: a5df7f414b81

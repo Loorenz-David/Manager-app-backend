@@ -1,0 +1,84 @@
+reviewId: 2026-09-22T09-12-47-829Z--abc94f
+reviewedItemIds:
+  - edge:command-apply-stock-demand--writes_to-->table-stock-report-history-record
+  - edge:test-task-state-write-site-guard--verifies-->domain-task-state-stock-sync
+  - edge:command-move-assignment--calls-->query-stock-report-consistency
+  - edge:command-apply-goal-effect--calls-->query-stock-report-consistency
+decisions:
+  - itemId: edge:command-apply-stock-demand--writes_to-->table-stock-report-history-record
+    decision: edit
+    editedFields:
+      description: Inserts one quantity_requested_change goal record per entry whose
+        requested quantity INCREASED. A decrease updates the row's
+        quantity_requested and writes no history record at all - the goal record
+        exists to be credited against as work is done, and lowering the target
+        does not create a new thing to work toward.
+    rationale: Said "for each entry whose requested quantity changed"; the code
+      writes only on an INCREASE (apply_stock_demand.py:207). A decrease writes
+      no record.
+  - itemId: edge:test-task-state-write-site-guard--verifies-->domain-task-state-stock-sync
+    decision: edit
+    editedFields:
+      description: "Proves every Task.state write site in the application and scripts
+        trees is accounted for: wired to a function that calls the sync,
+        deliberately excluded with a written reason, a paused-driver that can
+        never reach a task-state helper, or not a Task write at all. It is a
+        completeness instrument and nothing more - it cannot show the sync is
+        correct, only that no write site escaped it, which is the failure mode a
+        command-level sync is actually exposed to."
+    rationale: "\"The guard's five assertions\" is wrong (six test_c4a_* assertions)
+      and it listed three registry dispositions where there are four
+      (paused_driver missing)."
+  - itemId: edge:command-move-assignment--calls-->query-stock-report-consistency
+    decision: edit
+    editedFields:
+      description: "MISCATEGORISED - the relationship should be depends_on, not calls;
+        edge type cannot be edited in place, so this edge is left pending for
+        that reason. Shares the consistency module's per-row recompute helper
+        rather than calling the workspace-wide check: move_assignment's inline
+        self-heal reaches recompute_row_counters through its private
+        _apply_counter_delta, and never calls compute_stock_report_divergences.
+        The coupling is still worth recording, because the inline repair and the
+        manual repair must be unable to disagree about what a row's counters
+        should be - if they forked, a self-heal would move a divergence rather
+        than close it."
+      confidence: 0.3
+    rationale: WRONG RELATIONSHIP TYPE and the tool cannot correct type in place on
+      an edge. move_assignment never calls compute_stock_report_divergences; it
+      reaches the sibling helper recompute_row_counters via its private
+      _apply_counter_delta. Should be depends_on. Confidence dropped to 0.3 to
+      mark it. Fixing the type needs reject + recreate, not authorized.
+  - itemId: edge:command-apply-goal-effect--calls-->query-stock-report-consistency
+    decision: edit
+    editedFields:
+      description: "MISCATEGORISED - the relationship should be depends_on, not calls;
+        edge type cannot be edited in place, so this edge is left pending for
+        that reason. Shares the consistency module's goal recompute helper
+        rather than calling the workspace-wide check: apply_goal_effect's
+        downward self-heal reaches recompute_goal_total through its private
+        _uncredit, and never calls compute_stock_report_divergences. It matters
+        because the inline repair has to land on exactly the number the manual
+        repair would compute from the same credited assignments - one sum, two
+        callers - or the repaired total would immediately re-register as a
+        goal_total divergence."
+      confidence: 0.3
+    rationale: WRONG RELATIONSHIP TYPE, same shape, not correctable in place.
+      apply_goal_effect reaches recompute_goal_total via _uncredit, never the
+      divergence query. Should be depends_on.
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.276
+timestamp: 2026-09-22T09:12:47.829Z
+graphRevisionBefore: 0ca883d2e5cb844c6dde6b2b00932ee1d3dde071e9a7a80f1531f2116a817680
+graphRevisionAfter: e2654ffafe627a9ef8adf295ae626774ba8ab9cc882bdc72e7f029b631c21239
+evidenceSummary: 4 evidence entries across 4 files; no drift detected
+humanInstruction: Corrections batch C, final. Four edges. Two of them
+  (move_assignment and apply_goal_effect to query-stock-report-consistency)
+  carry the WRONG RELATIONSHIP TYPE - they are depends_on, not calls - and the
+  review tool cannot edit an edge's type in place. Their descriptions now say so
+  and their confidence is dropped to 0.3; correcting the type properly requires
+  reject + recreate, which the owner has not authorized and which is left as a
+  follow-up.
+reviewTokenCorrelation: b2c34aa2afc7

@@ -1,0 +1,208 @@
+reviewId: 2026-09-22T09-11-38-580Z--e6830b
+reviewedItemIds:
+  - node:command-delete-stock-report-item
+  - node:domain-stock-report-dense-ordering
+  - node:domain-stock-criteria-normalization
+  - node:command-apply-stock-demand
+  - node:command-move-assignment
+  - node:command-remove-assignment
+  - node:command-apply-goal-effect
+  - node:test-task-state-write-site-guard
+decisions:
+  - itemId: node:command-delete-stock-report-item
+    decision: edit
+    editedFields:
+      description: "The user-facing row deletion. Inside one transaction it takes the
+        ordering advisory lock FIRST, before it looks anything up: every path
+        that soft-deletes a board row holds that same lock, so the row and
+        assignment ids it then discovers unlocked cannot disappear underneath it
+        before the row locks are taken. Discovery is deliberately unlocked - it
+        decides only which ids to lock. The remaining classes follow the global
+        order: tasks, then the row together with every live row of its priority
+        group in one statement ordered by client_id, then the assignments. The
+        task lock is held for lock-order correctness alone; this command reads
+        no task field. That group select doubles as the post-lock re-read and as
+        the command's whole visibility boundary - workspace and is_deleted live
+        in its predicate, so an absent, soft-deleted or foreign id simply is not
+        in the locked result and the command answers NotFound instead of
+        cascading a row a concurrent delete already took. It then delegates
+        every effect to the shared cascade, passing the acting user from the
+        request context and its own trigger name rather than letting the cascade
+        reach for either, and once the transaction closes it coalesces the
+        returned events, dispatches them, and answers with the deleted row's
+        id."
+    rationale: Reversed the advisory lock and discovery; the lock is first
+      (delete_stock_report_item.py:69).
+  - itemId: node:domain-stock-report-dense-ordering
+    decision: edit
+    editedFields:
+      description: "The board's ordering mechanism: a group is (workspace, priority)
+        over non-deleted rows, orders are 1-based and dense, and null priority
+        means null order. Every positional change is one column-referencing
+        UPDATE over an order band with RETURNING, never a read-then-assign, so
+        each shifted neighbour's post-state comes back from the database and
+        becomes one row-updated event. Three operations share it - close the gap
+        a leaving row vacated, append at max+1, and shift the band between a
+        mover's current and target position. The gap close is deliberately open
+        above (everything strictly after the vacated position moves down one),
+        because a dense group has no known upper bound to name; the in-group
+        shift is a closed band whose direction and ends are derived inside the
+        shift from the mover's own from/to, so both of the contract's cases
+        reach one statement and a caller cannot get the sign wrong. The leaving
+        row is excluded from its own gap close by the band starting one past it,
+        which is what lets the deletion cascade keep the deleted row's own order
+        while its group renumbers."
+    rationale: '"closed order band" is false: close_priority_gap calls
+      _shift(high=None), unbounded above.'
+  - itemId: node:domain-stock-criteria-normalization
+    decision: edit
+    editedFields:
+      description: Normalizes a Scanner criteria payload to the MC-3 value table and
+        derives properties_signature from it. A non-blank string becomes a
+        one-element list holding its stripped, lower-cased value - that wrapping
+        is what makes a bare string and a one-element list one identity instead
+        of two. A list of strings with at least one non-blank element becomes
+        its stripped, lower-cased elements, deduplicated and sorted, so element
+        order, casing, padding and repeats cannot fork a row. Everything else is
+        passed through verbatim - a blank string, an all-blank or non-string
+        list, a number, a bool, null, a nested object - because the recipe only
+        claims to understand the shapes Scanner actually sends, and silently
+        coercing the rest would invent identities. Keys are never touched, so
+        two keys differing only in case or whitespace remain two criteria. Key
+        order is neutralized downstream instead, by
+        compute_properties_signature's sort_keys=True.
+        CRITERIA_NORMALIZATION_VERSION is 1; the version exists to force a
+        re-signing migration when the recipe changes, because this signature is
+        the identity half of every stock_report_items row and a changed recipe
+        re-files all of them.
+    rationale: Omitted that a non-blank string is wrapped into a ONE-ELEMENT LIST -
+      the load-bearing half of the identity rule.
+  - itemId: node:command-apply-stock-demand
+    decision: edit
+    editedFields:
+      description: Owner-mode command that applies a batch of Scanner demand entries
+        to a workspace. Refuses a session already in a transaction, sets a
+        statement and lock timeout for its own transaction, then resolves each
+        entry's category, finds or creates the identity row with a single INSERT
+        ... ON CONFLICT DO NOTHING against the partial unique index,
+        re-discovers every row by identity rather than by generated id, takes
+        one sorted FOR UPDATE, and writes a goal history record for each entry
+        whose requested quantity went up. Every write is a Core statement; the
+        one ORM entity load on the path is the FOR UPDATE itself, which has to
+        hand back comparable rows, while discovery deliberately selects identity
+        columns only - an unlocked read may discover ids and nothing more. The
+        lock is taken by identity, never by the client_ids discovery and the
+        insert happened to see, because a concurrent insert can win an identity
+        between them and ON CONFLICT DO NOTHING then returns nothing for it. The
+        statement budget is exact rather than a bound - eight for an all-new
+        request, seven all-changed, five all-unchanged - so a stray SELECT is a
+        contract breach, not an inefficiency. Deadline is checked against the
+        caller's budget as the last action inside the block, and a replay of the
+        same entries is a no-op.
+    rationale: '"The whole path is Core statements" is false - the FOR UPDATE is an
+      ORM entity load.'
+  - itemId: node:command-move-assignment
+    decision: edit
+    editedFields:
+      description: "The single operation that moves a stock task assignment between
+        states - including creation, the two Scanner-only exits, and soft delete
+        - and moves the row's unit counters with it. Asserts the move is legal
+        against a total six-state table read from the ACTIVE/TERMINAL frozensets
+        plus the two named Scanner-only cells, never a hand-typed state list.
+        Writes its own columns and flushes, then issues one guarded
+        column-referencing UPDATE whose WHERE is the row's client_id and the
+        three non-negativity guards and nothing else - so a zero-row result
+        means exactly that a counter would have gone negative, never wrong row
+        or row gone. On that result it self-heals: a fresh read of the stored
+        counters, a recompute from the assignments, one absolute UPDATE, one
+        repair record per column whose stored+delta disagrees with the
+        recomputed value, and one warning carrying the delta. The row's :updated
+        payload is built only from RETURNING, never from the ORM row instance,
+        which the Core UPDATE has just made stale; the assignment event, by
+        contrast, is built from the assignment instance, whose own columns this
+        function wrote and flushed itself. Opens no transaction, commits
+        nothing, dispatches nothing - the caller owns all three, and the caller
+        also owns the row and assignment locks and the post-lock re-read."
+    rationale: '"Events built only from RETURNING, never from the ORM instance" is
+      false - the assignment event is built from the ORM instance.'
+  - itemId: node:command-remove-assignment
+    decision: edit
+    editedFields:
+      description: "Soft-deletes a stock task assignment by delegating to
+        move_assignment with the DELETE sentinel, then recomputes the owning
+        task's is_stock_assignment flag from the assignments that remain. The
+        flag recompute is the whole reason this is an operation of its own: the
+        counters belong to the row, but the flag belongs to the task aggregate,
+        and removal is the only move that can turn it off. Its write to tasks
+        lands after the row and assignment locks, which inverts MC-1's global
+        order (items, tasks, rows, assignments), so it is safe only under the
+        contract that the caller already holds the task lock. That contract is
+        now discharged by every caller rather than merely asserted: delete_task,
+        remove_item_from_task, delete_item, delete_stock_task_assignments and
+        the row-deletion cascade each take the task lock before reaching this
+        function."
+    rationale: 'Stale: claimed the caller contract was "provable only in phase 8".
+      Five real callers exist today, each taking the task lock first.'
+  - itemId: node:command-apply-goal-effect
+    decision: edit
+    editedFields:
+      description: "Maintains a stock report row's goal record running total as
+        assignments move. Credits the current goal record - the newest
+        non-deleted quantity_requested_change record - when an assignment enters
+        awaiting, or resolves early out of in_queue or in_progress, and records
+        on the assignment which record was credited. When an assignment leaves
+        awaiting it un-credits that remembered record, with one exception that
+        carries the whole meaning of the figure: the move to resolved keeps the
+        credit, because resolved work is work the goal asked for and must stay
+        counted. The credit memory is cleared and flushed before the subtraction
+        statement, so any recomputation later in the same transaction already
+        excludes the assignment being un-credited. Takes no lock on the row
+        itself - the protection is the moving assignment's row lock, which every
+        writer of that row's goal totals holds. Self-heals only downward: a
+        total that would go below zero is repaired inline against the recomputed
+        sum and leaves a repair record, while upward drift is left for the
+        manual repair so a human sees it."
+    rationale: "Omitted the load-bearing exception: awaiting -> resolved does NOT
+      un-credit (_goal_credit.py:127)."
+  - itemId: node:test-task-state-write-site-guard
+    decision: edit
+    editedFields:
+      description: "An AST sweep of the application and scripts trees (excluding tests
+        and migrations) collecting every site that could write Task.state, in
+        six construct classes: an attribute assignment named state (including
+        annotated, tuple and for/with targets), a setattr call, an update(Task)
+        or insert(Task) call including the __table__ forms, a Task(...)
+        constructor carrying state= including a dict unpack, a call to one of
+        the four sync-adjacent helpers, and raw SQL whose literal argument names
+        both tasks and state. Classes are matched by construct rather than by
+        spelling - each file's import aliases are resolved first - so renaming
+        an import cannot hide a site. The 85 collected sites are checked against
+        a hand-classified, checked-in registry keyed by (path, lineno): 15
+        task_write, 7 no_sync, 3 paused_driver, 60 not_task. The guard fails on
+        an unregistered site, on a registry entry the collector no longer
+        produces (a stale entry - deliberately, so that touching code near one
+        forces a fresh look), on an unrecognized classification, on a task_write
+        whose named function is missing or never calls
+        sync_task_stock_assignments, on a paused_driver whose new_state is not
+        literally PAUSED, and on a no_sync or not_task entry missing its
+        required reason field."
+    rationale: Listed five of six construct classes (raw SQL missing) and fewer
+      failure modes than the guard enforces. The 85-site count was correct.
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.276
+timestamp: 2026-09-22T09:11:38.580Z
+graphRevisionBefore: 315bed5917b05a56ff547bdba91951f8a6b1304a4d263af9cbb8e8a1e039d564
+graphRevisionAfter: 85fb30b1ad426df0219a5644082ec317a2809707a6c30b43c0749d876a75519e
+evidenceSummary: 12 evidence entries across 9 files; no drift detected
+humanInstruction: "Corrections batch A of B. These 8 items were found FALSE
+  against the code during the owner-authorized confirmation pass and are
+  deliberately NOT promoted: each gets a corrected description and stays pending
+  / ai_inferred, so nothing untrue is recorded as human-confirmed. Notable:
+  command-delete-stock-report-item reversed the advisory lock and discovery (the
+  lock is first, and that ordering is the command's safety argument);
+  domain-stock-criteria-normalization omitted that a bare string is wrapped into
+  a one-element list, which is the identity rule itself."
+reviewTokenCorrelation: 2ec40b4fd8a8
