@@ -342,3 +342,67 @@ byte-identical to it.
   say so (one level below L-12). **L-17** a row's exact outcome is computed from its own fixture,
   side effects included (C1(l)). **L-18** a ruling that amends one registry row amends its callers
   in the same act (§6.5's `_task_flag.py` row).
+
+### Owner-authorized amendment — batch D1 production fix 1 (2026-09-22, Opus implementer, slot `dp`)
+
+**Authority.** Owner, 2026-09-22, verbatim: *"yes i approve the fix ( only assignment
+reconciliation against goal records )."* Phase 3 is APPROVED/VERIFIED; this is a scoped correction
+to one selection inside it, not a reopening. Prompt:
+`prompts/implementer/2026-09-22_batch_D1_fix_production_1.md`.
+
+**What changed — one file, one selection.** `bm/services/queries/stock_report/consistency.py`,
+the `histories` selection inside `compute_stock_report_divergences` now carries the type
+predicate `StockReportHistoryRecord.type ==
+StockReportHistoryRecordTypeEnum.QUANTITY_REQUESTED_CHANGE` (enum member, never a spelled
+string — §9 rule 16). The enum is added to the existing
+`beyo_manager.domain.stock_report.enums` import. Two hunks, +8/−1; nothing else in the file,
+the repo or the plans' criteria tables is touched.
+
+**Why.** The `goal_total` rule was applied to *every* `StockReportHistoryRecord` of the
+workspace. Intention §14C defines it as "`quantity_awaiting` of **each goal record**", and
+§6.2/MC-5 define a goal record as the `quantity_requested_change` record. A `priority_change` /
+`priority_order_change` record carries a **frozen snapshot** of the live counter that nothing
+credits, so its expected total is always 0 and any non-zero snapshot was reported as a permanent
+divergence — which `repair_stock_report` would then overwrite with 0, destroying an append-only
+record. Latent and unreachable until phase 12 became the first code to write a non-goal record.
+
+**What was NOT done, deliberately.** No mirror type guard on `repair_stock_report.py`'s
+`goal_total` UPDATE. Verified independently before accepting the prompt's instruction:
+`compute_stock_report_divergences` has exactly three consumers repo-wide
+(`repair_stock_report.py`, `get_stock_report_consistency.py`, the `assert_stock_report_clean`
+helper) and the repair sources its list **only** from that function (`:170`, `:217`, `:294`,
+with `goal_total` branch at `:248`); it constructs no divergence itself. A second guard would be
+unarmable by any test — lesson **L-37**. My reading agrees with the prompt's.
+
+**Blast radius inside the repair, checked.** The repair's history-record lock set (`:207-213`)
+is derived from the same divergence list, so it now locks goal records only. That is correct:
+no non-goal record can be a repair target any more, so locking one was never needed.
+
+**Judgment call — `is_deleted` deliberately not added.** MC-5 says *non-deleted*
+`quantity_requested_change` record. The selection filters neither before nor after this change,
+so a soft-deleted goal record is still reconciled. Adding that predicate is outside the owner's
+authorization ("only assignment reconciliation against goal records") and outside this
+perimeter, so it was left alone. See the candidate criterion below.
+
+**Candidate criteria (NOT authored into any criteria table — coordinator/owner to fold or refuse).**
+- **CC-1 — the health check ignores non-goal records.** A workspace holding a `priority_change`
+  record with a non-zero `quantity_awaiting` snapshot and no credited assignment yields **no**
+  `goal_total` divergence, and `repair_stock_report` leaves that record byte-identical. Defect it
+  catches: the exact regression this fix repairs — a repair that zeroes an append-only snapshot.
+  Serves §14C `goal_total` / §6.2 "priority records are never touched after they are written".
+  Today the behaviour is covered only indirectly, by plan 12 C3(d)'s
+  `assert_stock_report_clean` clause; nothing asserts the repair's non-write on such a record.
+- **CC-2 — a soft-deleted goal record is out of the reconciliation.** MC-5 scopes the current
+  goal record to non-deleted rows; the check does not. Unreached today (nothing soft-deletes a
+  history record in the shipped code), which is why it is a candidate and not a defect.
+
+**Evidence** (tree `2fb7acb`, clean): witness `test_the_priority_record_snapshots_the_live_awaiting_counter`
+green **unedited**; the whole stock_report surface **638 passed / 0 failed**, including
+`test_consistency_check.py` (16) and `test_repair_stock_report.py` (17); named mutation (revert
+the predicate) red on the witness at `tests/helpers/stock_report.py:143`, reverted with
+`git diff --quiet` exit 0; goal-side probe (predicate flipped to `PRIORITY_CHANGE`) red on
+`test_goal_signature_and_density_divergences_are_reported` and
+`test_manual_repair_fixes_goal_total_and_writes_history_record`, reverted clean. L4
+**23 failed / 3740 passed / 1 skipped**, both ID diffs empty against the 23-ID D1 baseline.
+No test file was touched. Full record:
+`handoffs/implementer/2026-09-22_batch_D1_fix_production_1_handoff.md`.

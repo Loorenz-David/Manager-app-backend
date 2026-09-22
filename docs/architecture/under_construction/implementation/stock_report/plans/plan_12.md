@@ -465,3 +465,25 @@ reading is right; the wording will keep producing two totals for the same work.
 **Lesson (L-D).** C3(d)'s named mutant M-24 was run against a test that is **red at baseline**, so
 it can only be read by where the failure lands, never as green → red. Its mutation must be re-run
 once the blocker is fixed.
+
+## Review log — batch D1 production fix 1 (2026-09-22, Opus implementer, slot `dp`)
+
+**Phase 12's blocker is cleared, and the fix is not in phase 12.** C3(d)'s witness
+`test_the_priority_record_snapshots_the_live_awaiting_counter` was RED on the unmutated tree
+because APPROVED phase 3's `goal_total` check applied the goal-record reconciliation to **every**
+history record, including the `priority_change` record that phase 12 is the first code ever to
+write. Owner authorized the correction on 2026-09-22 (*"yes i approve the fix ( only assignment
+reconciliation against goal records )"*); it is one type predicate in
+`bm/services/queries/stock_report/consistency.py` and is logged in full in **plan 3's Review log**.
+
+**Effect on this plan: none of its files, tests or criteria changed.** The witness now passes
+**unedited** — that is the whole proof — and the other 15 tests in
+`test_stock_report_priority_and_ordering.py` were green before and after (16 passed). No phase 12
+production file, test file or criterion cell was touched by this round.
+
+**For the coordinator.** Phase 12's own state is unchanged by me (still `IMPLEMENTED`); this
+round wrote no tracker row. Two candidate criteria are declared in plan 3's Review log (CC-1: the
+health check ignores non-goal records; CC-2: soft-deleted goal records). CC-1 is arguably phase
+3's, not phase 12's — plan 12 C3(d) already exercises the behaviour incidentally through
+`assert_stock_report_clean`, but nothing anywhere asserts that the **repair** leaves a
+`priority_change` snapshot untouched, which is the destructive half of the defect.
