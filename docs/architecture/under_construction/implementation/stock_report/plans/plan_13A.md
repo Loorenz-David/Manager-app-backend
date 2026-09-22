@@ -327,4 +327,68 @@ moved to this phase's own `stock_demand_deleted_request.py`. Applied here: **F-0
 (13A half)**. No criterion row was added or removed — the count stays 37 rows in 7 criteria.
 Handoff `handoffs/projectionist/2026-09-22_batch_D2_projection_1_handoff.md`.
 
+**Implementation, batch D2 round 1, 2026-09-22 (Opus implementer, slot `d2i`).** Built:
+`StockDemandDeletedOutcomeEnum` (the one name `enums.py` gains — `INLINE_REPAIR_TRIGGERS` not
+added, no caller); `DemandDeleteEntry` / `DemandDeleteOutcome`; `parse_stock_demand_deleted_body`
+with **its own inline field checks** (`stock_demand_request.py` untouched, card D-3 applied);
+`process_stock_demand_deleted`; the third route. 41 tests across four files, 41/41 green; L4
+**23 / 3798 / 1** at `fcf2fb8`, both ID diffs against the checked-in 23-ID baseline empty, pass
+delta +56 = exactly the tests this batch adds. **44 mutation runs declared and executed**, every
+one reverted with `git diff --quiet` exit 0 — the full ledger is in the handoff.
+
+**Judgment calls.**
+1. **Step 4.8 names the priority groups by subquery.** `discover_live_rows_by_identity` returns
+   ids only, so the candidates' priorities are not in hand. Rather than add an unlocked `SELECT`
+   of them, `_lock_rows_and_groups` puts the group predicate inside the same statement
+   (`client_id IN (candidates) OR priority IN (SELECT priority FROM … WHERE client_id IN
+   (candidates) AND priority IS NOT NULL)`). C5(b)'s one-statement-per-class clause and C5(d)'s
+   counts both depend on this; the alternative would have added a sixth statement to the
+   *all `not_found`* shape.
+2. **The group seeding runs through the shipped phase-12 commands**, not raw SQL: every row is put
+   in the group with `set_stock_report_item_priority` and then moved into place with
+   `set_stock_report_item_priority_order`, and the fixture asserts the resulting arrangement
+   disagrees with ascending `client_id` before the act under test. Plan 13's sibling used raw SQL;
+   this is the §6 procedure taken literally.
+3. **C2(f)'s foreign row carries W's own `item_category_id`.** A foreign row with its own
+   category has a different identity tuple, so no tenancy mutation could ever be observed against
+   it — the entry would answer `not_found` because the *category* did not resolve, not because of
+   the workspace filter. The row is therefore seeded as a genuine cross-workspace reference
+   (L-16), and the named mutant reddens exactly this row and nothing else.
+4. **Goal records are selected by `type`.** Because the seed now runs the phase-12 priority
+   commands, a row also carries `priority_change` / `priority_order_change` history records; the
+   helper reads the `quantity_requested_change` one.
+
+**Findings against this plan (nothing here changes an outcome; all routed to the coordinator).**
+- **C1(e)'s named mutation cannot fail against the row's stated outcome.** Dropping
+  `isinstance(payload, list)` leaves a bare JSON object iterating as its *key list*; every key is
+  a `str`, so the entry loop produces per-entry defects and the answer is **422 either way**. The
+  cell predicts the request "reaches the entry loop → red", which is true, and that the outcome
+  moves, which is not. The test asserts **which** 422 (the array-shape message), which is what
+  makes the term load-bearing; observed red.
+- **C1(i)'s fixture cannot fail against its own mutation.** With `"quantityRequested": 5` a mutant
+  that *validates* the key accepts it. Measured: the integration row stayed green under M8 while
+  28 other tests reddened. The unit half now sends `"seven"` — a value phase 7's rule refuses —
+  which is exactly what "ignored, not validated" claims. Cell text worth amending.
+- **C5(e)'s second named mutant is inert.** "Drop the `workspace_id` term in step 5 (W′'s row is
+  deleted)" presumes W′ holds the *same identity*, which a naturally seeded foreign workspace does
+  not (its category id differs). Measured: M17 reddens C2(f) alone and leaves C5(e) green. C5(e)
+  is armed by its first mutant (skip `recompute_task_stock_flag`), which reddens it.
+- **C5(g) does not arm the two sorts, measured four times.** Both named mutations stay green at
+  two identities and at forty, twice each. The mechanism is structural: each batch's absent
+  identities go in as **one** multi-row `INSERT … ON CONFLICT DO NOTHING`, a backend runs that
+  statement to completion unless it blocks, and the second session's statement compilation costs
+  more than the first session's whole insert — so the first holds every new row before the second
+  touches one and no cycle can form, in either sort order. The row's positive half is real and is
+  asserted (both complete, one live row per identity, created exactly once, no `DBAPIError`); the
+  sorts themselves need §9 rule 9's structural check, which the test's docstring now names. **The
+  cell should be amended to say so rather than imply a bite it does not have** — that is the
+  coordinator's edit, not this session's.
+- **C3(b)'s step clause is unexercised, not unmet.** The fixture's six tasks have no task steps, so
+  "the count and states of its steps" is asserted as "still zero". The task-level half is armed
+  (M22 soft-deletes the tasks inside the cascade and reddens the row alone).
+- **§6's seeding procedure cites "phase 11's `set_stock_report_item_priority_order`".** That
+  command is phase **12**'s (master plan §6.5/§6.6). Reference only.
+- **Step 4.10's `RuntimeError` is dead by design (L-37) and stayed dead**: no mutation was written
+  for it and none should be.
+
 (append-only, shared by implementer and reviewer)

@@ -261,3 +261,58 @@ widened.
 Applied here: **F-13 … F-20 (14 half)**. No criterion row was added or removed — the count stays
 **5 criterion rows in 2 criteria**. Handoff
 `handoffs/projectionist/2026-09-22_batch_D2_projection_1_handoff.md`.
+
+---
+
+## Review log — 2026-09-22: implemented (batch D2 round 1, Opus implementer, slot `d2i`)
+
+**Task 1 — `docs/domains/stock_report/api.md`.** All **thirteen** routes with method, path, roles
+and service, the three webhooks included; request bodies, response payloads, the four error classes
+and the three registered message identities. The route table is what C1(a) parses.
+
+**Task 2 — `docs/domains/stock_report/states.md`.** The six-state machine with each state's counter
+and its writer, the two frozensets and why a hand-typed list is a finding, what `resolved_early`
+means on the board, the soft-delete predicates, and the cascade strategy for row deletion by a user
+**and by Scanner**, task deletion, PRIMARY unlink, item deletion, the category guard and the reset
+order.
+
+**Task 3 — RE-VERIFY, and it found something.** Every one of the six SPECIFIED routes was read
+against shipped code field by field; all six match what the frontend was promised. **One thing had
+moved, and it was wrong in the published document**: §6.1's row example showed
+`"properties": {"wood_group": "teak"}` while the stored normalized form is
+`{"wood_group": ["teak"]}` — `normalize_stock_criteria` lower-cases, trims, de-duplicates, sorts,
+and turns a single string into a one-element list (`criteria_normalization.py`), and
+`apply_stock_demand` stores `properties_normalized`. The code is right and the document was wrong.
+Three further things moved: the delete webhook is now built (§5.6 was SPECIFIED and undocumented as
+to its response), no SPECIFIED line remains, and nullability is now stated per field.
+
+**So the re-issue path applied.** A **new** dated file
+`handoffs/to_frontend/HANDOFF_TO_FRONTEND_stock_report_api_20260922.md` carries a `supersedes:` key
+naming `…_api_v2_20260921.md`, a first section saying which document is current, and a §0.1 naming
+exactly what changed. The superseded file was **moved with `git mv`** to `archived/` — unedited, its
+content byte-identical. **`…_match_preview_v2_20260921.md` was not superseded and not moved**, and
+the new document points at it as the authority for that endpoint's semantics. The published file was
+never opened for writing.
+
+**Task 4 — the guard, `app/tests/unit/docs/test_stock_report_docs.py`.** Roots stated in the module
+docstring (verification-scope rule): the **app's own route table** via `create_app()` filtered to
+the two prefixes, with `require_roles([...])` read out of the router AST and the constants resolved
+through `routers/utils/roles.py` (L-38 — a guard grepping for `"admin"` would find nothing and
+pass); master plan §6.7's list **plus** every `event_name=` site under
+`bm/services/commands/stock_report/` with the assignment template expanded over its three kinds;
+`bm/errors/stock_report.py`'s classes and every `STOCK_REPORT_*` identity; the state enum; and, for
+C2(a), the shipped serializers parsed as AST with each field resolved to its mapped column's
+`nullable`. 13 tests, all green, `pytest tests/unit/docs/` 50 → 63 passed.
+
+**Named mutations — 10 runs, all red at their own row, all reverted `git diff --quiet` exit 0.**
+C1(a) route deletion; C1(b) (i) a name removed from the handoff, (ii) a code site renamed so it
+builds a name the handoff lacks, (iii) `stock_report_item:archived` added to the handoff with no
+site building it — (iii) is the only one that reddens the **reverse** direction, confirming
+projection r0 F-13; C1(c) once per document; C1(d) once per surface, confirming F-18; C2(a) a
+flipped nullability claim **and** an emptied "Null when" cell, which redden two different
+serializers' rows. Full ledger in the implementer handoff.
+
+**One note for the reviewer.** C2(a)'s comparison is only as good as its ability to disagree, so a
+second test asserts every serializer's field set contains at least one nullable and one
+non-nullable field — an agreement check over a uniform set cannot fail (L-26). It discharges the
+same row.
