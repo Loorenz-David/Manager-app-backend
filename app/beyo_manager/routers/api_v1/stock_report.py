@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, StrictInt
 from sqlalchemy.ext.asyncio import AsyncSession
+from beyo_manager.domain.items.enums import ItemMajorCategoryEnum
 from beyo_manager.domain.stock_report.enums import StockReportPriorityEnum
 from beyo_manager.errors.stock_report import (
     StockAssignmentPropertyMismatch,
@@ -187,11 +188,22 @@ async def route_preview_stock_task_assignment_match(
 @router.get("/items")
 async def route_list_stock_report_items(
     priority: str | None = None,
+    include_zero_requested: bool = False,
+    item_major_categories: list[ItemMajorCategoryEnum] | None = Query(None),
+    item_category_ids: list[str] | None = Query(None),
     claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
     session: AsyncSession = Depends(get_db),
 ):
     return await _run(
-        list_stock_report_items, claims, session, query_params={"priority": priority}
+        list_stock_report_items,
+        claims,
+        session,
+        query_params={
+            "priority": priority,
+            "include_zero_requested": include_zero_requested,
+            "item_major_categories": item_major_categories,
+            "item_category_ids": item_category_ids,
+        },
     )
 
 

@@ -50,11 +50,28 @@ def _parse_priority_filter(raw):
 
 async def list_stock_report_items(ctx) -> dict:
     priorities = _parse_priority_filter(ctx.query_params.get("priority"))
+    include_zero_requested = ctx.query_params.get("include_zero_requested", False)
+    item_major_categories = ctx.query_params.get("item_major_categories")
+    item_category_ids = ctx.query_params.get("item_category_ids")
 
     statement = select(StockReportItem).where(
         StockReportItem.workspace_id == ctx.workspace_id,
         StockReportItem.is_deleted.is_(False),
     )
+    if not include_zero_requested:
+        statement = statement.where(StockReportItem.quantity_requested > 0)
+    if item_major_categories is not None:
+        # Deliberately no category `is_deleted` predicate: rows keep their category
+        # identity after a category soft-delete and remain filterable by its major
+        # category, just as they remain serializable below.
+        statement = statement.join(
+            ItemCategory, ItemCategory.client_id == StockReportItem.item_category_id
+        ).where(
+            ItemCategory.workspace_id == ctx.workspace_id,
+            ItemCategory.major_category.in_(item_major_categories),
+        )
+    if item_category_ids is not None:
+        statement = statement.where(StockReportItem.item_category_id.in_(item_category_ids))
     if priorities:
         statement = statement.where(
             StockReportItem.priority.in_(priorities)

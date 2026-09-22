@@ -43,7 +43,7 @@ under the project's `handoffs/to_frontend/`.
 | `POST …/assignments` | `{"entries": [{"stock_report_item_id", "task_id", "item_id", "override_property_mismatch"?}]}`, `extra="forbid"` |
 | `POST …/assignments/delete` | `{"client_ids": [...]}`, `extra="forbid"` |
 | `POST …/match-preview` | `{"task_id"?, "article_number"?, "sku"?, "item_category_id", "properties", "quantity"}` — `item_category_id` is **required** (owner ruling, round 3: an Item cannot validly exist without a category, so the preview is never more permissive than creation) |
-| `GET …/items` | none; optional `?priority=high,medium,low` query parameter |
+| `GET …/items` | no body; optional `?priority=high,medium,low`, `?include_zero_requested=true`, repeated `?item_major_categories=seat` / `?item_major_categories=wood`, and repeated `?item_category_ids=<id>` query parameters. All supplied filters combine; zero-requested rows are hidden unless `include_zero_requested=true` |
 | `PATCH …/priority` | `{"priority": "high"\|"medium"\|"low"\|null}` — the key is required and has no default |
 | `PATCH …/priority-order` | `{"priority_order": <strict int>}` — the string `"2"` is refused, never coerced |
 | `DELETE …/items/{client_id}` | **none**; `client_id` travels in the path |

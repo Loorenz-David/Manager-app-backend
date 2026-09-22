@@ -110,11 +110,23 @@ async def _ids(session, workspace_id):
     )
 
 
-async def _list(session, identity, priority=None):
+async def _list(
+    session,
+    identity,
+    priority=None,
+    include_zero_requested=False,
+    item_major_categories=None,
+    item_category_ids=None,
+):
     ctx = ServiceContext(
         identity=identity,
         incoming_data={},
-        query_params={"priority": priority},
+        query_params={
+            "priority": priority,
+            "include_zero_requested": include_zero_requested,
+            "item_major_categories": item_major_categories,
+            "item_category_ids": item_category_ids,
+        },
         session=session,
     )
     return await list_stock_report_items(ctx)
@@ -214,6 +226,93 @@ async def test_no_filter_lists_only_null_priority_rows_by_created_at(db_session)
             row["client_id"]
             for row in (await _list(db_session, identity, ""))["stock_report_items"]
         ] == listed
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()
+
+
+async def test_zero_requested_rows_are_hidden_unless_explicitly_included(db_session):
+    seeded = await seed_stock_report_workspace(db_session)
+    await db_session.commit()
+    workspace_id = seeded.workspace.client_id
+    identity = make_ctx(db_session, seeded).identity
+    try:
+        await _AD(
+            db_session,
+            workspace_id,
+            [
+                _entry(0, "Dining Chairs", "requested", quantity=3),
+                _entry(1, "Dining Chairs", "zero", quantity=0),
+            ],
+        )
+        await db_session.commit()
+
+        rows_by_quantity = {
+            row["quantity_requested"]: row["client_id"]
+            for row in (
+                await _list(db_session, identity, include_zero_requested=True)
+            )["stock_report_items"]
+        }
+
+        assert [
+            row["client_id"]
+            for row in (await _list(db_session, identity))["stock_report_items"]
+        ] == [rows_by_quantity[3]]
+        assert {
+            row["client_id"]
+            for row in (
+                await _list(db_session, identity, include_zero_requested=True)
+            )["stock_report_items"]
+        } == {rows_by_quantity[3], rows_by_quantity[0]}
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()
+
+
+async def test_category_filters_narrow_rows_and_combine_with_each_other(db_session):
+    seeded = await seed_stock_report_workspace(db_session)
+    await db_session.commit()
+    workspace_id = seeded.workspace.client_id
+    identity = make_ctx(db_session, seeded).identity
+    seat, wood = seeded.categories
+    try:
+        await _AD(
+            db_session,
+            workspace_id,
+            [
+                _entry(0, seat.name, "seat", quantity=3),
+                _entry(1, wood.name, "wood", quantity=4),
+            ],
+        )
+        await db_session.commit()
+
+        all_rows = (await _list(db_session, identity))["stock_report_items"]
+        ids_by_category = {
+            row["item_category"]["client_id"]: row["client_id"] for row in all_rows
+        }
+
+        assert {
+            row["client_id"]
+            for row in (
+                await _list(
+                    db_session, identity, item_major_categories=[seat.major_category]
+                )
+            )["stock_report_items"]
+        } == {ids_by_category[seat.client_id]}
+        assert {
+            row["client_id"]
+            for row in (
+                await _list(db_session, identity, item_category_ids=[wood.client_id])
+            )["stock_report_items"]
+        } == {ids_by_category[wood.client_id]}
+        assert (
+            await _list(
+                db_session,
+                identity,
+                item_major_categories=[seat.major_category],
+                item_category_ids=[wood.client_id],
+            )
+        )["stock_report_items"] == []
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
         await db_session.commit()

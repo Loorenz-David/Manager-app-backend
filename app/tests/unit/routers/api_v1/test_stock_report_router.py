@@ -2,6 +2,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from beyo_manager.domain.items.enums import ItemMajorCategoryEnum
 from beyo_manager.errors.stock_report import (
     StockAssignmentPropertyMismatch,
     StockAssignmentRefused,
@@ -248,16 +249,40 @@ def test_ordering_routes_reject_worker(monkeypatch, path, body):
 @pytest.mark.parametrize("role", ["admin", "manager", "worker", "seller"])
 def test_list_items_route_reaches_service_for_every_role(monkeypatch, role):
     http, calls = client(monkeypatch, role)
-    response = http.get("/api/v1/stock-report/items?priority=high,low")
+    response = http.get(
+        "/api/v1/stock-report/items?priority=high,low&include_zero_requested=true"
+        "&item_major_categories=seat&item_major_categories=wood"
+        "&item_category_ids=itc_1&item_category_ids=itc_2"
+    )
     assert response.status_code == 200
     assert len(calls) == 1
-    assert calls[0][1].query_params == {"priority": "high,low"}
+    assert calls[0][1].query_params == {
+        "priority": "high,low",
+        "include_zero_requested": True,
+        "item_major_categories": [
+            ItemMajorCategoryEnum.SEAT,
+            ItemMajorCategoryEnum.WOOD,
+        ],
+        "item_category_ids": ["itc_1", "itc_2"],
+    }
 
 
 def test_list_items_route_passes_no_priority_when_the_param_is_absent(monkeypatch):
     http, calls = client(monkeypatch, "manager")
     assert http.get("/api/v1/stock-report/items").status_code == 200
-    assert calls[0][1].query_params == {"priority": None}
+    assert calls[0][1].query_params == {
+        "priority": None,
+        "include_zero_requested": False,
+        "item_major_categories": None,
+        "item_category_ids": None,
+    }
+
+
+def test_list_items_route_refuses_an_unknown_major_category(monkeypatch):
+    http, calls = client(monkeypatch, "manager")
+    response = http.get("/api/v1/stock-report/items?item_major_categories=unknown")
+    assert response.status_code == 422
+    assert calls == []
 
 
 @pytest.mark.parametrize(("path", "body"), PRIORITY_ROUTES)
