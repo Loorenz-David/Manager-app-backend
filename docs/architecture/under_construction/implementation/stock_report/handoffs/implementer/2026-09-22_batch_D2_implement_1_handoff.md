@@ -17,8 +17,8 @@ commits, listed in §8.
 
 **Every criterion row of both plans is satisfied by a test, and every named mutation was executed
 at its site and observed red — except one row, C5(g), whose two named mutations are measurably
-inert and which is reported as such rather than dressed up.** 42 rows, 41 new tests, 54 mutation
-runs, L4 **23 / 3798 / 1** with both failure-ID diffs empty.
+inert and which is reported as such rather than dressed up.** 42 rows, **56** new tests (43 for 13A + 13 for 14 — the L4's pass delta
+exactly), 54 mutation runs, L4 **23 / 3798 / 1** with both failure-ID diffs empty.
 
 ## ⚠ OWNER DECISIONS REQUIRED (0)
 

@@ -331,7 +331,7 @@ Handoff `handoffs/projectionist/2026-09-22_batch_D2_projection_1_handoff.md`.
 `StockDemandDeletedOutcomeEnum` (the one name `enums.py` gains — `INLINE_REPAIR_TRIGGERS` not
 added, no caller); `DemandDeleteEntry` / `DemandDeleteOutcome`; `parse_stock_demand_deleted_body`
 with **its own inline field checks** (`stock_demand_request.py` untouched, card D-3 applied);
-`process_stock_demand_deleted`; the third route. 41 tests across four files, 41/41 green; L4
+`process_stock_demand_deleted`; the third route. **43** tests across four files (33 integration + 6 unit parse + 2 lock + 2 router), all green; L4
 **23 / 3798 / 1** at `fcf2fb8`, both ID diffs against the checked-in 23-ID baseline empty, pass
 delta +56 = exactly the tests this batch adds. **44 mutation runs declared and executed**, every
 one reverted with `git diff --quiet` exit 0 — the full ledger is in the handoff.
