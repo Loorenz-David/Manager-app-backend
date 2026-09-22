@@ -159,6 +159,15 @@ thing the whole pipeline was for.
 
 ## Carried OUT of this pipeline — still not absorbed
 
+- **S3, the lock-order window (owner-ruled "file it", 2026-09-22).** An unlocked discovery decides
+  a lock set, so an assignment created in the same instant is deleted correctly but under a lock
+  taken out of the promised order; worst case is a Postgres tie-break and a Scanner retry. **The
+  same shape ships in APPROVED phase 13**, so it predates D2. Fix, when it is taken: re-discover
+  the assignment set **under** the row lock — `process_stock_demand_deleted.py` steps 4.6–4.9,
+  `delete_stock_report_item.py`, `_delete_stock_report_item_cascade.py` block (i). Plan 13A §7 Q1
+  and MC-1's note must carry the qualification: an unlocked discovery is sound **for rows** (the
+  advisory lock closes that window) but **not for children another path may add**.
+
 - **The mandatory-category enforcement gap** — needs its own intention, a migration and a backfill
   audit.
 - **`test_database_isolation.py` slot-sensitivity** — a foreign APPROVED project's file.

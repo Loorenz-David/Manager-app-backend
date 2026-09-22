@@ -564,6 +564,44 @@ changes. **In any of those the re-read becomes load-bearing.** It is correct def
 **not** to be deleted on the strength of being inert — that is exactly the misreading the
 `EQUIVALENT` label invites and the reason the owner required this wording.
 
+---
+
+# D2 review card — owner ruling, 2026-09-22
+
+## S3 — the lock-order window — **RULED: FILE IT.** Owner, 2026-09-22.
+
+**Not fixed in D2. Not accepted silently. Recorded with its measurement, and §7 Q1 corrected so it
+is not left on record as unqualified.**
+
+**What it is.** Scanner drops a rule and the delete webhook starts removing the board row. In the
+same instant a worker assigns a task to that same row. For roughly a millisecond the webhook has
+already discovered which assignments exist but has not yet locked anything, so the worker's new
+assignment slips in behind the discovery. **The webhook still deletes it and the data still ends up
+correct** — but to do so it reaches for a lock in an order §7 Q1 promises it never takes. If a third
+actor is deleting an assignment on that same task at that instant, Postgres breaks the tie by
+killing one request. Scanner retries; the worker sees a spinner. **Over a year of a busy floor this
+is a handful of retries, not a data loss.**
+
+**Why filing is right and is not just the cheap option.** The same shape has been shipping in
+**APPROVED phase 13**'s `delete_stock_report_item` since it was approved — **D2 is not where it was
+introduced and is not where it should be judged.** Fixing it means one re-discovery under the row
+lock across two files, which reopens an approved phase on the project's last day, and the fix would
+ship with **no test that can arm it**, because the race is not reproducible on demand. That is the
+L-37 shape this project has already shipped once.
+
+**The exact fix, recorded so the backlog item is actionable rather than a worry:** re-discover the
+assignment set **under** the row lock rather than before it, in `process_stock_demand_deleted.py`
+(steps 4.6–4.9) and in `delete_stock_report_item.py` / `_delete_stock_report_item_cascade.py`
+block (i).
+
+**What changes in the documents:** plan 13A **§7 Q1** must stop reading as an unqualified promise.
+The reviewer's own wording for it: an unlocked discovery deciding a lock set is **sound for rows**,
+because the advisory lock closes that window — but **not for children another path may add**. That
+qualification goes into Q1 and into MC-1's note.
+
+**Trace.** Review round 1 finding S3; plan 13A §7 Q1; `process_stock_demand_deleted.py` steps
+4.6–4.9; `delete_stock_report_item.py`; `_delete_stock_report_item_cascade.py` block (i).
+
 ## Carried OUT of the pipeline entirely — not cards, not for tonight
 
 Repeated from `FINALIZATION_STEPS.md` so this file stands alone:
