@@ -477,3 +477,76 @@ ordering are covered; ordering's *evidence* is B1's problem, not the code's.
 **Probes applied and reverted** (all `git diff --quiet -- app/` exit 0 after):
 `test_process_stock_demand_deleted.py`, `_delete_stock_report_item_cascade.py`,
 `process_stock_demand_deleted.py`. No DB, schema or archgraph side effect.
+
+---
+
+## Review log — 2026-09-22: batch D2 verification fix round 1 (implementer, Opus, slot `d2f`)
+
+**Scope: three rows, no production code.** `git diff --name-only -- app/beyo_manager/` is **empty**
+at close. Two test files changed: `test_process_stock_demand_deleted.py` and
+`tests/unit/docs/test_stock_report_docs.py`. No criterion cell was edited — proposed cell text for
+B2, C3(a), C5(e) and N4 is in the handoff for the coordinator to apply.
+
+**B1 (blocking) — C5(b)'s id order is now produced by the fixture, not by the clock.** Both
+candidates are minted first, then `sorted()` over the minted ids decides which identity plays R
+(position 2) and which plays C (position 3), the way `test_c5c` already does for `row_x, row_y`;
+`assert row_r < row_c` states the premise before the act. The flake is gone: the row is green under
+both mint orders, and red when the pin is inverted (`assert 3 == 2`, the reviewer's exact failure).
+
+**A second unpinned coupling was found while fixing the first, and it was in my own repair.** The
+two candidates' *items* still carried wood types bound to the old positional roles (`Teak` for the
+position-2 row, `Oak` for the position-3 row). Once R is chosen by id, that binding is wrong half
+the time: under the swapped-mint probe the fixture blew up with `StockAssignmentPropertyMismatch`
+(MC-12) before reaching any assertion. Each candidate now carries its own matching wood type
+alongside its properties. **The probe found it; reading the diff would not have.**
+
+**S1 — C3(a) reads every history record, and the fixture's own count is asserted.** The row records
+all of R's history records before the act, asserts the kinds present and that all are live, and
+after the act asserts the same id set, the same count, and `is_deleted` / `deleted_at == ctx.now` /
+`deleted_by_id IS NULL` on each.
+
+**Correction to review 1's premise, measured: R carries TWO history kinds, not three.** The fixture
+produces `quantity_requested_change` and `priority_change` only — **no** `priority_order_change`,
+because `_seed_group` appends the rows in the wanted order with the phase-12 priority command, so
+every row already sits at its wanted position when `set_stock_report_item_priority_order` runs and
+each call is a no-op that writes no history record. The second half of §6's stated seeding
+procedure is therefore inert in every row that uses it. This does not weaken the fix — two kinds is
+"more than one X", and the reviewer's type-narrowing mutant reddens on the `priority_change` record
+— but the cell and review 1's lesson 3 both say "three".
+
+**S2 — C5(e)'s foreign workspace holds the cell's shape.** W′ is seeded with the same row through
+`AD`, the same `A1 R2 C3` group through the phase-12 commands and the same six assignments through
+`CR` plus the state moves, and the row now asserts W′'s counters, goal, group orders, six live
+assignments, six task flags and live history records as well as its divergence list. The fixture
+kit gained a `Space` (identity, workspace, category, manager) so the same helpers build either
+workspace; every helper's `space` argument defaults to W, so no other row changed.
+
+**W′'s row differs from W's R in one respect, by necessity:** its `wood_group` is `light`, not
+`teak`. The `env` fixture's cross-workspace reference row (C2(f)) already occupies the default
+identity in W′ and `apply_stock_demand` mints no second live row for an existing identity. The cell
+asks for the same *shape*, which is what discriminates; the identity tuple could never be identical
+across workspaces anyway (the category ids differ — the reason C5(e)'s second mutant was retired as
+inert, implementer F-3).
+
+**Measured both ways, which is the point of the fix.** A gap close that loses its `workspace_id`
+term reddens C5(e) on W′'s `order_density` divergence and nothing else in the phase. With W′ as it
+stood before this round — a single bare row — **the same mutant is invisible and C5(e) passes.**
+
+**Notes.** N2 applied (C6(a) gains `assert_stock_report_clean` + the foreign check, C6(b) gains the
+clean check). N3 applied as a before/after snapshot of all four MC-9 tables for W′ — stated plainly:
+three of the four are 0 in that fixture, so only the `stock_report_items` count is load-bearing
+there. N5 applied (`rglob`, measured both ways: an `event_name=` site planted in the `requests/`
+subpackage reddens C1(b) under `rglob` and stays green under `glob`). N6 applied as non-emptiness
+guards on the three scans (contracts, not counts — charter rule 13), each proven able to fire
+separately (charter rule 12). N1, N4, N7 are records or cell edits, declined as out of this
+session's authority and carried to the coordinator.
+
+**Judgment calls.** (1) Where review 1's suggested correction and the measured fixture disagreed
+(S1's "three kinds"), the assertion follows the measurement and the disagreement is reported rather
+than engineered away — charter rule 14. (2) The exact history count is asserted from the fixture's
+own output; the three-kind shape is a fixture change belonging to the coordinator, proposed in the
+handoff, not made here. (3) C5(e)'s discriminating mutant (`close_priority_gap` loses its workspace
+term) is self-chosen and offered as the replacement for the cell's retired second mutant. (4) Its
+first siting — dropping the term from `_ordering.py:_group_where` — **mis-landed**: that predicate
+also serves the seeding commands, so it broke W's own fixture and reddened the W half. Re-sited to
+`close_priority_gap` alone and reported here rather than quietly kept.

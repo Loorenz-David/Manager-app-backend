@@ -125,6 +125,18 @@ _scalar_ids = itertools.count(100)
 
 
 @dataclass
+class Space:
+    """The handles one workspace's seeding needs. W and W' each get one so the
+    fixture kit can build the **same shape** in either workspace — C5(e)'s foreign
+    control is that shape, not a bare row (review 1, S2)."""
+
+    identity: dict
+    workspace_id: str
+    category_id: str
+    manager_id: str
+
+
+@dataclass
 class Env:
     """Every id is captured as a plain string while the seed's ORM instances are
     live: `session.rollback()` expires them, and a later attribute read would attempt
@@ -139,6 +151,8 @@ class Env:
     item_id: str
     task_id: str
     foreign_row_id: str
+    own: Space
+    foreign: Space
 
 
 @pytest_asyncio.fixture
@@ -156,16 +170,30 @@ async def env(db_session, monkeypatch):
     )
     db_session.add(foreign_row)
     await db_session.flush()
-    env = Env(
-        session=db_session,
+    own_space = Space(
         identity=make_ctx(db_session, own).identity,
         workspace_id=own.workspace.client_id,
-        foreign_workspace_id=foreign.workspace.client_id,
         category_id=own.categories[0].client_id,
         manager_id=own.manager.client_id,
+    )
+    foreign_space = Space(
+        identity=make_ctx(db_session, foreign).identity,
+        workspace_id=foreign.workspace.client_id,
+        category_id=foreign.categories[0].client_id,
+        manager_id=foreign.manager.client_id,
+    )
+    env = Env(
+        session=db_session,
+        identity=own_space.identity,
+        workspace_id=own_space.workspace_id,
+        foreign_workspace_id=foreign_space.workspace_id,
+        category_id=own_space.category_id,
+        manager_id=own_space.manager_id,
         item_id=own.item.client_id,
         task_id=own.task.client_id,
         foreign_row_id=foreign_row.client_id,
+        own=own_space,
+        foreign=foreign_space,
     )
     await db_session.commit()
 
@@ -200,6 +228,23 @@ async def _assert_foreign_untouched(env: Env) -> None:
     ) == (0, 0, 0)
 
 
+async def _foreign_table_counts(env: Env) -> dict:
+    """The foreign workspace's row count in each of the four MC-9 tables."""
+    counts = {}
+    for model in (
+        StockReportItem,
+        StockTaskAssignment,
+        StockReportHistoryRecord,
+        StockReportRepairRecord,
+    ):
+        counts[model] = await env.session.scalar(
+            select(func.count())
+            .select_from(model)
+            .where(model.workspace_id == env.foreign_workspace_id)
+        )
+    return counts
+
+
 async def _settle(env: Env) -> None:
     """Close the read transaction a helper autobegan: the command refuses a session
     that is already in a transaction (X3)."""
@@ -217,11 +262,15 @@ def _entry(index, properties_raw, *, quantity=10, category=CATEGORY):
     )
 
 
-async def _AD(env: Env, entries):
+def _space(env: Env, space: Space | None) -> Space:
+    return env.own if space is None else space
+
+
+async def _AD(env: Env, entries, *, space: Space | None = None):
     """The demand service — the fixture's row constructor (plan 13A §6)."""
     return await apply_stock_demand(
         env.session,
-        workspace_id=env.workspace_id,
+        workspace_id=_space(env, space).workspace_id,
         entries=entries,
         now=NOW,
         deadline=time.monotonic() + 60,
@@ -229,10 +278,12 @@ async def _AD(env: Env, entries):
     )
 
 
-async def _make_row(env: Env, properties_raw=None, *, quantity_requested=10):
+async def _make_row(
+    env: Env, properties_raw=None, *, quantity_requested=10, space: Space | None = None
+):
     properties_raw = CRITERIA if properties_raw is None else properties_raw
     result = await _AD(
-        env, [_entry(0, properties_raw, quantity=quantity_requested)]
+        env, [_entry(0, properties_raw, quantity=quantity_requested)], space=space
     )
     assert result.events, "AD created no row"
     return result.events[0].client_id
@@ -268,37 +319,38 @@ async def _DD(env: Env, entries, *, monkeypatch=None, headers=None, body=None):
     return result, captured
 
 
-async def _make_pair(env: Env, *, quantity, wood_type="Teak"):
+async def _make_pair(env: Env, *, quantity, wood_type="Teak", space: Space | None = None):
     """One more (item, task) pair shaped like F0's — a task holds one active PRIMARY
     item and an item holds one active assignment (master plan §6.1b)."""
+    target = _space(env, space)
     suffix = uuid4().hex[:10]
     item = Item(
         client_id=f"itm_sr_{suffix}",
-        workspace_id=env.workspace_id,
+        workspace_id=target.workspace_id,
         article_number=f"SR-{suffix}",
         state=ItemStateEnum.PENDING,
         quantity=quantity,
-        item_category_id=env.category_id,
+        item_category_id=target.category_id,
         properties={"wood_type": wood_type, "upholstery": "Down"},
     )
     task = Task(
         client_id=f"tsk_sr_{suffix}",
-        workspace_id=env.workspace_id,
+        workspace_id=target.workspace_id,
         task_scalar_id=next(_scalar_ids),
         task_type=TaskTypeEnum.INTERNAL,
         state=TaskStateEnum.PENDING,
-        created_by_id=env.manager_id,
+        created_by_id=target.manager_id,
     )
     env.session.add_all([item, task])
     await env.session.flush()
     env.session.add(
         TaskItem(
             client_id=f"tim_sr_{suffix}",
-            workspace_id=env.workspace_id,
+            workspace_id=target.workspace_id,
             task_id=task.client_id,
             item_id=item.client_id,
             role=TaskItemRoleEnum.PRIMARY,
-            created_by_id=env.manager_id,
+            created_by_id=target.manager_id,
         )
     )
     await env.session.flush()
@@ -306,9 +358,9 @@ async def _make_pair(env: Env, *, quantity, wood_type="Teak"):
     return item, task
 
 
-async def _CR(env: Env, row_id, item, task):
+async def _CR(env: Env, row_id, item, task, *, space: Space | None = None):
     ctx = ServiceContext(
-        identity={**env.identity, "role_name": "worker"},
+        identity={**_space(env, space).identity, "role_name": "worker"},
         session=env.session,
         now=NOW,
         incoming_data={
@@ -337,27 +389,38 @@ async def _fresh_assignment(session, client_id):
     ).scalar_one()
 
 
-async def _move(env: Env, assignment_id, target):
+async def _move(env: Env, assignment_id, target, *, space: Space | None = None):
+    where = _space(env, space)
     assignment = await _fresh_assignment(env.session, assignment_id)
     await move_assignment(
         env.session,
         assignment,
         target,
-        workspace_id=env.workspace_id,
-        actor_user_id=env.manager_id,
+        workspace_id=where.workspace_id,
+        actor_user_id=where.manager_id,
         now=NOW,
         trigger="test",
     )
     await env.session.commit()
 
 
-async def _assignment_on(env: Env, row_id, *, quantity, state=None, wood_type="Teak"):
-    item, task = await _make_pair(env, quantity=quantity, wood_type=wood_type)
-    assignment_id = await _CR(env, row_id, item, task)
+async def _assignment_on(
+    env: Env,
+    row_id,
+    *,
+    quantity,
+    state=None,
+    wood_type="Teak",
+    space: Space | None = None,
+):
+    item, task = await _make_pair(
+        env, quantity=quantity, wood_type=wood_type, space=space
+    )
+    assignment_id = await _CR(env, row_id, item, task, space=space)
     if state is not None and state is not S.IN_QUEUE:
         if state is S.RESOLVED:
-            await _move(env, assignment_id, S.AWAITING)
-        await _move(env, assignment_id, state)
+            await _move(env, assignment_id, S.AWAITING, space=space)
+        await _move(env, assignment_id, state, space=space)
     return assignment_id, item, task
 
 
@@ -418,7 +481,26 @@ async def _goal_awaiting(session, row_id):
     return (await _goal_record(session, row_id)).quantity_awaiting
 
 
-async def _seed_group(env: Env, ordered_ids, priority="high"):
+async def _history_records(session, row_id):
+    """**Every** history record of the row, keyed by `client_id` — not just the goal
+    one. C3(a) promises "every history record … soft-deleted with NULL author", and a
+    row that has been through the phase-12 priority commands carries three kinds
+    (review 1, S1)."""
+    return {
+        record.client_id: record
+        for record in (
+            await session.execute(
+                select(StockReportHistoryRecord)
+                .where(StockReportHistoryRecord.stock_report_item_id == row_id)
+                .execution_options(populate_existing=True)
+            )
+        )
+        .scalars()
+        .all()
+    }
+
+
+async def _seed_group(env: Env, ordered_ids, priority="high", *, space: Space | None = None):
     """Produce a group whose ascending `priority_order` **disagrees** with ascending
     `client_id`, by a procedure and never by assumption (plan 13A §6; L-14).
 
@@ -428,7 +510,8 @@ async def _seed_group(env: Env, ordered_ids, priority="high"):
     so the seed runs through shipped code. The disagreement is asserted here, before
     the act under test.
     """
-    identity = env.identity
+    where = _space(env, space)
+    identity = where.identity
     for client_id in ordered_ids:
         await set_stock_report_item_priority(
             ServiceContext(
@@ -450,7 +533,7 @@ async def _seed_group(env: Env, ordered_ids, priority="high"):
         )
         await env.session.commit()
 
-    orders = await _orders(env.session, env.workspace_id)
+    orders = await _orders(env.session, where.workspace_id)
     placed = [client_id for client_id in ordered_ids]
     assert [orders[client_id] for client_id in placed] == list(
         range(1, len(placed) + 1)
@@ -792,15 +875,29 @@ async def test_c2h_emits_no_created_event(env, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-async def _seed_six_assignment_row(env: Env):
+async def _seed_six_assignment_row(
+    env: Env, *, space: Space | None = None, properties=None, wood_type="Teak"
+):
     """C3(a)'s fixture: R in the `high` group as R2 of `A1 R2 C3`, with **six**
     assignments, one per member of the state enum (§14E E5 "any state", enumerated
-    and never sampled)."""
-    row_id = await _make_row(env)
+    and never sampled).
+
+    `space` builds the same shape in the foreign workspace — C5(e)'s control is this
+    shape in W', not a bare row (review 1, S2). `properties` and `wood_type` only
+    name W''s row: the `env` fixture already holds W''s cross-workspace reference row
+    at the default identity (C2(f)), the demand service will not mint a second live
+    row for an identity that already exists, and MC-12 requires each assignment's
+    item to match its row's criteria.
+    """
+    row_id = await _make_row(env, properties, space=space)
+    prefix = "oak" if properties is None else "elm"
     fillers = [
-        await _make_row(env, {"wood_group": [f"oak{index}"]}) for index in range(2)
+        await _make_row(env, {"wood_group": [f"{prefix}{index}"]}, space=space)
+        for index in range(2)
     ]
-    await _seed_group(env, _group_arrangement([None, row_id, None], fillers))
+    await _seed_group(
+        env, _group_arrangement([None, row_id, None], fillers), space=space
+    )
 
     assignments = {}
     for label, quantity, state in (
@@ -812,7 +909,12 @@ async def _seed_six_assignment_row(env: Env):
         ("A6", 3, S.IN_PROGRESS),
     ):
         assignment_id, item, task = await _assignment_on(
-            env, row_id, quantity=quantity, state=state
+            env,
+            row_id,
+            quantity=quantity,
+            state=state,
+            wood_type=wood_type,
+            space=space,
         )
         assignments[label] = (assignment_id, item, task)
     await _settle(env)
@@ -829,6 +931,19 @@ async def test_c3a_every_assignment_state_is_removed_and_only_awaiting_is_uncred
 
     assert await _counters(env.session, row_id) == (1, 3, 2)
     assert await _goal_awaiting(env.session, row_id) == 10
+    history_before = await _history_records(env.session, row_id)
+    # "Every X" needs a fixture with more than one X and an assertion that counts
+    # them (review 1, S1). The fixture gives R **two** kinds, not the three review 1
+    # named: `_seed_group` appends the rows in the wanted order, so every row is
+    # already at its wanted position when `set_stock_report_item_priority_order`
+    # runs and no `priority_order_change` record is written. Both kinds are asserted
+    # by identity below, so the type-narrowing mutant reddens on the second one.
+    assert {record.type for record in history_before.values()} == {
+        StockReportHistoryRecordTypeEnum.QUANTITY_REQUESTED_CHANGE,
+        StockReportHistoryRecordTypeEnum.PRIORITY_CHANGE,
+    }
+    assert len(history_before) == 2
+    assert all(record.is_deleted is False for record in history_before.values())
     stamps_before = {}
     for label, (assignment_id, _item, _task) in assignments.items():
         assignment = await _fresh_assignment(env.session, assignment_id)
@@ -852,9 +967,13 @@ async def test_c3a_every_assignment_state_is_removed_and_only_awaiting_is_uncred
         assert refreshed_task.is_stock_assignment is False, label
 
     assert await _goal_awaiting(env.session, row_id) == 8
-    goal = await _goal_record(env.session, row_id)
-    assert goal.is_deleted is True
-    assert goal.deleted_by_id is None
+    history_after = await _history_records(env.session, row_id)
+    assert set(history_after) == set(history_before)
+    assert len(history_after) == len(history_before)
+    for record in history_after.values():
+        assert record.is_deleted is True, record.type
+        assert record.deleted_at == NOW, record.type
+        assert record.deleted_by_id is None, record.type
 
     row = await _fresh_row(env.session, row_id)
     assert row.is_deleted is True
@@ -1145,9 +1264,26 @@ async def test_c5b_two_rows_of_one_group_each_close_their_own_gap(env, monkeypat
     It also **measures** Q2's promise under `record_statements`: one advisory lock and
     exactly one `FOR UPDATE` per lock class whatever the number of candidate rows
     (master plan §9 rule 7, sixth authorized use).
+
+    **Which identity is R is decided from the minted ids, never from creation order**
+    (review 1, B1; the `test_c5c` pattern). The cascade loop runs ascending
+    `client_id`, so "C was shifted 3 → 2 by R's cascade **before** its own deletion"
+    holds only when R's id sorts first; a ULID carries no monotonic counter, so two
+    `_make_row` calls decide nothing (master plan §10). R therefore takes position 2
+    and C position 3 by `sorted()` over the two minted ids, the premise is asserted
+    before the act, and C stays a candidate *after* another candidate in the group so
+    the shift clause survives.
     """
-    row_r = await _make_row(env)
-    row_c = await _make_row(env, {"wood_group": ["light"]})
+    # Each candidate carries its own MC-12-matching wood type, because which
+    # identity plays R is decided below from the ids and not from this order.
+    candidates = {}
+    for properties, wood_type in (
+        ({"wood_group": ["teak"]}, "Teak"),
+        ({"wood_group": ["light"]}, "Oak"),
+    ):
+        candidates[await _make_row(env, properties)] = (properties, wood_type)
+    row_r, row_c = sorted(candidates)
+    assert row_r < row_c, "the cascade loop must reach R before C"
     fillers = [
         await _make_row(env, {"wood_group": [f"ash{index}"]}) for index in range(2)
     ]
@@ -1155,16 +1291,21 @@ async def test_c5b_two_rows_of_one_group_each_close_their_own_gap(env, monkeypat
     A, D = arrangement[0], arrangement[3]
     await _seed_group(env, arrangement)
 
-    a_r, _item_r, _task_r = await _assignment_on(env, row_r, quantity=1)
+    a_r, _item_r, _task_r = await _assignment_on(
+        env, row_r, quantity=1, wood_type=candidates[row_r][1]
+    )
     a_c, _item_c, _task_c = await _assignment_on(
-        env, row_c, quantity=2, wood_type="Oak"
+        env, row_c, quantity=2, wood_type=candidates[row_c][1]
     )
     await _settle(env)
 
     async with record_statements(env.session) as statements:
         result, captured = await _DD(
             env,
-            [_identity_entry(), _identity_entry({"wood_group": ["light"]})],
+            [
+                _identity_entry(candidates[row_r][0]),
+                _identity_entry(candidates[row_c][0]),
+            ],
             monkeypatch=monkeypatch,
         )
 
@@ -1324,8 +1465,34 @@ async def test_c5e_the_consistency_check_stays_empty_in_both_workspaces(env):
     """C5(e), carried question (5): after C3(a)'s deletion the MC-20 check returns
     `[]` for W — every task flag false, the group dense, no counter divergence and
     the soft-deleted goal consistent with its kept credits — and `[]` for a foreign
-    workspace seeded with the identical shape, whose row is still live."""
+    workspace holding **the same shape**, whose row is still live.
+
+    W' is seeded with the cell's shape, not a bare row (review 1, S2): the same row
+    through `AD`, the same `A1 R2 C3` group through the phase-12 commands and the
+    same six assignments through `CR` plus the state moves. Only its `wood_group`
+    values differ, because the `env` fixture's cross-workspace reference row (C2(f))
+    already occupies the default identity in W' and `AD` mints no second live row for
+    an identity that exists. Every clause below is therefore asserted against a W'
+    that *could* diverge: a group whose density a leaking gap close would break,
+    counters a leaking cascade would zero, six task flags a leaking recompute would
+    clear, and a goal record a leaking credit would move.
+    """
     row_id, _fillers, _assignments = await _seed_six_assignment_row(env)
+    foreign_row_id, _foreign_fillers, foreign_assignments = (
+        await _seed_six_assignment_row(
+            env,
+            space=env.foreign,
+            properties={"wood_group": ["light"]},
+            wood_type="Birch",
+        )
+    )
+    foreign_before = {
+        "counters": await _counters(env.session, foreign_row_id),
+        "goal": await _goal_awaiting(env.session, foreign_row_id),
+        "orders": await _orders(env.session, env.foreign_workspace_id),
+    }
+    await _settle(env)
+
     await _DD(env, [_identity_entry()])
 
     assert await compute_stock_report_divergences(env.session, env.workspace_id) == []
@@ -1344,6 +1511,24 @@ async def test_c5e_the_consistency_check_stays_empty_in_both_workspaces(env):
         )
     goal = await _goal_record(env.session, row_id)
     assert goal.quantity_awaiting == 8
+
+    # W' is untouched in every part of the shape, not only in its bare row.
+    foreign_row = await _fresh_row(env.session, foreign_row_id)
+    assert foreign_row.is_deleted is False
+    assert await _counters(env.session, foreign_row_id) == foreign_before["counters"]
+    assert await _goal_awaiting(env.session, foreign_row_id) == foreign_before["goal"]
+    assert (
+        await _orders(env.session, env.foreign_workspace_id) == foreign_before["orders"]
+    )
+    for label, (assignment_id, _item, task) in foreign_assignments.items():
+        assert (
+            await _fresh_assignment(env.session, assignment_id)
+        ).is_deleted is False, label
+        assert (
+            await _fresh_task(env.session, task.client_id)
+        ).is_stock_assignment is True, label
+    for record in (await _history_records(env.session, foreign_row_id)).values():
+        assert record.is_deleted is False, record.type
     await _assert_foreign_untouched(env)
 
 
@@ -1362,6 +1547,9 @@ async def test_c5f_the_workspace_reset_still_clears_everything(env, monkeypatch)
     )
     await _settle(env)
     await _DD(env, [_identity_entry()])
+
+    foreign_before = await _foreign_table_counts(env)
+    await _settle(env)
 
     reset_ctx = ServiceContext(
         identity=env.identity,
@@ -1396,14 +1584,12 @@ async def test_c5f_the_workspace_reset_still_clears_everything(env, monkeypatch)
         )
         is None
     )
-    assert (
-        await env.session.scalar(
-            select(func.count())
-            .select_from(StockReportItem)
-            .where(StockReportItem.workspace_id == env.foreign_workspace_id)
-        )
-        == 1
-    )
+    # "the foreign counts unchanged" — all four MC-9 tables, not just the items one
+    # (review 1, N3). Three of the four are 0 in this fixture: the foreign workspace
+    # holds one bare row and nothing else, so `stock_report_items` (1 → 1) is the
+    # only count here that could move.
+    assert await _foreign_table_counts(env) == foreign_before
+    assert foreign_before[StockReportItem] == 1
     await _assert_foreign_untouched(env)
 
 
@@ -1426,6 +1612,9 @@ async def test_c6a_the_first_statement_sets_both_limits_from_the_default(env):
     assert "statement_timeout" in statement
     assert "lock_timeout" in statement
     assert list(parameters) == [str(TIMEOUT_MS), str(TIMEOUT_MS)]
+    # §6's standing close, which this row was missing (review 1, N2).
+    await assert_stock_report_clean(env.session, env.workspace_id)
+    await _assert_foreign_untouched(env)
 
 
 async def test_c6b_the_deadline_is_checked_before_the_commit(env, monkeypatch):
@@ -1454,6 +1643,8 @@ async def test_c6b_the_deadline_is_checked_before_the_commit(env, monkeypatch):
         )
         == 0
     )
+    # §6's standing close, which this row was missing (review 1, N2).
+    await assert_stock_report_clean(env.session, env.workspace_id)
     await _assert_foreign_untouched(env)
 
 

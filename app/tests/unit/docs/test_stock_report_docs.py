@@ -170,7 +170,10 @@ def _event_names_in_code() -> set[str]:
     """Every name an `event_name=` site under `bm/services/commands/stock_report/`
     can build, the `stock_task_assignment:{kind}` template expanded."""
     names: set[str] = set()
-    for module_path in sorted(_STOCK_COMMANDS.glob("*.py")):
+    # `rglob`, not `glob`: the stated root is every `event_name=` site **under**
+    # the package, and today's only subpackage (`requests/`) builds none — so the
+    # scan matched its own description only by accident (review 1, N5).
+    for module_path in sorted(_STOCK_COMMANDS.rglob("*.py")):
         tree = ast.parse(_read(module_path))
         for node in ast.walk(tree):
             if not isinstance(node, ast.keyword) or node.arg != "event_name":
@@ -332,7 +335,12 @@ def test_c1a_api_md_documents_no_route_the_app_does_not_serve():
 
 def test_c1b_every_event_name_the_code_builds_is_in_the_handoff():
     handoff = _normalized(_CURRENT_HANDOFF)
-    for name in sorted(_MASTER_PLAN_EVENT_NAMES | _event_names_in_code()):
+    built = _event_names_in_code()
+    # A scan that returned nothing would make this loop pass over nothing, which is
+    # the vacuity C1(a)'s `len(routes) == 13` already forbids (review 1, N6). The
+    # contract is "the scan finds event names", not a pinned count (charter r13).
+    assert built, "the `event_name=` scan found nothing"
+    for name in sorted(_MASTER_PLAN_EVENT_NAMES | built):
         assert f"`{name}`" in handoff, f"missing from the handoff: {name}"
 
 
@@ -357,7 +365,13 @@ def test_c1b_the_handoff_names_no_event_no_site_builds():
 @pytest.mark.parametrize("document", ["api.md", "handoff"])
 def test_c1c_every_error_class_and_identity_appears(document):
     text = _normalized(_API_MD if document == "api.md" else _CURRENT_HANDOFF)
-    for name in sorted(_error_class_names() | _message_identities()):
+    classes = _error_class_names()
+    identities = _message_identities()
+    # Both scans observed non-empty, so neither loop can pass over nothing
+    # (review 1, N6). Non-emptiness is the contract; the counts are not pinned.
+    assert classes, "the error-class scan found nothing"
+    assert identities, "the message-identity scan found nothing"
+    for name in sorted(classes | identities):
         assert name in text, f"missing from {document}: {name}"
 
 
