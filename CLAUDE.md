@@ -98,7 +98,8 @@ wire `quantity_awaiting` keeps counting units Scanner has resolved (`quantity_re
 credited by the processed webhook) — completion never goes backwards;
 `GET /snapshots/versions/active` and each row of `GET /snapshots/versions` carry a
 `progress` object over the prioritised snapshots. Contract:
-`.../handoffs/to_frontend/HANDOFF_TO_FRONTEND_stock_report_snapshots_20260926.md`.
+`.../handoffs/to_frontend/HANDOFF_TO_FRONTEND_stock_report_snapshots_v2_20260926.md`
+(v2 adds `priority=all` on `GET /items`; the first version is in `archived/`).
 
 The three Scanner webhooks are `POST /api/v1/location-tracker/webhooks/{stock-demand,
 items-processed,stock-demand-deleted}`, all key-authenticated by `X-API-KEY` against

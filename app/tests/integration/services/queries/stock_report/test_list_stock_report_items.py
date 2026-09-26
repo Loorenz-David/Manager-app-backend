@@ -359,6 +359,96 @@ async def test_unknown_priority_token_is_refused(db_session):
         await db_session.commit()
 
 
+async def test_priority_all_lists_prioritised_then_unprioritised_in_board_order(
+    db_session,
+):
+    """`priority=all` (2026-09-26): every active snapshot. Prioritised rows first in
+    the board order (high, medium, low, then `priority_order`), then the
+    unprioritised by `(created_at, client_id)` — the two filtered reads concatenated.
+    The labels deliberately disagree with `client_id` order (`_ids` sorts
+    descending), so an order falling back to `client_id` would fail."""
+    seeded = await seed_stock_report_workspace(db_session)
+    await db_session.commit()
+    workspace_id = seeded.workspace.client_id
+    identity = make_ctx(db_session, seeded).identity
+    try:
+        await _AD(
+            db_session,
+            workspace_id,
+            [_entry(index, "Dining Chairs", f"teak{index}") for index in range(6)],
+        )
+        await _version(db_session, workspace_id)
+        H2, L1, H1, N_a, M1, N_b = await _ids(db_session, workspace_id)
+        for client_id, priority, order in (
+            (H1, "high", 1),
+            (H2, "high", 2),
+            (M1, "medium", 1),
+            (L1, "low", 1),
+        ):
+            await _set_order(db_session, client_id, priority, order)
+        await db_session.commit()
+        unprioritised = [
+            client_id
+            for (client_id,) in (
+                await db_session.execute(
+                    select(StockReportItem.client_id)
+                    .where(StockReportItem.client_id.in_([N_a, N_b]))
+                    .order_by(StockReportItem.created_at, StockReportItem.client_id)
+                )
+            ).all()
+        ]
+
+        result = await _list(db_session, identity, "all")
+
+        listed = [row["client_id"] for row in result["stock_report_items"]]
+        assert listed == [H1, H2, M1, L1, *unprioritised]
+        # It is the union of the two filtered reads, nothing more and nothing less.
+        prioritised = await _list(db_session, identity, "high,medium,low")
+        nulls = await _list(db_session, identity, None)
+        assert listed == [
+            row["client_id"]
+            for row in prioritised["stock_report_items"] + nulls["stock_report_items"]
+        ]
+        assert [row["snapshot"]["priority"] for row in result["stock_report_items"]] == [
+            "high",
+            "high",
+            "medium",
+            "low",
+            None,
+            None,
+        ]
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        pytest.param({"priority": "all,high"}, id="all-combined"),
+        pytest.param({"priority": "high, all"}, id="all-combined-spaced"),
+        pytest.param({"priority": "all", "live_stock": True}, id="all-on-live-read"),
+    ],
+)
+async def test_priority_all_is_refused_when_combined(db_session, params):
+    seeded = await seed_stock_report_workspace(db_session)
+    await db_session.commit()
+    workspace_id = seeded.workspace.client_id
+    identity = make_ctx(db_session, seeded).identity
+    try:
+        with pytest.raises(ValidationError) as excinfo:
+            await _list(db_session, identity, **params)
+        expected = (
+            "STOCK_REPORT_LIVE_STOCK_FILTER_CONFLICT:"
+            if params.get("live_stock")
+            else "STOCK_REPORT_UNKNOWN_PRIORITY_FILTER:"
+        )
+        assert str(excinfo.value).startswith(expected)
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()
+
+
 async def test_row_shape_carries_the_four_key_category_including_a_null_image(
     db_session,
 ):

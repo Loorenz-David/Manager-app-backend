@@ -66,7 +66,7 @@ _CURRENT_HANDOFF = (
     _PROJECT
     / "handoffs"
     / "to_frontend"
-    / "HANDOFF_TO_FRONTEND_stock_report_snapshots_20260926.md"
+    / "HANDOFF_TO_FRONTEND_stock_report_snapshots_v2_20260926.md"
 )
 
 _SOURCE = _BACKEND / "app" / "beyo_manager"

@@ -55,7 +55,7 @@ under the project's `handoffs/to_frontend/`.
 | `POST …/snapshots/versions` | **none** — every live row is snapshotted, there is nothing to choose |
 | `POST …/snapshots/versions/{client_id}/apply-priorities` | **none**; the source version's id travels in the path |
 | `GET …/snapshots/missing-summary` | none |
-| `GET …/items` | no body; optional `?priority=high,medium,low`, `?include_zero_requested=true`, repeated `?item_major_categories=seat` / `?item_major_categories=wood`, repeated `?item_category_ids=<id>`, `?live_stock=true`, `?missing_only=true`. All supplied filters combine. By default the read is of the **active snapshots**: a row without one is absent, "zero requested" means `snapshot.quantity_requested − snapshot.quantity_missing <= 0`, and `priority` filters the snapshot's. `live_stock=true` reads every live row with its snapshot attached or `null`; `priority` and `missing_only` are refused on it |
+| `GET …/items` | no body; optional `?priority=high,medium,low`, `?include_zero_requested=true`, repeated `?item_major_categories=seat` / `?item_major_categories=wood`, repeated `?item_category_ids=<id>`, `?live_stock=true`, `?missing_only=true`. All supplied filters combine. By default the read is of the **active snapshots**: a row without one is absent, "zero requested" means `snapshot.quantity_requested − snapshot.quantity_missing <= 0`, and `priority` filters the snapshot's: omitted means unprioritised snapshots only, a list means only those priorities, and `priority=all` (alone, never combined) means every active snapshot, prioritised first in board order then unprioritised by `created_at, client_id`. `live_stock=true` reads every live row with its snapshot attached or `null`; `priority` and `missing_only` are refused on it |
 | `PATCH …/missing-quantity` | `{"quantity_missing": <strict int>}` — the string `"2"` is refused, never coerced; an absolute value, not a delta |
 | `PATCH …/priority` | `{"priority": "high"\|"medium"\|"low"\|null}` — the key is required and has no default |
 | `PATCH …/priority-order` | `{"priority_order": <strict int>}` — the string `"2"` is refused, never coerced |
@@ -146,7 +146,7 @@ Registered message identities (leading-token form, `05_errors_local`):
 
 | Identity | HTTP | Meaning |
 |---|---|---|
-| `STOCK_REPORT_UNKNOWN_PRIORITY_FILTER` | 422 | a `priority` query token that is not `high`, `medium` or `low` |
+| `STOCK_REPORT_UNKNOWN_PRIORITY_FILTER` | 422 | a `priority` query token that is not `high`, `medium`, `low` or `all`, or `all` combined with another token |
 | `STOCK_REPORT_ROW_HAS_NO_PRIORITY` | 422 | the row's active snapshot has no priority, so it has no group to be ordered within |
 | `STOCK_REPORT_TARGET_OUT_OF_RANGE` | 422 | the requested `priority_order` is outside `1..n` for that group |
 | `STOCK_REPORT_NO_ACTIVE_SNAPSHOT` | 422 | the row exists but has no active snapshot (created since the last version), so it has no position and no missing quantity to set |

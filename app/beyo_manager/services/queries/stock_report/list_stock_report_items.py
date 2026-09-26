@@ -45,13 +45,27 @@ _ACTIVE_SNAPSHOT_JOIN = and_(
 )
 
 
+_ALL_PRIORITIES = "all"
+
+
 def _parse_priority_filter(raw):
     """§7A: a comma list of `high|medium|low`. **Omitted or empty means the
     null-priority snapshots**, not "all rows" (ratified owner answer); an unknown
-    token is a 422."""
+    token is a 422.
+
+    `all` (owner request 2026-09-26) is the one way to ask for every active
+    snapshot, prioritised and not. It returns `None` — no priority predicate at all —
+    and must be the only token: `all,high` is ambiguous and refused."""
     if raw is None:
         return []
     tokens = [token.strip() for token in str(raw).split(",") if token.strip()]
+    if _ALL_PRIORITIES in tokens:
+        if len(tokens) > 1:
+            raise ValidationError(
+                "STOCK_REPORT_UNKNOWN_PRIORITY_FILTER: 'all' cannot be combined with "
+                "other priorities; send it alone."
+            )
+        return None
     priorities = []
     for token in tokens:
         try:
@@ -59,7 +73,7 @@ def _parse_priority_filter(raw):
         except ValueError:
             raise ValidationError(
                 f"STOCK_REPORT_UNKNOWN_PRIORITY_FILTER: '{token}' is not one of "
-                "high, medium, low."
+                "high, medium, low, all."
             ) from None
     return priorities
 
@@ -102,7 +116,18 @@ async def list_stock_report_items(ctx) -> dict:
             )
         if missing_only:
             statement = statement.where(StockReportItemSnapshot.quantity_missing > 0)
-        if priorities:
+        if priorities is None:
+            # `priority=all`: every active snapshot. The board order is the two
+            # filtered reads concatenated — prioritised first (high, medium, low,
+            # then `priority_order`), then the unprioritised by creation. Postgres
+            # sorts NULL last on ASC by default; it is stated, not assumed.
+            statement = statement.order_by(
+                _PRIORITY_RANK.asc().nulls_last(),
+                StockReportItemSnapshot.priority_order.asc().nulls_last(),
+                StockReportItem.created_at.asc(),
+                StockReportItem.client_id.asc(),
+            )
+        elif priorities:
             statement = statement.where(
                 StockReportItemSnapshot.priority.in_(priorities)
             ).order_by(_PRIORITY_RANK, StockReportItemSnapshot.priority_order.asc())

@@ -276,6 +276,14 @@ def test_list_items_route_reaches_service_for_every_role(monkeypatch, role):
     }
 
 
+def test_list_items_route_passes_priority_all_through_verbatim(monkeypatch):
+    """`all` is interpreted by the query, not the router: it arrives as the raw
+    string, exactly like a priority list."""
+    http, calls = client(monkeypatch, "worker")
+    assert http.get("/api/v1/stock-report/items?priority=all").status_code == 200
+    assert calls[0][1].query_params["priority"] == "all"
+
+
 def test_list_items_route_passes_no_priority_when_the_param_is_absent(monkeypatch):
     http, calls = client(monkeypatch, "manager")
     assert http.get("/api/v1/stock-report/items").status_code == 200
