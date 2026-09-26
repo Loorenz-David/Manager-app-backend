@@ -126,7 +126,7 @@ def _group(priority, **values):
 def test_empty_progress_carries_every_key_and_every_priority_at_zero():
     progress = empty_version_progress()
     assert set(progress) == set(PROGRESS_KEYS) | {"by_priority"}
-    assert set(progress["by_priority"]) == {"high", "medium", "low"}
+    assert set(progress["by_priority"]) == {"high", "medium", "low", "unset"}
     assert all(progress[key] == 0 for key in PROGRESS_KEYS)
     for slot in progress["by_priority"].values():
         assert set(slot) == set(PROGRESS_KEYS)
@@ -153,6 +153,23 @@ def test_fold_sums_groups_into_totals_and_slots_each_under_its_priority():
     # A priority with no group is present, at zero — the frontend never branches
     # on absence.
     assert progress["by_priority"]["medium"] == {key: 0 for key in PROGRESS_KEYS}
+
+
+def test_fold_slots_the_null_priority_group_under_unset_and_counts_it_in_totals():
+    # `priority=all` / omitted select null-priority snapshots too (2026-09-26); the
+    # totals stay the sum of the four slots.
+    progress = fold_version_progress(
+        [
+            _group(None, items_total=2, quantity_requested=9, quantity_target=9),
+            _group(P.MEDIUM, items_total=1, quantity_requested=4, quantity_target=4),
+        ]
+    )
+    assert progress["by_priority"]["unset"]["items_total"] == 2
+    assert progress["by_priority"]["unset"]["quantity_target"] == 9
+    assert progress["by_priority"]["medium"]["quantity_requested"] == 4
+    assert progress["items_total"] == 3
+    assert progress["quantity_requested"] == 13
+    assert progress["by_priority"]["high"] == {key: 0 for key in PROGRESS_KEYS}
 
 
 def test_fold_of_nothing_is_the_empty_progress():

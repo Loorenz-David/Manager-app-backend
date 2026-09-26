@@ -97,10 +97,14 @@ priority board.
 wire `quantity_awaiting` keeps counting units Scanner has resolved (`quantity_resolved`,
 credited by the processed webhook) — completion never goes backwards;
 `GET /snapshots/versions/active` and each row of `GET /snapshots/versions` carry a
-`progress` object over the prioritised snapshots. Contract:
-`.../handoffs/to_frontend/HANDOFF_TO_FRONTEND_stock_report_snapshots_v3_20260926.md`
+`progress` object and a `filtered_snapshot_count` (the stored `snapshot_count` under the
+filter, deleted rows included) over the snapshots their `priority` param selects — the same parser
+and meaning as `GET /items` (`services/queries/stock_report/_priority_filter.py`).
+Contract:
+`.../handoffs/to_frontend/HANDOFF_TO_FRONTEND_stock_report_snapshots_v6_20260926.md`
 (v2 added `priority=all` on `GET /items`, v3 fixed `missing_only` hiding fully missing
-rows; earlier versions are in `archived/`).
+rows, v4 paginated `GET /items` with a default of 20, v5 put `priority` on the version
+reads, v6 added `filtered_snapshot_count`; earlier versions are in `archived/`).
 
 The three Scanner webhooks are `POST /api/v1/location-tracker/webhooks/{stock-demand,
 items-processed,stock-demand-deleted}`, all key-authenticated by `X-API-KEY` against

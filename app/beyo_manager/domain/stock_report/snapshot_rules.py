@@ -10,8 +10,10 @@
   every group renumbered densely.
 * `fold_version_progress` / `empty_version_progress` — the shape of a version's
   progress (addendum 2026-09-26): one aggregate per priority group folded into
-  totals plus `by_priority`, every priority key always present. A computed dict, built
-  here and not in `serializers.py` (46_serialization "Exempt cases").
+  totals plus `by_priority`, every priority key always present — `high`, `medium`,
+  `low` and `unset` (the null-priority snapshots, since the progress follows the
+  board's `priority` filter). A computed dict, built here and not in `serializers.py`
+  (46_serialization "Exempt cases").
 """
 
 from __future__ import annotations
@@ -34,27 +36,35 @@ PROGRESS_KEYS = (
 )
 
 
+# The `by_priority` key of the null-priority snapshots (owner's word, 2026-09-26).
+UNSET_PRIORITY_KEY = "unset"
+PROGRESS_PRIORITY_KEYS = (
+    *(priority.value for priority in StockReportPriorityEnum),
+    UNSET_PRIORITY_KEY,
+)
+
+
 def _zero_progress() -> dict:
     return {key: 0 for key in PROGRESS_KEYS}
 
 
 def empty_version_progress() -> dict:
     progress = _zero_progress()
-    progress["by_priority"] = {
-        priority.value: _zero_progress() for priority in StockReportPriorityEnum
-    }
+    progress["by_priority"] = {key: _zero_progress() for key in PROGRESS_PRIORITY_KEYS}
     return progress
 
 
 def fold_version_progress(groups: Iterable) -> dict:
     """`groups` — one mapping per priority group of a version, carrying `priority`
-    (an enum member or its value) and every key of `PROGRESS_KEYS` as already
+    (an enum member, its value, or `None` for the `unset` slot) and every key of `PROGRESS_KEYS` as already
     aggregated integers. The per-item caps (`quantity_completed = Σ min(target_i,
     awaiting_i)`, `items_completed`) are the aggregator's job; this only sums groups
     into totals and slots each under its priority key."""
     progress = empty_version_progress()
     for group in groups:
         priority = group["priority"]
+        if priority is None:
+            priority = UNSET_PRIORITY_KEY
         priority = priority.value if hasattr(priority, "value") else priority
         slot = progress["by_priority"][priority]
         for key in PROGRESS_KEYS:

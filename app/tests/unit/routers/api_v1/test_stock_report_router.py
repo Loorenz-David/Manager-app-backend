@@ -273,6 +273,8 @@ def test_list_items_route_reaches_service_for_every_role(monkeypatch, role):
         "item_category_ids": ["itc_1", "itc_2"],
         "live_stock": False,
         "missing_only": False,
+        "limit": 20,
+        "offset": 0,
     }
 
 
@@ -294,7 +296,22 @@ def test_list_items_route_passes_no_priority_when_the_param_is_absent(monkeypatc
         "item_category_ids": None,
         "live_stock": False,
         "missing_only": False,
+        "limit": 20,
+        "offset": 0,
     }
+
+
+def test_list_items_route_passes_limit_and_offset_and_bounds_them(monkeypatch):
+    """Paginated since 2026-09-26: default 20, max 200, limit at least 1."""
+    http, calls = client(monkeypatch, "worker")
+    assert http.get("/api/v1/stock-report/items?limit=5&offset=10").status_code == 200
+    assert (calls[0][1].query_params["limit"], calls[0][1].query_params["offset"]) == (
+        5,
+        10,
+    )
+    for bad in ("limit=201", "limit=0", "limit=-1", "offset=-1"):
+        assert http.get(f"/api/v1/stock-report/items?{bad}").status_code == 422, bad
+    assert len(calls) == 1
 
 
 def test_list_items_route_passes_the_two_snapshot_flags(monkeypatch):
@@ -417,11 +434,31 @@ def test_versions_list_route_passes_limit_and_offset(monkeypatch):
         http.get("/api/v1/stock-report/snapshots/versions?limit=5&offset=10").status_code
         == 200
     )
-    assert calls[0][1].query_params == {"limit": 5, "offset": 10}
+    assert calls[0][1].query_params == {"limit": 5, "offset": 10, "priority": None}
     assert http.get("/api/v1/stock-report/snapshots/versions?limit=201").status_code == 422
     # Default page size 20 (owner ruling 2026-09-26), not the contract's 50.
     assert http.get("/api/v1/stock-report/snapshots/versions").status_code == 200
-    assert calls[-1][1].query_params == {"limit": 20, "offset": 0}
+    assert calls[-1][1].query_params == {"limit": 20, "offset": 0, "priority": None}
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/v1/stock-report/snapshots/versions",
+        "/api/v1/stock-report/snapshots/versions/active",
+    ],
+)
+@pytest.mark.parametrize("priority", ["all", "high,low", ""])
+def test_version_routes_pass_the_priority_filter_through_verbatim(
+    monkeypatch, path, priority
+):
+    # Parsed by the service, as on `GET /items`: the route neither validates nor
+    # rewrites it.
+    http, calls = client(monkeypatch, "manager")
+    assert http.get(path, params={"priority": priority}).status_code == 200
+    assert calls[0][1].query_params["priority"] == priority
+    assert http.get(path).status_code == 200
+    assert calls[-1][1].query_params["priority"] is None
 
 
 @pytest.mark.parametrize("role", ["admin", "manager"])

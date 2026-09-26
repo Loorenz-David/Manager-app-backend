@@ -657,9 +657,22 @@ async def _seed_snapshot(session, row_id, *, missing=0, resolved=0, counters=Non
         )
 
 
-async def _progress(session, seeded):
-    result = await get_stock_report_active_snapshot_version(_ctx(session, seeded))
+async def _progress(session, seeded, priority="all"):
+    result = await get_stock_report_active_snapshot_version(
+        _ctx(session, seeded, query_params={"priority": priority})
+    )
     return result["stock_report_snapshot_version"]
+
+
+async def _listed(session, seeded, priority):
+    listed = await list_stock_report_snapshot_versions(
+        _ctx(session, seeded, query_params={"priority": priority})
+    )
+    return listed["stock_report_snapshot_versions"][0]
+
+
+async def _listed_progress(session, seeded, priority):
+    return (await _listed(session, seeded, priority))["progress"]
 
 
 async def _assign_seeded_item(session, seeded, row_id):
@@ -730,20 +743,34 @@ async def test_active_version_is_null_before_the_first_version(db_session):
         assert await get_stock_report_active_snapshot_version(
             _ctx(db_session, seeded)
         ) == {"stock_report_snapshot_version": None}
+        # The filter is parsed first: a bad value is refused even with no version.
+        for bad in ("all,high", "urgent"):
+            with pytest.raises(ValidationError, match="STOCK_REPORT_UNKNOWN_PRIORITY_FILTER"):
+                await get_stock_report_active_snapshot_version(
+                    _ctx(db_session, seeded, query_params={"priority": bad})
+                )
+            with pytest.raises(ValidationError, match="STOCK_REPORT_UNKNOWN_PRIORITY_FILTER"):
+                await list_stock_report_snapshot_versions(
+                    _ctx(db_session, seeded, query_params={"priority": bad})
+                )
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
         await db_session.commit()
 
 
-async def test_active_version_progress_is_computed_over_prioritised_live_rows(db_session):
-    """The matrix, by hand:
+async def test_active_version_progress_follows_the_boards_priority_filter(db_session):
+    """The matrix, by hand (`priority` as on `GET /items`: `high,medium,low` = the
+    prioritised rows a-c, omitted = the unset row d, `all` = a-d; e never counts):
 
     | row | requested | priority | missing | in_queue/in_progress/awaiting | resolved | target | awaiting(wire) | completed |
     | a   | 10        | high 1   | 2       | 3 / 1 / 2                     | 5        | 8      | 7              | 7 (open)  |
     | b   | 6         | high 2   | 0       | 0 / 0 / 6                     | 2        | 6      | 8              | 6 (done)  |
     | c   | 5         | low 1    | 5       | 0 / 0 / 0                     | 0        | 0      | 0              | 0 (done)  |
     | d   | 8         | —        | 0       | 0 / 0 / 8                     | 0        | excluded: no priority        |
-    | e   | 4         | high 3   | 0       | 0 / 0 / 0                     | 0        | excluded: row deleted        |
+    | e   | 4         | medium 1 | 0       | 0 / 0 / 0                     | 0        | excluded: row deleted        |
+
+    e is the medium group's only member, so that group reaches the aggregate with every
+    row deleted — its sums must come back 0, not NULL.
     """
     seeded = _pin(db_session, await seed_stock_report_workspace(db_session))
     await db_session.commit()
@@ -772,7 +799,7 @@ async def test_active_version_progress_is_computed_over_prioritised_live_rows(db
         version, _ = await _CV(db_session, seeded)
         await set_snapshot_position(db_session, a, "high", 1)
         await set_snapshot_position(db_session, b, "high", 2)
-        await set_snapshot_position(db_session, e, "high", 3)
+        await set_snapshot_position(db_session, e, "medium", 1)
         await set_snapshot_position(db_session, c, "low", 1)
         await _seed_snapshot(db_session, a, missing=2, resolved=5, counters=(3, 1, 2))
         await _seed_snapshot(db_session, b, resolved=2, counters=(0, 0, 6))
@@ -784,7 +811,7 @@ async def test_active_version_progress_is_computed_over_prioritised_live_rows(db
         )
         await db_session.commit()
 
-        payload = await _progress(db_session, seeded)
+        payload = await _progress(db_session, seeded, "high,medium,low")
 
         assert payload["client_id"] == version["client_id"]
         assert payload["closed_at"] is None
@@ -807,7 +834,20 @@ async def test_active_version_progress_is_computed_over_prioritised_live_rows(db
             quantity_requested=5,
             quantity_missing=5,
         )
-        assert progress["by_priority"] == {"high": high, "medium": _expect(), "low": low}
+        unset = _expect(
+            items_total=1,
+            items_completed=1,
+            quantity_requested=8,
+            quantity_target=8,
+            quantity_awaiting=8,
+            quantity_completed=8,
+        )
+        assert progress["by_priority"] == {
+            "high": high,
+            "medium": _expect(),
+            "low": low,
+            "unset": _expect(),
+        }
         assert {key: progress[key] for key in PROGRESS_KEYS} == _expect(
             items_total=3,
             items_completed=2,
@@ -821,9 +861,71 @@ async def test_active_version_progress_is_computed_over_prioritised_live_rows(db
             quantity_completed=13,
         )
 
-        # The same object rides on the list row.
-        listed = await list_stock_report_snapshot_versions(_ctx(db_session, seeded))
-        assert listed["stock_report_snapshot_versions"][0]["progress"] == progress
+        # Omitted: the unset row only — the board's default read.
+        omitted = await get_stock_report_active_snapshot_version(_ctx(db_session, seeded))
+        omitted = omitted["stock_report_snapshot_version"]["progress"]
+        assert omitted["by_priority"] == {
+            "high": _expect(),
+            "medium": _expect(),
+            "low": _expect(),
+            "unset": unset,
+        }
+        assert {key: omitted[key] for key in PROGRESS_KEYS} == unset
+
+        # `all`: every live row, the unset one included; the deleted one still not.
+        everything = (await _progress(db_session, seeded, "all"))["progress"]
+        assert everything["by_priority"] == {
+            "high": high,
+            "medium": _expect(),
+            "low": low,
+            "unset": unset,
+        }
+        assert {key: everything[key] for key in PROGRESS_KEYS} == _expect(
+            items_total=4,
+            items_completed=3,
+            quantity_requested=29,
+            quantity_missing=7,
+            quantity_target=22,
+            quantity_in_queue=3,
+            quantity_in_progress=1,
+            quantity_awaiting=23,
+            quantity_resolved=7,
+            quantity_completed=21,
+        )
+
+        # One priority: that group alone, the others at zero.
+        only_low = (await _progress(db_session, seeded, "low"))["progress"]
+        assert {key: only_low[key] for key in PROGRESS_KEYS} == low
+        assert only_low["by_priority"]["high"] == _expect()
+
+        # `filtered_snapshot_count` is the stored `snapshot_count` under the filter:
+        # it counts the deleted row e (as `snapshot_count` does) where `items_total`
+        # does not — 4 against 3 for the prioritised groups.
+        snapshot_count = payload["snapshot_count"]
+        assert payload["filtered_snapshot_count"] == 4
+        assert progress["items_total"] == 3
+        for priority, expected in (
+            (None, 1),
+            ("low", 1),
+            ("high", 2),
+            ("medium", 1),
+            ("all", snapshot_count),
+        ):
+            active = await get_stock_report_active_snapshot_version(
+                _ctx(db_session, seeded, query_params={"priority": priority})
+            )
+            active = active["stock_report_snapshot_version"]
+            assert active["filtered_snapshot_count"] == expected, priority
+            assert active["snapshot_count"] == snapshot_count, priority
+            assert (await _listed(db_session, seeded, priority))[
+                "filtered_snapshot_count"
+            ] == expected, priority
+
+        # The same object rides on the list row, under the same filter.
+        assert await _listed_progress(db_session, seeded, "high,medium,low") == progress
+        assert await _listed_progress(db_session, seeded, None) == omitted
+        assert await _listed_progress(db_session, seeded, "all") == everything
+        assert await _listed_progress(db_session, seeded, "low") == only_low
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
         await db_session.commit()
@@ -902,7 +1004,9 @@ async def test_closed_version_progress_is_frozen_and_the_list_costs_two_statemen
         await _resolve_seeded_item(db_session, seeded, monkeypatch)
 
         async with record_statements(db_session) as statements:
-            listed = await list_stock_report_snapshot_versions(_ctx(db_session, seeded))
+            listed = await list_stock_report_snapshot_versions(
+                _ctx(db_session, seeded, query_params={"priority": "high"})
+            )
         assert len(statements) == 2, statements
         by_id = {v["client_id"]: v for v in listed["stock_report_snapshot_versions"]}
         assert list(by_id) == [v2["client_id"], v1["client_id"]]

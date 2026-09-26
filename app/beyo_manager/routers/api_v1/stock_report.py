@@ -216,12 +216,14 @@ async def route_list_stock_report_snapshot_versions(
     session: AsyncSession = Depends(get_db),
     limit: int = Query(20, le=200),
     offset: int = Query(0, ge=0),
+    # Same values and meaning as on `GET /items`; selects what `progress` sums.
+    priority: str | None = None,
 ):
     return await _run(
         list_stock_report_snapshot_versions,
         claims,
         session,
-        query_params={"limit": limit, "offset": offset},
+        query_params={"limit": limit, "offset": offset, "priority": priority},
     )
 
 
@@ -229,9 +231,15 @@ async def route_list_stock_report_snapshot_versions(
 async def route_get_stock_report_active_snapshot_version(
     claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
     session: AsyncSession = Depends(get_db),
+    priority: str | None = None,
 ):
     # Static segment, declared before any `/snapshots/versions/{client_id}/…` route.
-    return await _run(get_stock_report_active_snapshot_version, claims, session)
+    return await _run(
+        get_stock_report_active_snapshot_version,
+        claims,
+        session,
+        query_params={"priority": priority},
+    )
 
 
 @router.post("/snapshots/versions")
@@ -273,6 +281,10 @@ async def route_list_stock_report_items(
     item_category_ids: list[str] | None = Query(None),
     live_stock: bool = False,
     missing_only: bool = False,
+    # Paginated since 2026-09-26; default 20 by owner ruling. `ge=1`: a zero or
+    # negative limit has no meaning, and a negative one reaches Postgres as an error.
+    limit: int = Query(20, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
     session: AsyncSession = Depends(get_db),
 ):
@@ -287,6 +299,8 @@ async def route_list_stock_report_items(
             "item_category_ids": item_category_ids,
             "live_stock": live_stock,
             "missing_only": missing_only,
+            "limit": limit,
+            "offset": offset,
         },
     )
 

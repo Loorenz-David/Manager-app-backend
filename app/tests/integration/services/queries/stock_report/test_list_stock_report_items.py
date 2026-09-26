@@ -138,7 +138,14 @@ async def _list(
     item_category_ids=None,
     live_stock=False,
     missing_only=False,
+    limit=None,
+    offset=None,
 ):
+    pagination = {}
+    if limit is not None:
+        pagination["limit"] = limit
+    if offset is not None:
+        pagination["offset"] = offset
     ctx = ServiceContext(
         identity=identity,
         incoming_data={},
@@ -149,6 +156,7 @@ async def _list(
             "item_category_ids": item_category_ids,
             "live_stock": live_stock,
             "missing_only": missing_only,
+            **pagination,
         },
         session=session,
     )
@@ -194,8 +202,12 @@ async def test_read_order_is_high_medium_low_then_priority_order(db_session):
             X,
             Y,
         ]
-        # §5 / 07_queries_local override: this endpoint emits no pagination key.
-        assert set(result) == {"stock_report_items"}
+        # Paginated since 2026-09-26: the default page is 20, so seven rows fit.
+        assert result["stock_report_items_pagination"] == {
+            "has_more": False,
+            "limit": 20,
+            "offset": 0,
+        }
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
         await db_session.commit()
@@ -444,6 +456,83 @@ async def test_priority_all_is_refused_when_combined(db_session, params):
             else "STOCK_REPORT_UNKNOWN_PRIORITY_FILTER:"
         )
         assert str(excinfo.value).startswith(expected)
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()
+
+
+async def test_pages_walk_the_board_order_without_gaps_or_overlap(db_session):
+    """Pagination (2026-09-26). Five rows under `priority=all` — three prioritised,
+    two not — read two at a time. The pages concatenate to exactly the unpaginated
+    order, the boundary between prioritised and unprioritised rows falls inside a
+    page, `has_more` is true until the last page, and a page past the end is empty
+    but still carries the pagination key. Filters narrow *before* paging: a
+    `missing_only` read of the same board pages over its own two rows only."""
+    seeded = await seed_stock_report_workspace(db_session)
+    await db_session.commit()
+    workspace_id = seeded.workspace.client_id
+    identity = make_ctx(db_session, seeded).identity
+    try:
+        await _AD(
+            db_session,
+            workspace_id,
+            [_entry(index, "Dining Chairs", f"page{index}") for index in range(5)],
+        )
+        await _version(db_session, workspace_id)
+        H2, M1, N_a, H1, N_b = await _ids(db_session, workspace_id)
+        for client_id, priority, order in (
+            (H1, "high", 1),
+            (H2, "high", 2),
+            (M1, "medium", 1),
+        ):
+            await _set_order(db_session, client_id, priority, order)
+        await _set_missing(db_session, M1, 3)
+        await _set_missing(db_session, N_b, 2)
+        await db_session.commit()
+
+        everything = [
+            row["client_id"]
+            for row in (await _list(db_session, identity, "all"))["stock_report_items"]
+        ]
+        assert len(everything) == 5
+        assert everything[:3] == [H1, H2, M1]
+
+        pages = []
+        for offset in (0, 2, 4):
+            page = await _list(db_session, identity, "all", limit=2, offset=offset)
+            pages.append(page)
+        assert [row["client_id"] for p in pages for row in p["stock_report_items"]] == (
+            everything
+        )
+        assert [len(p["stock_report_items"]) for p in pages] == [2, 2, 1]
+        assert [p["stock_report_items_pagination"] for p in pages] == [
+            {"has_more": True, "limit": 2, "offset": 0},
+            {"has_more": True, "limit": 2, "offset": 2},
+            {"has_more": False, "limit": 2, "offset": 4},
+        ]
+
+        past_the_end = await _list(db_session, identity, "all", limit=2, offset=10)
+        assert past_the_end == {
+            "stock_report_items": [],
+            "stock_report_items_pagination": {
+                "has_more": False,
+                "limit": 2,
+                "offset": 10,
+            },
+        }
+
+        missing_first = await _list(
+            db_session, identity, "all", missing_only=True, limit=1
+        )
+        missing_second = await _list(
+            db_session, identity, "all", missing_only=True, limit=1, offset=1
+        )
+        assert [row["client_id"] for row in missing_first["stock_report_items"]] == [M1]
+        assert missing_first["stock_report_items_pagination"]["has_more"] is True
+        assert [row["client_id"] for row in missing_second["stock_report_items"]] == [
+            N_b
+        ]
+        assert missing_second["stock_report_items_pagination"]["has_more"] is False
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
         await db_session.commit()

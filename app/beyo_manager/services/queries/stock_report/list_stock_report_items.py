@@ -9,9 +9,11 @@ quantity_missing <= 0` (the workers' outstanding count, not Scanner's live deman
 attached when there is one and `null` otherwise; the snapshot filters (`priority`,
 `missing_only`) are refused on it because they have nothing to filter.
 
-**Unpaginated by ratified owner answer** (master plan §5 overrides
-`07_queries_local`'s pagination gate for this endpoint): no `_pagination` key is
-emitted and none is accepted.
+**Paginated since 2026-09-26** (owner decision; it was unpaginated by the earlier
+ratified answer in master plan §5). Offset pagination per `07_queries_local`:
+`limit` (default 20 by owner ruling, max 200) and `offset`, `limit + 1` rows fetched
+for `has_more`, `stock_report_items_pagination` on every path. Every branch orders by
+a total key (ending in `client_id`), so pages never overlap or skip a row.
 """
 
 from __future__ import annotations
@@ -26,6 +28,9 @@ from beyo_manager.models.tables.stock_report.stock_report_item import StockRepor
 from beyo_manager.models.tables.stock_report.stock_report_item_snapshot import (
     StockReportItemSnapshot,
 )
+from beyo_manager.services.queries.stock_report._priority_filter import (
+    parse_priority_filter,
+)
 
 # §7A: `high` before `medium` before `low`. Ordering by the `priority` column itself
 # would sort by the enum's text — `high, low, medium`.
@@ -39,48 +44,21 @@ _PRIORITY_RANK = case(
     (StockReportItemSnapshot.priority == StockReportPriorityEnum.LOW, 3),
 )
 
+_MAX_LIMIT = 200
+_DEFAULT_LIMIT = 20  # owner ruling 2026-09-26: 20, not the contract's 50
+
 _ACTIVE_SNAPSHOT_JOIN = and_(
     StockReportItemSnapshot.stock_report_item_id == StockReportItem.client_id,
     StockReportItemSnapshot.closed_at.is_(None),
 )
 
 
-_ALL_PRIORITIES = "all"
-
-
-def _parse_priority_filter(raw):
-    """§7A: a comma list of `high|medium|low`. **Omitted or empty means the
-    null-priority snapshots**, not "all rows" (ratified owner answer); an unknown
-    token is a 422.
-
-    `all` (owner request 2026-09-26) is the one way to ask for every active
-    snapshot, prioritised and not. It returns `None` — no priority predicate at all —
-    and must be the only token: `all,high` is ambiguous and refused."""
-    if raw is None:
-        return []
-    tokens = [token.strip() for token in str(raw).split(",") if token.strip()]
-    if _ALL_PRIORITIES in tokens:
-        if len(tokens) > 1:
-            raise ValidationError(
-                "STOCK_REPORT_UNKNOWN_PRIORITY_FILTER: 'all' cannot be combined with "
-                "other priorities; send it alone."
-            )
-        return None
-    priorities = []
-    for token in tokens:
-        try:
-            priorities.append(StockReportPriorityEnum(token))
-        except ValueError:
-            raise ValidationError(
-                f"STOCK_REPORT_UNKNOWN_PRIORITY_FILTER: '{token}' is not one of "
-                "high, medium, low, all."
-            ) from None
-    return priorities
-
-
 async def list_stock_report_items(ctx) -> dict:
+    limit = min(int(ctx.query_params.get("limit", _DEFAULT_LIMIT)), _MAX_LIMIT)
+    offset = int(ctx.query_params.get("offset", 0))
     raw_priority = ctx.query_params.get("priority")
-    priorities = _parse_priority_filter(raw_priority)
+    # Omitted → null-priority snapshots; `all` → `None`, no predicate; else a list.
+    priorities = parse_priority_filter(raw_priority)
     include_zero_requested = ctx.query_params.get("include_zero_requested", False)
     item_major_categories = ctx.query_params.get("item_major_categories")
     item_category_ids = ctx.query_params.get("item_category_ids")
@@ -136,7 +114,13 @@ async def list_stock_report_items(ctx) -> dict:
         elif priorities:
             statement = statement.where(
                 StockReportItemSnapshot.priority.in_(priorities)
-            ).order_by(_PRIORITY_RANK, StockReportItemSnapshot.priority_order.asc())
+            ).order_by(
+                _PRIORITY_RANK,
+                StockReportItemSnapshot.priority_order.asc(),
+                # Unique already while groups are dense; the tie-breaker keeps pages
+                # stable even if a group ever is not (a repairable divergence).
+                StockReportItem.client_id.asc(),
+            )
         else:
             statement = statement.where(
                 StockReportItemSnapshot.priority.is_(None)
@@ -157,9 +141,15 @@ async def list_stock_report_items(ctx) -> dict:
 
     # Two entities per result row: `.scalars()` would keep only the first and drop
     # the snapshot silently, so the pairs are read whole.
-    pairs = (
-        await ctx.session.execute(statement.execution_options(populate_existing=True))
+    fetched = (
+        await ctx.session.execute(
+            statement.offset(offset)
+            .limit(limit + 1)  # one extra row decides `has_more`
+            .execution_options(populate_existing=True)
+        )
     ).all()
+    has_more = len(fetched) > limit
+    pairs = fetched[:limit]
 
     # Categories are batch-loaded **by id**, with no `is_deleted` filter: MC-16 says
     # a row whose category was soft-deleted keeps working and still serializes the
@@ -187,5 +177,10 @@ async def list_stock_report_items(ctx) -> dict:
                 row, category=categories_by_id[row.item_category_id], snapshot=snapshot
             )
             for row, snapshot in pairs
-        ]
+        ],
+        "stock_report_items_pagination": {
+            "has_more": has_more,
+            "limit": limit,
+            "offset": offset,
+        },
     }

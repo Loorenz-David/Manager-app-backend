@@ -50,12 +50,12 @@ under the project's `handoffs/to_frontend/`.
 | `POST …/assignments` | `{"entries": [{"stock_report_item_id", "task_id", "item_id", "override_property_mismatch"?}]}`, `extra="forbid"` |
 | `POST …/assignments/delete` | `{"client_ids": [...]}`, `extra="forbid"` |
 | `POST …/match-preview` | `{"task_id"?, "article_number"?, "sku"?, "item_category_id", "properties", "quantity"}` — `item_category_id` is **required** (owner ruling, round 3: an Item cannot validly exist without a category, so the preview is never more permissive than creation) |
-| `GET …/snapshots/versions` | no body; `?limit=` (default **20** — owner ruling, the one departure from `07_queries_local`'s 50; max 200) and `?offset=` |
-| `GET …/snapshots/versions/active` | none |
+| `GET …/snapshots/versions` | no body; `?limit=` (default **20** — owner ruling, the one departure from `07_queries_local`'s 50; max 200), `?offset=`, and `?priority=` (as on `GET /items`; selects what `progress` sums) |
+| `GET …/snapshots/versions/active` | `?priority=` only, as on `GET /items` |
 | `POST …/snapshots/versions` | **none** — every live row is snapshotted, there is nothing to choose |
 | `POST …/snapshots/versions/{client_id}/apply-priorities` | **none**; the source version's id travels in the path |
 | `GET …/snapshots/missing-summary` | none |
-| `GET …/items` | no body; optional `?priority=high,medium,low`, `?include_zero_requested=true`, repeated `?item_major_categories=seat` / `?item_major_categories=wood`, repeated `?item_category_ids=<id>`, `?live_stock=true`, `?missing_only=true`. All supplied filters combine. By default the read is of the **active snapshots**: a row without one is absent, "zero requested" means `snapshot.quantity_requested − snapshot.quantity_missing <= 0` (hidden unless `include_zero_requested=true`, and never applied under `missing_only=true`, which returns every snapshot with `quantity_missing > 0`, fully missing ones included), and `priority` filters the snapshot's: omitted means unprioritised snapshots only, a list means only those priorities, and `priority=all` (alone, never combined) means every active snapshot, prioritised first in board order then unprioritised by `created_at, client_id`. `live_stock=true` reads every live row with its snapshot attached or `null`; `priority` and `missing_only` are refused on it |
+| `GET …/items` | no body; `?limit=` (default **20** by owner ruling, min 1, max 200) and `?offset=` (`07_queries_local`, paginated since 2026-09-26); optional `?priority=high,medium,low`, `?include_zero_requested=true`, repeated `?item_major_categories=seat` / `?item_major_categories=wood`, repeated `?item_category_ids=<id>`, `?live_stock=true`, `?missing_only=true`. All supplied filters combine. By default the read is of the **active snapshots**: a row without one is absent, "zero requested" means `snapshot.quantity_requested − snapshot.quantity_missing <= 0` (hidden unless `include_zero_requested=true`, and never applied under `missing_only=true`, which returns every snapshot with `quantity_missing > 0`, fully missing ones included), and `priority` filters the snapshot's: omitted means unprioritised snapshots only, a list means only those priorities, and `priority=all` (alone, never combined) means every active snapshot, prioritised first in board order then unprioritised by `created_at, client_id`. `live_stock=true` reads every live row with its snapshot attached or `null`; `priority` and `missing_only` are refused on it |
 | `PATCH …/missing-quantity` | `{"quantity_missing": <strict int>}` — the string `"2"` is refused, never coerced; an absolute value, not a delta |
 | `PATCH …/priority` | `{"priority": "high"\|"medium"\|"low"\|null}` — the key is required and has no default |
 | `PATCH …/priority-order` | `{"priority_order": <strict int>}` — the string `"2"` is refused, never coerced |
@@ -80,8 +80,8 @@ the router.
 | `POST …/assignments` | `{"stock_task_assignments": [<assignment>]}` |
 | `POST …/assignments/delete` | `{"deleted_client_ids": [...]}` |
 | `POST …/match-preview` | `{"can_proceed", "override_required", "refusal_reason", "property_failures", "matched_item_client_id", "values_source", "checks"}` |
-| `GET …/snapshots/versions` | `{"stock_report_snapshot_versions": [<version + "progress">], "stock_report_snapshot_versions_pagination": {"has_more", "limit", "offset"}}` |
-| `GET …/snapshots/versions/active` | `{"stock_report_snapshot_version": <version + "progress">}`, or `{"stock_report_snapshot_version": null}` (200) when no version has been created yet |
+| `GET …/snapshots/versions` | `{"stock_report_snapshot_versions": [<version + "filtered_snapshot_count" + "progress">], "stock_report_snapshot_versions_pagination": {"has_more", "limit", "offset"}}` |
+| `GET …/snapshots/versions/active` | `{"stock_report_snapshot_version": <version + "filtered_snapshot_count" + "progress">}`, or `{"stock_report_snapshot_version": null}` (200) when no version has been created yet |
 | `POST …/snapshots/versions` | `{"stock_report_snapshot_version": <version>}` |
 | `POST …/snapshots/versions/{client_id}/apply-priorities` | `{"changed": <int>, "stock_report_items": [<row>]}` — the rows whose snapshot moved |
 | `GET …/snapshots/missing-summary` | `{"quantity_missing_total": <int>, "items_with_missing": <int>}` over the active snapshots |
@@ -89,8 +89,10 @@ the router.
 **The `progress` object** (2026-09-26 addendum; `services/queries/stock_report/_version_progress.py`,
 shape from `domain/stock_report/snapshot_rules.py::fold_version_progress`). Attached to a
 version by the two version reads, never by the serializer. Computed over the version's
-snapshots **whose `priority` is set** and whose row is not deleted, in one aggregate
-statement for a whole page:
+snapshots **selected by the `priority` query parameter** — the same parser and meaning as
+`GET /items` (`_priority_filter.py`): omitted → null priority, `all` → every snapshot,
+a list → those groups — whose row is not deleted, in one aggregate statement for a whole
+page:
 
 ```jsonc
 {
@@ -98,7 +100,7 @@ statement for a whole page:
   "quantity_requested": 21, "quantity_missing": 2, "quantity_target": 19,
   "quantity_in_queue": 3, "quantity_in_progress": 1, "quantity_awaiting": 9,
   "quantity_resolved": 4, "quantity_completed": 9,
-  "by_priority": { "high": { /* the same ten keys */ }, "medium": { /* … */ }, "low": { /* … */ } }
+  "by_priority": { "high": { /* the same ten keys */ }, "medium": { /* … */ }, "low": { /* … */ }, "unset": { /* null priority */ } }
 }
 ```
 
@@ -108,9 +110,13 @@ statement for a whole page:
   `quantity_resolved`**, so it never drops because Scanner processed a shelf.
 - `quantity_completed = Σ min(target_i, awaiting_i)` per item (an over-assigned row cannot
   cover another's shortfall); `items_completed` counts items with `awaiting_i >= target_i`.
-- The three `by_priority` keys are always present, zeros included; no ratio is sent —
-  `quantity_completed / quantity_target` is the bar.
-| `GET …/items` | `{"stock_report_items": [<row>]}` — unpaginated by ratified decision |
+- The four `by_priority` keys are always present, zeros included, and the totals are
+  their sum; no ratio is sent — `quantity_completed / quantity_target` is the bar.
+  `snapshot_count` on the version is its size at creation and ignores the filter;
+  **`filtered_snapshot_count`** (beside it, computed by the same statement) is that count
+  under the filter — deleted rows included, so it equals `snapshot_count` under
+  `priority=all` and exceeds `progress.items_total` by the rows deleted mid-version.
+| `GET …/items` | `{"stock_report_items": [<row>], "stock_report_items_pagination": {"has_more", "limit", "offset"}}` — filters narrow first, then the page is cut from the ordered set |
 | the three item `PATCH` routes | `{"stock_report_item": <row>}` |
 | `DELETE …/items/{client_id}` | `{"client_id": ...}` |
 | `GET …/items/{client_id}/assignments` | `{"stock_task_assignments": [<assignment>]}` |
