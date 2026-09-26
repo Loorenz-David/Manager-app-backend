@@ -106,7 +106,13 @@ async def list_stock_report_items(ctx) -> dict:
         )
     else:
         statement = statement.join(StockReportItemSnapshot, _ACTIVE_SNAPSHOT_JOIN)
-        if not include_zero_requested:
+        # The outstanding rule is the worker's view: a snapshot whose every unit is
+        # missing has nothing left to do, so the board hides it. The buyer's list
+        # (`missing_only`) is the opposite view, and a fully missing snapshot is the
+        # one it most needs — so the rule does not apply there (fix 2026-09-26: the
+        # list came back empty while the missing-summary counted the row). No empty
+        # snapshot can slip in: `0 < missing <= requested`.
+        if not include_zero_requested and not missing_only:
             statement = statement.where(
                 (
                     StockReportItemSnapshot.quantity_requested

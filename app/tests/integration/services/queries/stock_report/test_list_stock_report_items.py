@@ -702,6 +702,19 @@ async def test_outstanding_is_requested_minus_missing_and_missing_only_filters(
             )["stock_report_items"]
         }
         assert missing == {all_missing: 3, some_missing: 2}
+        # `missing_only` alone (2026-09-26 fix): the outstanding rule is the
+        # worker's view and does not apply to the buyer's list. A fully missing
+        # snapshot (outstanding 0) is exactly what the buyer needs to see — before
+        # the fix it was hidden, while the missing-summary counter still counted it.
+        # With and without `priority=all`: `all_missing` has no priority.
+        for priority in (None, "all"):
+            missing_alone = {
+                row["client_id"]: row["snapshot"]["quantity_missing"]
+                for row in (
+                    await _list(db_session, identity, priority, missing_only=True)
+                )["stock_report_items"]
+            }
+            assert missing_alone == {all_missing: 3, some_missing: 2}, priority
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
         await db_session.commit()
