@@ -9,9 +9,9 @@ therefore takes **every stamp value from its arguments and never from `ctx`** �
 module does not import `ctx` and cannot: with `actor_user_id=None` it stamps NULL
 everywhere (MC-17), the path 13A exercises.
 
-The caller holds the advisory lock and the tasks → row+group → assignments locks,
-and has re-read the row. This operation never commits and never dispatches; it
-returns the pending events (`06_commands_local`).
+The caller holds the advisory lock and the tasks → row → active snapshot + its
+priority group → assignments locks, and has re-read the row. This operation never
+commits and never dispatches; it returns the pending events (`06_commands_local`).
 """
 
 from __future__ import annotations
@@ -23,11 +23,14 @@ from beyo_manager.models.tables.stock_report.stock_report_history_record import 
     StockReportHistoryRecord,
 )
 from beyo_manager.models.tables.stock_report.stock_report_item import StockReportItem
+from beyo_manager.models.tables.stock_report.stock_report_item_snapshot import (
+    StockReportItemSnapshot,
+)
 from beyo_manager.models.tables.stock_report.stock_task_assignment import (
     StockTaskAssignment,
 )
 from beyo_manager.services.commands.stock_report._events import (
-    build_stock_report_item_updated_event,
+    build_stock_report_item_snapshot_updated_event,
 )
 from beyo_manager.services.commands.stock_report._ordering import close_priority_gap
 from beyo_manager.services.commands.stock_report._remove_assignment import (
@@ -143,63 +146,61 @@ async def cascade_delete_stock_report_item(
             now=now,
         )
 
-    # ── (iii) The gap close, then the two soft-deletes.
-    #
-    # `priority`/`priority_order` come from a **fresh `SELECT`**, never from the ORM
-    # instance loaded at the lock.
-    #
-    # CORRECTED 2026-09-22 — this comment previously claimed the held instance goes
-    # **stale** after the first cascade's shift, and that claim is false. Measured on
-    # the production shape (PostgreSQL, asyncpg, `AsyncSession`, SQLAlchemy 2.0.40):
-    # `update()` here is ORM-enabled, `synchronize_session="auto"` resolves to
-    # `"evaluate"`, and every term of `close_priority_gap`'s WHERE clause evaluates
-    # the same way in Python as in SQL **when the caller passes an enum member** —
-    # which it does (`priority=position["priority"]`). The identity map is therefore
-    # SYNCHRONISED and the read below is **not** load-bearing today. The earlier
-    # measurement that said otherwise had passed the plain string `"high"`, and
-    # `StockReportItem.priority == "high"` is true in SQL but false in Python.
-    #
-    # The `SELECT` stays: it is correct defensive code, recorded "unobservable, not
-    # unnecessary", and it becomes load-bearing again if a criterion is added that
-    # Python cannot evaluate (a SQL function, subquery or JSON operator), if a caller
-    # passes a plain string, if the instance is detached or expired rather than live
-    # in the identity map, or if SQLAlchemy's default strategy changes. **Do not
-    # delete it for being inert.** (§9 rule 3; master plan L-40 as corrected, L-49.)
-    position = (
-        (
-            await session.execute(
-                select(
-                    StockReportItem.priority, StockReportItem.priority_order
-                ).where(
-                    StockReportItem.workspace_id == workspace_id,
-                    StockReportItem.client_id == row.client_id,
-                )
+    # ── (iii) The active snapshot: close its priority gap, then close it. Since
+    # 2026-09-26 the row itself holds no position; the snapshot does. Its position
+    # comes from a fresh `SELECT` (§9 rule 3 — the caller's locked instance is not
+    # relied on after the shifts above). The closed snapshot keeps its own
+    # `priority`/`priority_order` — it is outside every group now (MC-7 "Delete C"),
+    # and `close_priority_gap` shifts only orders strictly after it. Its counters are
+    # frozen at 0: every assignment is gone by (i). The version stays open.
+    snapshot = (
+        await session.execute(
+            select(
+                StockReportItemSnapshot.client_id,
+                StockReportItemSnapshot.priority,
+                StockReportItemSnapshot.priority_order,
+            ).where(
+                StockReportItemSnapshot.workspace_id == workspace_id,
+                StockReportItemSnapshot.stock_report_item_id == row.client_id,
+                StockReportItemSnapshot.closed_at.is_(None),
             )
         )
-        .mappings()
-        .one()
-    )
-    if position["priority"] is not None:
-        shifted = await close_priority_gap(
-            session,
-            workspace_id=workspace_id,
-            priority=position["priority"],
-            removed_order=position["priority_order"],
-        )
-        events.extend(
-            build_stock_report_item_updated_event(
-                client_id=neighbour["client_id"],
+    ).first()
+    if snapshot is not None:
+        if snapshot.priority is not None:
+            shifted = await close_priority_gap(
+                session,
                 workspace_id=workspace_id,
-                values=neighbour,
+                priority=snapshot.priority,
+                removed_order=snapshot.priority_order,
             )
-            # The shift statement's RETURNING order is not guaranteed; neighbours
-            # follow their new position.
-            for neighbour in sorted(shifted, key=lambda r: r["priority_order"])
+            events.extend(
+                build_stock_report_item_snapshot_updated_event(
+                    client_id=neighbour["client_id"],
+                    workspace_id=workspace_id,
+                    values=neighbour,
+                )
+                # The shift statement's RETURNING order is not guaranteed;
+                # neighbours follow their new position.
+                for neighbour in sorted(shifted, key=lambda r: r["priority_order"])
+            )
+        await session.execute(
+            update(StockReportItemSnapshot)
+            .where(
+                StockReportItemSnapshot.workspace_id == workspace_id,
+                StockReportItemSnapshot.client_id == snapshot.client_id,
+            )
+            .values(
+                closed_at=now,
+                quantity_in_queue=0,
+                quantity_in_progress=0,
+                quantity_awaiting=0,
+                updated_at=now,
+                updated_by_id=actor_user_id,
+            )
         )
 
-    # The deleted row keeps its own `priority`/`priority_order` — it is outside every
-    # group now (MC-7 "Delete C"), and `close_priority_gap` shifts only orders
-    # strictly after it.
+    # ── (iv) The two soft-deletes.
     await session.execute(
         update(StockReportItem)
         .where(

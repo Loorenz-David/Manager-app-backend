@@ -1,11 +1,22 @@
+from datetime import datetime
+
 from sqlalchemy import select, update
 from beyo_manager.domain.stock_report.enums import StockReportRepairTargetKindEnum
 from beyo_manager.models.tables.stock_report.stock_report_history_record import (
     StockReportHistoryRecord,
 )
 from beyo_manager.models.tables.stock_report.stock_report_item import StockReportItem
+from beyo_manager.models.tables.stock_report.stock_report_item_snapshot import (
+    StockReportItemSnapshot,
+)
 from beyo_manager.models.tables.stock_report.stock_task_assignment import (
     StockTaskAssignment,
+)
+from beyo_manager.services.commands.stock_report._events import (
+    build_stock_report_item_snapshot_updated_event,
+)
+from beyo_manager.services.commands.stock_report._snapshot_values import (
+    snapshot_values,
 )
 from beyo_manager.services.commands.stock_report._repair_records import (
     write_repair_record,
@@ -13,6 +24,7 @@ from beyo_manager.services.commands.stock_report._repair_records import (
 from beyo_manager.services.commands.stock_report._task_flag import set_task_stock_flag
 from beyo_manager.services.commands.stock_report._locks import (
     acquire_stock_report_order_lock,
+    lock_stock_report_item_snapshots,
     lock_stock_report_items,
     lock_stock_report_history_records,
     lock_stock_task_assignments,
@@ -31,140 +43,104 @@ _TARGETS = {
     "counter_awaiting": StockReportRepairTargetKindEnum.STOCK_REPORT_ITEM,
     "task_flag": StockReportRepairTargetKindEnum.TASK,
     "goal_total": StockReportRepairTargetKindEnum.HISTORY_RECORD,
-    "priority_order_nullness": StockReportRepairTargetKindEnum.STOCK_REPORT_ITEM,
+    # The ordering repair targets the active item snapshot since 2026-09-26. There
+    # is no `priority_order_nullness` any more: the snapshot table's pairing check
+    # makes a half-null position unstorable.
     "order_density": StockReportRepairTargetKindEnum.GROUP,
+    "missing_over_ceiling": StockReportRepairTargetKindEnum.ITEM_SNAPSHOT,
+    "snapshot_version_closed_mismatch": StockReportRepairTargetKindEnum.ITEM_SNAPSHOT,
 }
 
 
-async def _repair_priority_orders(ctx, repaired, changed_row_ids):
-    """Densify each priority group and record the net, not intermediate, changes."""
-    rows = (
+async def _repair_priority_orders(ctx, repaired, changed_snapshot_ids):
+    """Densify each priority group of the **active snapshots** and record the net,
+    not intermediate, changes. Every prioritised snapshot has an order (the pairing
+    check), so densification is the only ordering repair."""
+    snapshots = (
         (
             await ctx.session.execute(
-                select(StockReportItem)
+                select(StockReportItemSnapshot)
                 .where(
-                    StockReportItem.workspace_id == ctx.workspace_id,
-                    StockReportItem.is_deleted.is_(False),
+                    StockReportItemSnapshot.workspace_id == ctx.workspace_id,
+                    StockReportItemSnapshot.closed_at.is_(None),
                 )
                 .order_by(
-                    StockReportItem.priority,
-                    StockReportItem.priority_order,
-                    StockReportItem.client_id,
+                    StockReportItemSnapshot.priority,
+                    StockReportItemSnapshot.priority_order,
+                    StockReportItemSnapshot.client_id,
                 )
             )
         )
         .scalars()
         .all()
     )
-    for row in rows:
-        if row.priority is None and row.priority_order is not None:
-            stored = row.priority_order
-            result = await ctx.session.execute(
-                update(StockReportItem)
-                .where(
-                    StockReportItem.workspace_id == ctx.workspace_id,
-                    StockReportItem.client_id == row.client_id,
-                )
-                .values(
-                    priority_order=None,
-                    updated_at=ctx.now,
-                    updated_by_id=ctx.user_id,
-                )
+
+    async def _write(snapshot, expected, kind, target_kind):
+        stored = snapshot.priority_order
+        result = await ctx.session.execute(
+            update(StockReportItemSnapshot)
+            .where(
+                StockReportItemSnapshot.workspace_id == ctx.workspace_id,
+                StockReportItemSnapshot.client_id == snapshot.client_id,
             )
-            if result.rowcount != 1:
-                raise RuntimeError(
-                    "priority-order repair affected an unexpected number of rows"
-                )
-            await write_repair_record(
-                ctx.session,
-                workspace_id=ctx.workspace_id,
-                target_kind=StockReportRepairTargetKindEnum.STOCK_REPORT_ITEM,
-                target_client_id=row.client_id,
-                field="priority_order",
-                stored_value=stored,
-                recomputed_value=None,
-                trigger="manual",
-                created_by_id=ctx.user_id,
-                now=ctx.now,
+            .values(
+                priority_order=expected,
+                updated_at=ctx.now,
+                updated_by_id=ctx.user_id,
             )
-            repaired.append(
-                {
-                    "kind": "priority_order_nullness",
-                    "client_id": row.client_id,
-                    "field": "priority_order",
-                    "stored": stored,
-                    "expected": None,
-                }
+        )
+        if result.rowcount != 1:
+            raise RuntimeError(
+                "priority-order repair affected an unexpected number of rows"
             )
-            changed_row_ids.add(row.client_id)
+        await write_repair_record(
+            ctx.session,
+            workspace_id=ctx.workspace_id,
+            target_kind=target_kind,
+            target_client_id=snapshot.client_id,
+            field="priority_order",
+            stored_value=stored,
+            recomputed_value=expected,
+            trigger="manual",
+            created_by_id=ctx.user_id,
+            now=ctx.now,
+        )
+        repaired.append(
+            {
+                "kind": kind,
+                "client_id": snapshot.client_id,
+                "field": "priority_order",
+                "stored": stored,
+                "expected": expected,
+            }
+        )
+        changed_snapshot_ids.add(snapshot.client_id)
 
     groups = {}
-    for row in rows:
-        if row.priority is not None:
-            groups.setdefault(row.priority, []).append(row)
-    for group_rows in groups.values():
+    for snapshot in snapshots:
+        if snapshot.priority is not None:
+            groups.setdefault(snapshot.priority, []).append(snapshot)
+    for group_snapshots in groups.values():
         ordered = sorted(
-            group_rows,
-            key=lambda row: (
-                row.priority_order is None,
-                row.priority_order if row.priority_order is not None else 0,
-                row.client_id,
-            ),
+            group_snapshots,
+            key=lambda snapshot: (snapshot.priority_order, snapshot.client_id),
         )
-        for expected, row in enumerate(ordered, 1):
-            if row.priority_order == expected:
+        for expected, snapshot in enumerate(ordered, 1):
+            if snapshot.priority_order == expected:
                 continue
-            stored = row.priority_order
-            result = await ctx.session.execute(
-                update(StockReportItem)
-                .where(
-                    StockReportItem.workspace_id == ctx.workspace_id,
-                    StockReportItem.client_id == row.client_id,
-                )
-                .values(
-                    priority_order=expected,
-                    updated_at=ctx.now,
-                    updated_by_id=ctx.user_id,
-                )
+            await _write(
+                snapshot,
+                expected,
+                "order_density",
+                StockReportRepairTargetKindEnum.GROUP,
             )
-            if result.rowcount != 1:
-                raise RuntimeError(
-                    "priority-order repair affected an unexpected number of rows"
-                )
-            await write_repair_record(
-                ctx.session,
-                workspace_id=ctx.workspace_id,
-                target_kind=(
-                    StockReportRepairTargetKindEnum.STOCK_REPORT_ITEM
-                    if stored is None
-                    else StockReportRepairTargetKindEnum.GROUP
-                ),
-                target_client_id=row.client_id,
-                field="priority_order",
-                stored_value=stored,
-                recomputed_value=expected,
-                trigger="manual",
-                created_by_id=ctx.user_id,
-                now=ctx.now,
-            )
-            repaired.append(
-                {
-                    "kind": (
-                        "priority_order_nullness" if stored is None else "order_density"
-                    ),
-                    "client_id": row.client_id,
-                    "field": "priority_order",
-                    "stored": stored,
-                    "expected": expected,
-                }
-            )
-            changed_row_ids.add(row.client_id)
 
 
 async def repair_stock_report(ctx) -> dict:
     repaired = []
     not_repaired = []
     changed_row_ids = set()
+    changed_snapshot_ids = set()
     async with maybe_begin(ctx.session):
         await acquire_stock_report_order_lock(ctx.session, ctx.workspace_id)
         divergences = await compute_stock_report_divergences(
@@ -187,6 +163,18 @@ async def repair_stock_report(ctx) -> dict:
                     select(StockReportItem.client_id).where(
                         StockReportItem.workspace_id == ctx.workspace_id,
                         StockReportItem.is_deleted.is_(False),
+                    )
+                )
+            ).all(),
+        )
+        await lock_stock_report_item_snapshots(
+            ctx.session,
+            ctx.workspace_id,
+            (
+                await ctx.session.scalars(
+                    select(StockReportItemSnapshot.client_id).where(
+                        StockReportItemSnapshot.workspace_id == ctx.workspace_id,
+                        StockReportItemSnapshot.closed_at.is_(None),
                     )
                 )
             ).all(),
@@ -217,7 +205,6 @@ async def repair_stock_report(ctx) -> dict:
         divergences = await compute_stock_report_divergences(
             ctx.session, ctx.workspace_id
         )
-        # Nullness changes establish the ordering population before density is recomputed.
         divergences.sort(
             key=lambda item: (
                 item["kind"] == "order_density",
@@ -225,14 +212,11 @@ async def repair_stock_report(ctx) -> dict:
                 item["client_id"],
             )
         )
-        if any(
-            divergence["kind"] in {"priority_order_nullness", "order_density"}
-            for divergence in divergences
-        ):
-            await _repair_priority_orders(ctx, repaired, changed_row_ids)
+        if any(divergence["kind"] == "order_density" for divergence in divergences):
+            await _repair_priority_orders(ctx, repaired, changed_snapshot_ids)
         for divergence in divergences:
             kind = divergence["kind"]
-            if kind in {"priority_order_nullness", "order_density"}:
+            if kind == "order_density":
                 continue
             if kind == "signature":
                 not_repaired.append(divergence)
@@ -245,6 +229,63 @@ async def repair_stock_report(ctx) -> dict:
                     divergence["expected"] == "true",
                     require_update=True,
                 )
+            elif kind == "missing_over_ceiling":
+                result = await ctx.session.execute(
+                    update(StockReportItemSnapshot)
+                    .where(
+                        StockReportItemSnapshot.workspace_id == ctx.workspace_id,
+                        StockReportItemSnapshot.client_id == divergence["client_id"],
+                    )
+                    .values(
+                        quantity_missing=divergence["expected"],
+                        updated_at=ctx.now,
+                        updated_by_id=ctx.user_id,
+                    )
+                )
+                if result.rowcount != 1:
+                    raise RuntimeError(
+                        "missing-quantity repair affected an unexpected number of rows"
+                    )
+                changed_snapshot_ids.add(divergence["client_id"])
+            elif kind == "snapshot_version_closed_mismatch":
+                # Never reopen: the snapshot follows its version into the past. Its
+                # counters are frozen from the row exactly as a version close does.
+                row_counters = (
+                    await ctx.session.execute(
+                        select(
+                            StockReportItem.quantity_in_queue,
+                            StockReportItem.quantity_in_progress,
+                            StockReportItem.quantity_awaiting,
+                        )
+                        .join(
+                            StockReportItemSnapshot,
+                            StockReportItemSnapshot.stock_report_item_id
+                            == StockReportItem.client_id,
+                        )
+                        .where(
+                            StockReportItemSnapshot.client_id == divergence["client_id"]
+                        )
+                    )
+                ).one()
+                result = await ctx.session.execute(
+                    update(StockReportItemSnapshot)
+                    .where(
+                        StockReportItemSnapshot.workspace_id == ctx.workspace_id,
+                        StockReportItemSnapshot.client_id == divergence["client_id"],
+                    )
+                    .values(
+                        closed_at=datetime.fromisoformat(divergence["expected"]),
+                        quantity_in_queue=row_counters[0],
+                        quantity_in_progress=row_counters[1],
+                        quantity_awaiting=row_counters[2],
+                        updated_at=ctx.now,
+                        updated_by_id=ctx.user_id,
+                    )
+                )
+                if result.rowcount != 1:
+                    raise RuntimeError(
+                        "snapshot-close repair affected an unexpected number of rows"
+                    )
             elif kind == "goal_total":
                 result = await ctx.session.execute(
                     update(StockReportHistoryRecord)
@@ -301,6 +342,7 @@ async def repair_stock_report(ctx) -> dict:
             raise RuntimeError(
                 f"stock-report repair left divergences: {unexpected_remaining!r}"
             )
+    pending = []
     if changed_row_ids:
         rows = (
             (
@@ -311,26 +353,51 @@ async def repair_stock_report(ctx) -> dict:
                         StockReportItem.client_id.in_(sorted(changed_row_ids)),
                     )
                     .order_by(StockReportItem.client_id)
+                    .execution_options(populate_existing=True)
                 )
             )
             .scalars()
             .all()
         )
-        await dispatch(
-            [
-                build_workspace_event(
-                    row,
-                    "stock_report_item:updated",
-                    extra={
-                        "quantity_requested": row.quantity_requested,
-                        "quantity_in_queue": row.quantity_in_queue,
-                        "quantity_in_progress": row.quantity_in_progress,
-                        "quantity_awaiting": row.quantity_awaiting,
-                        "priority": row.priority.value if row.priority else None,
-                        "priority_order": row.priority_order,
-                    },
-                )
-                for row in rows
-            ]
+        pending.extend(
+            build_workspace_event(
+                row,
+                "stock_report_item:updated",
+                extra={
+                    "quantity_requested": row.quantity_requested,
+                    "quantity_in_queue": row.quantity_in_queue,
+                    "quantity_in_progress": row.quantity_in_progress,
+                    "quantity_awaiting": row.quantity_awaiting,
+                },
+            )
+            for row in rows
         )
+    if changed_snapshot_ids:
+        snapshots = (
+            (
+                await ctx.session.execute(
+                    select(StockReportItemSnapshot)
+                    .where(
+                        StockReportItemSnapshot.workspace_id == ctx.workspace_id,
+                        StockReportItemSnapshot.client_id.in_(
+                            sorted(changed_snapshot_ids)
+                        ),
+                    )
+                    .order_by(StockReportItemSnapshot.client_id)
+                    .execution_options(populate_existing=True)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        pending.extend(
+            build_stock_report_item_snapshot_updated_event(
+                client_id=snapshot.client_id,
+                workspace_id=ctx.workspace_id,
+                values=snapshot_values(snapshot),
+            )
+            for snapshot in snapshots
+        )
+    if pending:
+        await dispatch(pending)
     return {"repaired": repaired, "not_repaired": not_repaired}

@@ -76,6 +76,8 @@ from beyo_manager.services.commands.reset.phases.delete_stock_report_repair_reco
 from beyo_manager.services.commands.reset.phases.delete_stock_task_assignments import delete_stock_task_assignments
 from beyo_manager.services.commands.reset.phases.delete_stock_report_history_records import delete_stock_report_history_records
 from beyo_manager.services.commands.reset.phases.delete_stock_report_items import delete_stock_report_items
+from beyo_manager.services.commands.reset.phases.delete_stock_report_item_snapshots import delete_stock_report_item_snapshots
+from beyo_manager.services.commands.reset.phases.delete_stock_report_snapshot_versions import delete_stock_report_snapshot_versions
 
 
 async def reset_app(ctx: ServiceContext) -> dict:
@@ -88,8 +90,10 @@ async def reset_app(ctx: ServiceContext) -> dict:
     1. stock_report_repair_records
     2. stock_task_assignments
     3. stock_report_history_records
-    4. stock_report_items
-    
+    4. stock_report_item_snapshots
+    5. stock_report_snapshot_versions
+    6. stock_report_items
+
     Task system:
     5. task_events
     6. task_step_assignment_records
@@ -150,6 +154,8 @@ async def reset_app(ctx: ServiceContext) -> dict:
         await delete_stock_report_repair_records(ctx.session, workspace_id)
         await delete_stock_task_assignments(ctx.session, workspace_id)
         await delete_stock_report_history_records(ctx.session, workspace_id)
+        await delete_stock_report_item_snapshots(ctx.session, workspace_id)
+        await delete_stock_report_snapshot_versions(ctx.session, workspace_id)
         await delete_stock_report_items(ctx.session, workspace_id)
         # Task system data
         await delete_task_events(ctx.session, workspace_id)

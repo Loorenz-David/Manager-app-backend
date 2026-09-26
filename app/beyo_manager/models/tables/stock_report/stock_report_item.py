@@ -3,7 +3,6 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
-    Enum as SAEnum,
     ForeignKey,
     Index,
     Integer,
@@ -12,12 +11,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
-from beyo_manager.domain.stock_report.enums import StockReportPriorityEnum
 from beyo_manager.models.base.base import Base
 from beyo_manager.models.base.identity import IdentityMixin
-from beyo_manager.models.base.sa_enum import configure_sa_enum_values
-
-SAEnum = configure_sa_enum_values(SAEnum)
 
 
 class StockReportItem(IdentityMixin, Base):
@@ -49,13 +44,8 @@ class StockReportItem(IdentityMixin, Base):
     quantity_awaiting: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
-    priority: Mapped[StockReportPriorityEnum | None] = mapped_column(
-        SAEnum(
-            StockReportPriorityEnum, name="stock_report_priority_enum", create_type=True
-        ),
-        nullable=True,
-    )
-    priority_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # `priority` / `priority_order` used to live here. They belong to the row's active
+    # `stock_report_item_snapshots` row since the snapshot change (2026-09-26).
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -90,12 +80,6 @@ class StockReportItem(IdentityMixin, Base):
             "properties_signature",
             unique=True,
             postgresql_where=text("is_deleted = false"),
-        ),
-        Index(
-            "ix_stock_report_items_workspace_priority_order",
-            "workspace_id",
-            "priority",
-            "priority_order",
         ),
         CheckConstraint(
             "quantity_requested >= 0",

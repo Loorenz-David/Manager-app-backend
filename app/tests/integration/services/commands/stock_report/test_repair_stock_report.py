@@ -1,5 +1,8 @@
+from datetime import datetime, timezone
+
 import pytest
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 from beyo_manager.domain.stock_report.criteria_normalization import (
     compute_stock_criteria_signature,
 )
@@ -12,6 +15,12 @@ from beyo_manager.models.tables.stock_report.stock_report_history_record import 
     StockReportHistoryRecord,
 )
 from beyo_manager.models.tables.stock_report.stock_report_item import StockReportItem
+from beyo_manager.models.tables.stock_report.stock_report_item_snapshot import (
+    StockReportItemSnapshot,
+)
+from beyo_manager.models.tables.stock_report.stock_report_snapshot_version import (
+    StockReportSnapshotVersion,
+)
 from beyo_manager.models.tables.stock_report.stock_task_assignment import (
     StockTaskAssignment,
 )
@@ -34,6 +43,43 @@ from tests.helpers.stock_report import (
 from tests.helpers.statement_listener import count_writes, record_statements
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
+
+_NOW = datetime(2026, 9, 26, 12, 0, 0, tzinfo=timezone.utc)
+
+
+async def _snapshotted(db_session, seeded, specs):
+    """Rows plus their active snapshots inside one version — the fixture shape for
+    the ordering repairs since the position moved to the snapshot (2026-09-26).
+    `specs` is `[(properties, category_index, priority, priority_order), ...]`;
+    returns the snapshots in the same order."""
+    version = StockReportSnapshotVersion(
+        workspace_id=seeded.workspace.client_id, active_at=_NOW, created_at=_NOW
+    )
+    db_session.add(version)
+    await db_session.flush()
+    snapshots = []
+    for properties, category_index, priority, order in specs:
+        row = StockReportItem(
+            workspace_id=seeded.workspace.client_id,
+            item_category_id=seeded.categories[category_index].client_id,
+            properties=properties,
+            properties_signature=compute_stock_criteria_signature(properties),
+        )
+        db_session.add(row)
+        await db_session.flush()
+        snapshot = StockReportItemSnapshot(
+            workspace_id=seeded.workspace.client_id,
+            version_id=version.client_id,
+            stock_report_item_id=row.client_id,
+            priority=priority,
+            priority_order=order,
+            active_at=_NOW,
+            created_at=_NOW,
+        )
+        db_session.add(snapshot)
+        snapshots.append(snapshot)
+    await db_session.flush()
+    return snapshots
 
 
 async def test_manual_repair_fixes_counter_and_task_flag_and_records_each_change(
@@ -349,60 +395,25 @@ async def test_clean_manual_repair_makes_no_stock_writes_or_events(
     assert dispatch_calls == []
 
 
-async def test_repair_applies_nullness_before_priority_density(db_session):
-    seeded = await seed_stock_report_workspace(db_session)
-
-    def row(index, order):
-        return StockReportItem(
-            workspace_id=seeded.workspace.client_id,
-            item_category_id=seeded.categories[0].client_id,
-            properties={"index": index},
-            properties_signature=compute_stock_criteria_signature({"index": index}),
-            priority=StockReportPriorityEnum.HIGH,
-            priority_order=order,
-        )
-
-    first, third, missing = row(1, 1), row(2, 3), row(3, None)
-    db_session.add_all([first, third, missing])
-    await db_session.flush()
-    await repair_stock_report(make_ctx(db_session, seeded))
-    await db_session.refresh(first)
-    await db_session.refresh(third)
-    await db_session.refresh(missing)
-    assert (first.priority_order, third.priority_order, missing.priority_order) == (
-        1,
-        2,
-        3,
-    )
-    assert (
-        await compute_stock_report_divergences(db_session, seeded.workspace.client_id)
-        == []
-    )
-
-
 async def test_repair_records_one_net_change_per_priority_order_field(db_session):
+    """`high` = 1, 3, 6: two gaps, and the repair renumbers 3 -> 2 and 6 -> 3 with one
+    `group` record each — never an intermediate value. (Nullness has no repair since
+    2026-09-26: the pairing check makes a half-null position unstorable.)"""
     seeded = await seed_stock_report_workspace(db_session)
-
-    def row(index, order):
-        return StockReportItem(
-            workspace_id=seeded.workspace.client_id,
-            item_category_id=seeded.categories[0].client_id,
-            properties={"index": index},
-            properties_signature=compute_stock_criteria_signature({"index": index}),
-            priority=StockReportPriorityEnum.HIGH,
-            priority_order=order,
-        )
-
-    first, gapped, missing = row(1, 1), row(2, 3), row(3, None)
-    db_session.add_all([first, gapped, missing])
-    await db_session.flush()
+    first, gapped, far = await _snapshotted(
+        db_session,
+        seeded,
+        [
+            ({"index": 1}, 0, StockReportPriorityEnum.HIGH, 1),
+            ({"index": 2}, 0, StockReportPriorityEnum.HIGH, 3),
+            ({"index": 3}, 0, StockReportPriorityEnum.HIGH, 6),
+        ],
+    )
     await repair_stock_report(make_ctx(db_session, seeded))
     records = (
         (
             await db_session.execute(
-                __import__("sqlalchemy")
-                .select(StockReportRepairRecord)
-                .where(
+                select(StockReportRepairRecord).where(
                     StockReportRepairRecord.workspace_id == seeded.workspace.client_id,
                     StockReportRepairRecord.field == "priority_order",
                 )
@@ -421,8 +432,10 @@ async def test_repair_records_one_net_change_per_priority_order_field(db_session
         for record in records
     } == {
         ("group", gapped.client_id, "3", "2"),
-        ("stock_report_item", missing.client_id, None, "3"),
+        ("group", far.client_id, "6", "3"),
     }
+    await db_session.refresh(first)
+    assert first.priority_order == 1
     assert (
         await compute_stock_report_divergences(db_session, seeded.workspace.client_id)
         == []
@@ -475,8 +488,6 @@ async def test_repair_dispatches_only_changed_stock_report_rows(
         "quantity_in_queue": 4,
         "quantity_in_progress": 0,
         "quantity_awaiting": 0,
-        "priority": None,
-        "priority_order": None,
     }
 
 
@@ -536,24 +547,14 @@ async def test_counter_repair_stamps_only_the_changed_stock_report_row(db_sessio
 
 async def test_density_repair_stamps_only_the_renumbered_row(db_session):
     seeded = await seed_stock_report_workspace(db_session)
-    unchanged = StockReportItem(
-        workspace_id=seeded.workspace.client_id,
-        item_category_id=seeded.categories[0].client_id,
-        properties={"order": 1},
-        properties_signature=compute_stock_criteria_signature({"order": 1}),
-        priority=StockReportPriorityEnum.HIGH,
-        priority_order=1,
+    unchanged, moved = await _snapshotted(
+        db_session,
+        seeded,
+        [
+            ({"order": 1}, 0, StockReportPriorityEnum.HIGH, 1),
+            ({"order": 3}, 1, StockReportPriorityEnum.HIGH, 3),
+        ],
     )
-    moved = StockReportItem(
-        workspace_id=seeded.workspace.client_id,
-        item_category_id=seeded.categories[1].client_id,
-        properties={"order": 3},
-        properties_signature=compute_stock_criteria_signature({"order": 3}),
-        priority=StockReportPriorityEnum.HIGH,
-        priority_order=3,
-    )
-    db_session.add_all([unchanged, moved])
-    await db_session.flush()
     ctx = make_ctx(db_session, seeded)
     await repair_stock_report(ctx)
     await db_session.refresh(unchanged)
@@ -570,49 +571,14 @@ async def test_density_repair_stamps_only_the_renumbered_row(db_session):
     )
 
 
-async def test_manual_repair_clears_priority_nullness_and_records_one_item_change(
-    db_session,
-):
+async def test_a_half_null_position_is_refused_by_the_snapshot_table(db_session):
+    """What `priority_order_nullness` used to repair on the row is now impossible to
+    store: the snapshot table pairs the two columns with a check constraint."""
     seeded = await seed_stock_report_workspace(db_session)
-    row = StockReportItem(
-        workspace_id=seeded.workspace.client_id,
-        item_category_id=seeded.categories[0].client_id,
-        properties={"priority": None},
-        properties_signature=compute_stock_criteria_signature({"priority": None}),
-        priority=None,
-        priority_order=1,
-    )
-    db_session.add(row)
-    await db_session.flush()
-    ctx = make_ctx(db_session, seeded)
-    result = await repair_stock_report(ctx)
-    await db_session.refresh(row)
-    record = (
-        await db_session.scalars(
-            select(StockReportRepairRecord).where(
-                StockReportRepairRecord.target_client_id == row.client_id,
-                StockReportRepairRecord.field == "priority_order",
-            )
-        )
-    ).one()
-    assert row.priority_order is None
-    assert result["repaired"] == [
-        {
-            "kind": "priority_order_nullness",
-            "client_id": row.client_id,
-            "field": "priority_order",
-            "stored": 1,
-            "expected": None,
-        }
-    ]
-    assert (
-        record.target_kind.value,
-        record.stored_value,
-        record.recomputed_value,
-    ) == ("stock_report_item", "1", None)
-    assert await compute_stock_report_divergences(
-        db_session, seeded.workspace.client_id
-    ) == []
+    with pytest.raises(IntegrityError) as excinfo:
+        await _snapshotted(db_session, seeded, [({"priority": None}, 0, None, 1)])
+    assert "ck_stock_report_item_snapshots_priority_order_pairing" in str(excinfo.value)
+    await db_session.rollback()
 
 
 async def test_assert_stock_report_clean_rejects_a_stray_repair_record(db_session):

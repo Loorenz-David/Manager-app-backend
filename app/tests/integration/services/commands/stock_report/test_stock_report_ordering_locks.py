@@ -37,6 +37,9 @@ from beyo_manager.services.commands.stock_report.set_stock_report_item_priority_
 from beyo_manager.services.commands.stock_report.stock_demand_entries import DemandEntry
 from beyo_manager.services.context import ServiceContext
 from tests.helpers.stock_report import (
+    ensure_active_snapshots,
+    set_snapshot_position,
+    snapshot_positions,
     assert_stock_report_clean,
     make_ctx,
     purge_stock_report_workspace,
@@ -88,14 +91,9 @@ async def _seed_high_group(session, workspace_id):
         .all(),
         reverse=True,
     )
+    await ensure_active_snapshots(session, workspace_id, now=NOW)
     for order, client_id in enumerate(ids, 1):
-        await session.execute(
-            text(
-                "UPDATE stock_report_items SET priority = 'high', "
-                "priority_order = :order WHERE client_id = :client_id"
-            ),
-            {"order": order, "client_id": client_id},
-        )
+        await set_snapshot_position(session, client_id, "high", order)
     await session.commit()
     return ids  # A, B, C, D
 
@@ -151,17 +149,8 @@ async def test_the_move_waits_for_the_workspace_ordering_lock(db_session):
             break
 
         await db_session.rollback()
-        state = {
-            client_id: order
-            for client_id, order in (
-                await db_session.execute(
-                    select(
-                        StockReportItem.client_id, StockReportItem.priority_order
-                    ).where(StockReportItem.workspace_id == workspace_id)
-                )
-            ).all()
-        }
-        assert [state[client_id] for client_id in (A, B, C, D)] == [2, 3, 1, 4]
+        state = await snapshot_positions(db_session, workspace_id)
+        assert [state[client_id][1] for client_id in (A, B, C, D)] == [2, 3, 1, 4]
         await assert_stock_report_clean(db_session, workspace_id)
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)

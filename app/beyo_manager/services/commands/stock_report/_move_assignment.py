@@ -15,6 +15,12 @@ from beyo_manager.services.commands.stock_report._goal_credit import apply_goal_
 from beyo_manager.services.commands.stock_report._repair_records import (
     write_repair_record,
 )
+from beyo_manager.services.commands.stock_report._snapshot_resolved import (
+    credit_snapshot_resolved,
+)
+from beyo_manager.services.commands.stock_report._snapshot_missing import (
+    clamp_snapshot_missing_quantity,
+)
 from beyo_manager.services.queries.stock_report.consistency import (
     recompute_row_counters,
 )
@@ -46,8 +52,6 @@ _RETURNING_COLUMNS = (
     StockReportItem.quantity_in_queue,
     StockReportItem.quantity_in_progress,
     StockReportItem.quantity_awaiting,
-    StockReportItem.priority,
-    StockReportItem.priority_order,
 )
 
 
@@ -190,7 +194,12 @@ async def move_assignment(
 ):
     """The one operation that moves an assignment and its unit counters (MC-1). The
     caller holds the row lock and the assignment lock and has re-read `state` /
-    `is_deleted`. Never reads `ctx`, never commits, never dispatches."""
+    `is_deleted`. Never reads `ctx`, never commits, never dispatches.
+
+    On **creation** — the only move that raises the covered quantity — it also clamps
+    the active snapshot's `quantity_missing` to what is still uncovered
+    (`_snapshot_missing.py`); the creating caller therefore holds the snapshot lock
+    too (`lock_stock_report_item_snapshots`, after the row lock)."""
     from_state = None if is_creation else assignment.state
     if (
         not is_creation
@@ -263,6 +272,32 @@ async def move_assignment(
                 client_id=assignment.stock_report_item_id,
                 workspace_id=workspace_id,
                 values=values,
+            )
+        )
+    if is_creation:
+        events.extend(
+            await clamp_snapshot_missing_quantity(
+                session,
+                row_id=assignment.stock_report_item_id,
+                workspace_id=workspace_id,
+                actor_user_id=actor_user_id,
+                now=now,
+            )
+        )
+    elif target in (
+        StockTaskAssignmentStateEnum.RESOLVED,
+        StockTaskAssignmentStateEnum.RESOLVED_EARLY,
+    ):
+        # Completion memory (`_snapshot_resolved.py`): no caller takes this branch
+        # today — Scanner's exits go through `resolve_processed_group` — but the
+        # credit path is one, wherever a terminal target is written.
+        events.extend(
+            await credit_snapshot_resolved(
+                session,
+                row_id=assignment.stock_report_item_id,
+                workspace_id=workspace_id,
+                quantity=quantity,
+                now=now,
             )
         )
     return events
@@ -351,4 +386,15 @@ async def resolve_processed_group(session, assignments, *, row, workspace_id, no
                 values=values,
             )
         )
+    # Completion memory: every moved assignment landed in resolved / resolved_early,
+    # and both count (`_snapshot_resolved.py`). One statement for the group.
+    events.extend(
+        await credit_snapshot_resolved(
+            session,
+            row_id=row.client_id,
+            workspace_id=workspace_id,
+            quantity=sum(assignment.quantity for assignment, _f, _t in moved),
+            now=now,
+        )
+    )
     return events

@@ -1505,3 +1505,117 @@ async def test_resolve_processed_group_short_circuits_an_assignment_already_at_t
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
         await db_session.commit()
+
+
+# ---------------------------------------------------------------------------
+# Completion memory (addendum 2026-09-26): a resolve credits the row's **active**
+# snapshot's `quantity_resolved` — the version's memory that Scanner processed the
+# units, so the wire `quantity_awaiting` never drops because of a resolve.
+# ---------------------------------------------------------------------------
+
+PR_SITE = "beyo_manager.services.commands.stock_report.process_items_processed.dispatch"
+
+
+async def _resolved_of(db_session, row_id):
+    """`version_id -> quantity_resolved` over every snapshot of the row."""
+    from beyo_manager.models.tables.stock_report.stock_report_item_snapshot import (
+        StockReportItemSnapshot,
+    )
+
+    return {
+        version_id: resolved
+        for version_id, resolved in (
+            await db_session.execute(
+                select(
+                    StockReportItemSnapshot.version_id,
+                    StockReportItemSnapshot.quantity_resolved,
+                ).where(StockReportItemSnapshot.stock_report_item_id == row_id)
+            )
+        ).all()
+    }
+
+
+async def test_resolve_credits_the_active_snapshot_only_and_emits_its_event(
+    db_session, monkeypatch
+):
+    """Two versions on one row. A (4) resolves from awaiting under v1; then v2 opens
+    (v1 closes) and B (3) resolves early from in_queue under v2. v1's snapshot keeps
+    exactly A's 4, v2's holds exactly B's 3: the credit lands on the snapshot active
+    at the time, and a close never moves it."""
+    from tests.helpers.stock_report import create_snapshot_version
+
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    task_b, item_b = await _second_pair(db_session, seeded, "prb", quantity=3)
+    await _create_at(db_session, seeded, row, seeded.task, seeded.item, [S.AWAITING])
+    await _CR(db_session, seeded, row, task_b, item_b)
+    v1 = await create_snapshot_version(
+        db_session, seeded.workspace.client_id, now=NOW, user_id=seeded.manager.client_id
+    )
+    await db_session.commit()
+    workspace_id = seeded.workspace.client_id
+    v1_id = v1["stock_report_snapshot_version"]["client_id"]
+    try:
+        _configure(monkeypatch, workspace_id=workspace_id)
+        captured = capture_dispatch(monkeypatch, PR_SITE)
+
+        await _PR(db_session, [seeded.item.article_number])
+
+        assert await _resolved_of(db_session, row.client_id) == {v1_id: 4}
+        assert await _counters(db_session, row.client_id) == (3, 0, 0)
+        names = [event.event_name for event in captured]
+        assert names == [
+            "stock_task_assignment:state-changed",
+            "stock_report_item:updated",
+            "stock_report_item_snapshot:updated",
+        ]
+        assert captured[2].extra["stock_report_item_id"] == row.client_id
+        assert captured[2].extra["version_id"] == v1_id
+        assert captured[2].extra["quantity_resolved"] == 4
+
+        v2 = await create_snapshot_version(
+            db_session, workspace_id, now=NOW, user_id=seeded.manager.client_id
+        )
+        await db_session.commit()
+        v2_id = v2["stock_report_snapshot_version"]["client_id"]
+        captured.clear()
+
+        await _PR(db_session, [item_b.article_number])
+
+        assert await _resolved_of(db_session, row.client_id) == {v1_id: 4, v2_id: 3}
+        assert await _counters(db_session, row.client_id) == (0, 0, 0)
+        assert [event.event_name for event in captured][-1] == (
+            "stock_report_item_snapshot:updated"
+        )
+        assert captured[-1].extra["version_id"] == v2_id
+        assert captured[-1].extra["quantity_resolved"] == 3
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()
+
+
+async def test_resolve_without_an_active_snapshot_writes_no_snapshot(
+    db_session, monkeypatch
+):
+    """No version yet: the guarded credit statement matches nothing, so no snapshot
+    row appears, no snapshot event is dispatched, and the resolve itself is
+    unchanged (the row's counters and the goal step as before)."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    await _create_at(db_session, seeded, row, seeded.task, seeded.item, [S.AWAITING])
+    await db_session.commit()
+    workspace_id = seeded.workspace.client_id
+    try:
+        _configure(monkeypatch, workspace_id=workspace_id)
+        captured = capture_dispatch(monkeypatch, PR_SITE)
+        response = await _PR(db_session, [seeded.item.article_number])
+        assert response["results"][0]["outcome"] == "resolved"
+        assert await _counters(db_session, row.client_id) == (0, 0, 0)
+        assert "stock_report_item_snapshot:updated" not in {
+            event.event_name for event in captured
+        }
+        assert await _resolved_of(db_session, row.client_id) == {}
+        await assert_stock_report_clean(db_session, workspace_id)
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()

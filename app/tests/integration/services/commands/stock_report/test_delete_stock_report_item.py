@@ -58,6 +58,11 @@ from beyo_manager.services.commands.stock_report.delete_stock_report_item import
 )
 from beyo_manager.services.commands.stock_report.stock_demand_entries import DemandEntry
 from tests.helpers.stock_report import (
+    ensure_active_snapshots,
+    latest_snapshot,
+    set_snapshot_position,
+    snapshot_id_of,
+    snapshot_positions,
     assert_stock_report_clean,
     capture_dispatch,
     make_ctx,
@@ -228,28 +233,22 @@ async def _seed_high_group(session, seeded, row):
     # the largest id holds order 1.
     ordered = [client_id for client_id in ids if client_id != row.client_id]
     plan = [(ordered[0], 1), (row.client_id, 2), (ordered[1], 3)]
+    # Positions live on the active item snapshot (2026-09-26).
+    await ensure_active_snapshots(session, seeded.workspace.client_id, now=NOW)
     for client_id, order in plan:
-        await session.execute(
-            text(
-                "UPDATE stock_report_items SET priority = 'high', "
-                "priority_order = :order WHERE client_id = :client_id"
-            ),
-            {"order": order, "client_id": client_id},
-        )
+        await set_snapshot_position(session, client_id, "high", order)
     await session.flush()
     return ordered[0], ordered[1]  # A (order 1), C (order 3)
 
 
 async def _orders(session, workspace_id):
+    """`row_id -> priority_order` over every snapshot of the workspace, the deleted
+    row's closed one included (one version in these tests)."""
     return {
-        client_id: order
-        for client_id, order in (
-            await session.execute(
-                select(
-                    StockReportItem.client_id, StockReportItem.priority_order
-                ).where(StockReportItem.workspace_id == workspace_id)
-            )
-        ).all()
+        row_id: order
+        for row_id, (_priority, order) in (
+            await snapshot_positions(session, workspace_id, include_closed=True)
+        ).items()
     }
 
 
@@ -384,18 +383,13 @@ async def test_the_group_closes_its_gap_and_the_deleted_row_keeps_its_own_order(
     assert orders[A] == 1
     assert orders[C] == 2
     assert orders[row.client_id] == 2  # the deleted row is outside every group
-    deleted_row = (
-        await db_session.execute(
-            select(StockReportItem)
-            .where(StockReportItem.client_id == row.client_id)
-            .execution_options(populate_existing=True)
-        )
-    ).scalar_one()
-    assert deleted_row.priority.value == "high"
+    deleted_snapshot = await latest_snapshot(db_session, row.client_id)
+    assert deleted_snapshot.closed_at is not None
+    assert deleted_snapshot.priority.value == "high"
     assert [
         (event.event_name, event.client_id) for event in captured
     ] == [
-        ("stock_report_item:updated", C),
+        ("stock_report_item_snapshot:updated", await snapshot_id_of(db_session, C)),
         ("stock_report_item:deleted", row.client_id),
     ]
     await assert_stock_report_clean(db_session, workspace_id)

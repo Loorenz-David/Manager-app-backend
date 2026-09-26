@@ -1,10 +1,11 @@
-"""Dense ordering — MC-7's shift statements (master plan §6.5, phase 12).
+"""Dense ordering — MC-7's shift statements (master plan §6.5, phase 12), retargeted
+to the **active item snapshots** on 2026-09-26 when priority left the row.
 
-A *group* is `(workspace_id, priority)` over non-deleted rows, `priority ∈ {high,
-medium, low}`; orders are 1-based and dense. Every shift here is **one**
-column-referencing `UPDATE … RETURNING`, never a read-then-assign and never an ORM
-attribute write (master plan §9 rule 3): each returned row's six event fields feed
-one `stock_report_item:updated` (MC-19).
+A *group* is `(workspace_id, priority)` over **active** snapshots (`closed_at IS
+NULL`), `priority ∈ {high, medium, low}`; orders are 1-based and dense. Every shift
+here is **one** column-referencing `UPDATE … RETURNING`, never a read-then-assign and
+never an ORM attribute write (master plan §9 rule 3): each returned row's fields feed
+one `stock_report_item_snapshot:updated`.
 
 The caller holds `pg_advisory_xact_lock(hashtext('stock_report_order:' || ws))` and
 the group's `FOR UPDATE`, and has read its positions **after** those locks (MC-7
@@ -15,26 +16,28 @@ from __future__ import annotations
 
 from sqlalchemy import func, select, update
 
-from beyo_manager.models.tables.stock_report.stock_report_item import StockReportItem
+from beyo_manager.models.tables.stock_report.stock_report_item_snapshot import (
+    StockReportItemSnapshot,
+)
 
-# The six event fields of MC-19's `stock_report_item:updated`, plus the row's own id
-# so the caller can address each shifted neighbour.
+# The five fields of a `stock_report_item_snapshot:updated` payload, plus the
+# snapshot's own id so the caller can address each shifted neighbour.
 _RETURNING_COLUMNS = (
-    StockReportItem.client_id,
-    StockReportItem.quantity_requested,
-    StockReportItem.quantity_in_queue,
-    StockReportItem.quantity_in_progress,
-    StockReportItem.quantity_awaiting,
-    StockReportItem.priority,
-    StockReportItem.priority_order,
+    StockReportItemSnapshot.client_id,
+    StockReportItemSnapshot.stock_report_item_id,
+    StockReportItemSnapshot.version_id,
+    StockReportItemSnapshot.priority,
+    StockReportItemSnapshot.priority_order,
+    StockReportItemSnapshot.quantity_missing,
+    StockReportItemSnapshot.quantity_resolved,
 )
 
 
 def _group_where(workspace_id, priority):
     return (
-        StockReportItem.workspace_id == workspace_id,
-        StockReportItem.priority == priority,
-        StockReportItem.is_deleted.is_(False),
+        StockReportItemSnapshot.workspace_id == workspace_id,
+        StockReportItemSnapshot.priority == priority,
+        StockReportItemSnapshot.closed_at.is_(None),
     )
 
 
@@ -43,27 +46,26 @@ async def _shift(session, *, workspace_id, priority, low, high, delta):
     means "everything from `low` upwards"."""
     if high is not None and low > high:
         return []
-    band = [StockReportItem.priority_order >= low]
+    band = [StockReportItemSnapshot.priority_order >= low]
     if high is not None:
-        band.append(StockReportItem.priority_order <= high)
+        band.append(StockReportItemSnapshot.priority_order <= high)
     statement = (
-        update(StockReportItem)
+        update(StockReportItemSnapshot)
         .where(*_group_where(workspace_id, priority), *band)
-        .values(priority_order=StockReportItem.priority_order + delta)
+        .values(priority_order=StockReportItemSnapshot.priority_order + delta)
         .returning(*_RETURNING_COLUMNS)
     )
     return [dict(row) for row in (await session.execute(statement)).mappings().all()]
 
 
 async def close_priority_gap(session, *, workspace_id, priority, removed_order):
-    """MC-7 "source closes its gap": every row of the group ordered **after** the
+    """MC-7 "source closes its gap": every snapshot of the group ordered **after** the
     vacated position moves down one.
 
-    `removed_order` is the position the leaving row held. The leaving row itself
-    sits at `removed_order`, so the band starting at `removed_order + 1` is what
-    keeps it out of the shift — that matters for the deletion cascade (plan 13
-    C1(b)), where the row is still non-deleted at this point and must keep its own
-    `priority_order` afterwards.
+    `removed_order` is the position the leaving snapshot held. It still sits at
+    `removed_order`, so the band starting at `removed_order + 1` is what keeps it out
+    of the shift — that matters for the deletion cascade, where the snapshot is
+    closed afterwards and keeps its own `priority_order`.
     """
     if removed_order is None:
         return []
@@ -83,7 +85,7 @@ async def append_to_priority_group(session, *, workspace_id, priority):
     called (`X == Y` is short-circuited by the caller as a no-op, B2).
     """
     current_max = await session.scalar(
-        select(func.max(StockReportItem.priority_order)).where(
+        select(func.max(StockReportItemSnapshot.priority_order)).where(
             *_group_where(workspace_id, priority)
         )
     )

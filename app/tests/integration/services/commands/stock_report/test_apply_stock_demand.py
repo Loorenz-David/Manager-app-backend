@@ -42,6 +42,9 @@ from beyo_manager.services.commands.stock_report.apply_stock_demand import (
 from beyo_manager.services.commands.stock_report.stock_demand_entries import DemandEntry
 from tests.helpers.statement_listener import count_writes, record_statements
 from tests.helpers.stock_report import (
+    active_snapshot,
+    ensure_active_snapshots,
+    set_snapshot_position,
     assert_stock_report_clean,
     purge_stock_report_workspace,
     seed_stock_report_workspace,
@@ -117,8 +120,8 @@ async def test_c1a_new_entry_creates_row_and_emits_created_only(db_session):
         assert row.quantity_in_queue == 0
         assert row.quantity_in_progress == 0
         assert row.quantity_awaiting == 0
-        assert row.priority is None
-        assert row.priority_order is None
+        # A row created by demand has no snapshot until the next version is opened.
+        assert await active_snapshot(db_session, row.client_id) is None
 
         assert len(result.outcomes) == 1
         assert result.outcomes[0].outcome == StockDemandOutcomeEnum.APPLIED
@@ -606,17 +609,16 @@ async def test_c3g_goal_record_snapshots_priority_not_live_counter(db_session):
             db_session, workspace_id, [_entry(0, "Dining Chairs", {"wood_group": ["oak"]}, 1)]
         )
         companion_id = companion.events[0].client_id
+        await db_session.commit()
+        # The position lives on the active item snapshot (2026-09-26): the goal
+        # record must read it from there, and null when the row has none.
+        await ensure_active_snapshots(db_session, workspace_id, now=NOW)
+        await set_snapshot_position(db_session, companion_id, "high", 1)
+        await set_snapshot_position(db_session, row_id, "high", 2)
         await db_session.execute(
             text(
-                "UPDATE stock_report_items SET priority = 'high', priority_order = 1 "
+                "UPDATE stock_report_items SET quantity_awaiting = 3 "
                 "WHERE client_id = :id"
-            ),
-            {"id": companion_id},
-        )
-        await db_session.execute(
-            text(
-                "UPDATE stock_report_items SET priority = 'high', priority_order = 2, "
-                "quantity_awaiting = 3 WHERE client_id = :id"
             ),
             {"id": row_id},
         )
@@ -1029,13 +1031,9 @@ async def test_c8b_updated_event_payload_matches_returning_values(db_session):
         properties_raw = {"wood_group": ["teak"]}
         first = await _AD(db_session, workspace_id, [_entry(0, "Dining Chairs", properties_raw, 5)])
         row_id = first.events[0].client_id
-        await db_session.execute(
-            text(
-                "UPDATE stock_report_items SET priority = 'high', priority_order = 1 "
-                "WHERE client_id = :id"
-            ),
-            {"id": row_id},
-        )
+        await db_session.commit()
+        await ensure_active_snapshots(db_session, workspace_id, now=NOW)
+        await set_snapshot_position(db_session, row_id, "high", 1)
         await db_session.commit()
 
         result = await _AD(db_session, workspace_id, [_entry(0, "Dining Chairs", properties_raw, 9)])
@@ -1044,13 +1042,12 @@ async def test_c8b_updated_event_payload_matches_returning_values(db_session):
         event = result.events[0]
         assert event.event_name == "stock_report_item:updated"
         assert event.client_id == row_id
+        # Four quantity keys only: the snapshot's position is not the row's payload.
         assert event.extra == {
             "quantity_requested": 9,
             "quantity_in_queue": 0,
             "quantity_in_progress": 0,
             "quantity_awaiting": 0,
-            "priority": "high",
-            "priority_order": 1,
         }
 
         await assert_stock_report_clean(db_session, workspace_id)

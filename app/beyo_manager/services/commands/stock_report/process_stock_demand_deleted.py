@@ -7,7 +7,8 @@ that order. Inside the transaction, in MC-1's global lock order:
 
     set_config -> workspace check -> **advisory lock** -> category resolution ->
     identity discovery -> assignment id discovery -> tasks (class 3) ->
-    rows + their priority groups (class 4) -> assignments (class 5) -> re-read ->
+    rows (class 4) -> their active snapshots + priority groups -> assignments
+    (class 5) -> re-read ->
     one cascade per candidate row, ascending `client_id` -> deadline check
 
 The advisory lock is taken **before** discovery (carried question Q1): every path
@@ -28,7 +29,7 @@ from __future__ import annotations
 
 import time
 
-from sqlalchemy import or_, select, text
+from sqlalchemy import select, text
 
 from beyo_manager.config import settings
 from beyo_manager.domain.stock_report.enums import StockDemandDeletedOutcomeEnum
@@ -53,6 +54,12 @@ from beyo_manager.services.commands.stock_report._locks import (
     lock_tasks,
 )
 from beyo_manager.services.commands.stock_report._row_values import row_values
+from beyo_manager.services.commands.stock_report._snapshot_values import (
+    snapshot_values,
+)
+from beyo_manager.services.commands.stock_report.delete_stock_report_item import (
+    lock_active_snapshots_and_groups,
+)
 from beyo_manager.services.commands.stock_report.stock_demand_deleted_request import (
     parse_stock_demand_deleted_body,
 )
@@ -64,23 +71,10 @@ from beyo_manager.services.infra.location_tracker.webhook_verifier import (
 )
 
 
-async def _lock_rows_and_groups(session, workspace_id, candidate_row_ids):
-    """Class 4 — the candidate rows **and every non-deleted row of their priority
-    groups**, in one `SELECT … FOR UPDATE ORDER BY client_id` (MC-1 / MC-7
-    "Serialization"; plan 13's single-row form generalized).
-
-    The groups are named by a subquery over the candidates' own `priority`, so the
-    whole class still costs one statement whatever the number of candidates (Q2).
-    """
-    group_priorities = (
-        select(StockReportItem.priority)
-        .where(
-            StockReportItem.workspace_id == workspace_id,
-            StockReportItem.client_id.in_(candidate_row_ids),
-            StockReportItem.priority.is_not(None),
-        )
-        .scalar_subquery()
-    )
+async def _lock_rows(session, workspace_id, candidate_row_ids):
+    """Class 4 — the candidate rows, in one `SELECT … FOR UPDATE ORDER BY client_id`
+    (MC-1). The priority groups moved to the snapshot table on 2026-09-26 and are
+    locked next, by `lock_active_snapshots_and_groups` (one statement, Q2)."""
     rows = (
         (
             await session.execute(
@@ -88,10 +82,7 @@ async def _lock_rows_and_groups(session, workspace_id, candidate_row_ids):
                 .where(
                     StockReportItem.workspace_id == workspace_id,
                     StockReportItem.is_deleted.is_(False),
-                    or_(
-                        StockReportItem.client_id.in_(candidate_row_ids),
-                        StockReportItem.priority.in_(group_priorities),
-                    ),
+                    StockReportItem.client_id.in_(candidate_row_ids),
                 )
                 .order_by(StockReportItem.client_id)
                 .with_for_update()
@@ -207,9 +198,10 @@ async def process_stock_demand_deleted(ctx) -> dict:
         )
         locked_rows: dict[str, StockReportItem] = {}
         if candidate_row_ids:
-            locked_rows = await _lock_rows_and_groups(
-                ctx.session, workspace_id, candidate_row_ids
-            )
+            locked_rows = await _lock_rows(ctx.session, workspace_id, candidate_row_ids)
+        locked_snapshots = await lock_active_snapshots_and_groups(
+            ctx.session, workspace_id, candidate_row_ids
+        )
         await lock_stock_task_assignments(
             ctx.session,
             workspace_id,
@@ -228,6 +220,10 @@ async def process_stock_demand_deleted(ctx) -> dict:
 
         initial_row_values = {
             row_id: row_values(row) for row_id, row in locked_rows.items()
+        }
+        initial_snapshot_values = {
+            snapshot_id: snapshot_values(snapshot)
+            for snapshot_id, snapshot in locked_snapshots.items()
         }
 
         # 11. One cascade per candidate row, ascending `client_id`. Each closes its
@@ -249,7 +245,11 @@ async def process_stock_demand_deleted(ctx) -> dict:
             raise StockDemandDeadlineExceeded()
 
     await dispatch(
-        coalesce_stock_report_events(events, initial_row_values=initial_row_values)
+        coalesce_stock_report_events(
+            events,
+            initial_row_values=initial_row_values,
+            initial_snapshot_values=initial_snapshot_values,
+        )
     )
 
     return {

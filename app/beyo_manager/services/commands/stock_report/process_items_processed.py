@@ -8,7 +8,9 @@ request order, on the §14F F5 ladder -> grouped resolution per row
 (`resolve_processed_group`) -> dispatch -> response in request order.
 
 The task is never touched (F3): this command writes only `stock_task_assignments`,
-`stock_report_items` and, through the goal step, `stock_report_history_records`.
+`stock_report_items`, through the goal step `stock_report_history_records`, and —
+since the 2026-09-26 addendum — the row's active `stock_report_item_snapshots`
+(`quantity_resolved`, the version's completion memory).
 """
 
 from __future__ import annotations
@@ -20,10 +22,14 @@ from beyo_manager.domain.stock_report.enums import (
     StockTaskAssignmentStateEnum,
 )
 from beyo_manager.models.tables.items.item import Item
+from beyo_manager.models.tables.stock_report.stock_report_item_snapshot import (
+    StockReportItemSnapshot,
+)
 from beyo_manager.models.tables.stock_report.stock_task_assignment import (
     StockTaskAssignment,
 )
 from beyo_manager.services.commands.stock_report._locks import (
+    lock_stock_report_item_snapshots,
     lock_stock_report_items,
     lock_stock_task_assignments,
 )
@@ -108,11 +114,32 @@ async def process_items_processed(ctx) -> dict:
                     assignment_row.client_id
                 ] = assignment_row.stock_report_item_id
 
-        # Locks, ascending, one statement each (X2): rows, then their candidate
-        # assignments (MC-1 lock order steps 4-5).
+        # Locks, ascending, one statement each (X2): rows, then the rows' active
+        # snapshots, then their candidate assignments (MC-1 lock order). The snapshot
+        # is locked because resolution credits its completion memory
+        # (`_snapshot_resolved.py`); its ids are discovered unlocked first, which only
+        # decides what to lock (the `create_stock_task_assignments` shape).
         candidate_row_ids = sorted(set(row_id_by_assignment_id.values()))
         locked_rows = await lock_stock_report_items(
             ctx.session, workspace_id, candidate_row_ids
+        )
+        active_snapshot_ids = (
+            (
+                await ctx.session.scalars(
+                    select(StockReportItemSnapshot.client_id).where(
+                        StockReportItemSnapshot.workspace_id == workspace_id,
+                        StockReportItemSnapshot.stock_report_item_id.in_(
+                            candidate_row_ids
+                        ),
+                        StockReportItemSnapshot.closed_at.is_(None),
+                    )
+                )
+            ).all()
+            if candidate_row_ids
+            else []
+        )
+        await lock_stock_report_item_snapshots(
+            ctx.session, workspace_id, active_snapshot_ids
         )
         candidate_assignment_ids = sorted(row_id_by_assignment_id.keys())
         locked_assignments = await lock_stock_task_assignments(

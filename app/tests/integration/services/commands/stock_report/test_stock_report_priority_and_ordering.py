@@ -65,6 +65,11 @@ from beyo_manager.services.commands.stock_report.stock_demand_entries import Dem
 from beyo_manager.services.context import ServiceContext
 from tests.helpers.statement_listener import count_writes, record_statements
 from tests.helpers.stock_report import (
+    active_snapshot,
+    ensure_active_snapshots,
+    set_snapshot_position,
+    snapshot_id_of,
+    snapshot_positions,
     assert_stock_report_clean,
     capture_dispatch,
     make_ctx,
@@ -80,6 +85,7 @@ _TIMEOUT_MS = Settings.model_fields["stock_demand_webhook_timeout_ms"].default
 # set, `test_apply_stock_demand.py:WRITE_TABLES`).
 WRITE_TABLES = {
     "stock_report_items",
+    "stock_report_item_snapshots",
     "stock_task_assignments",
     "stock_report_history_records",
     "tasks",
@@ -128,7 +134,8 @@ class Groups:
 
 
 async def _seed_groups(session, workspace_id):
-    """Seven rows through `AD`, then priority/order by raw SQL.
+    """Seven rows through `AD`, a version through the shipped command, then
+    priority/order by raw SQL **on the active item snapshots** (2026-09-26).
 
     The labels are bound by **sorting the real ids at runtime**, descending, so
     `priority_order` ascending disagrees with `client_id` ascending inside `high`.
@@ -138,6 +145,8 @@ async def _seed_groups(session, workspace_id):
         workspace_id,
         [_entry(index, {"wood_group": [f"teak{index}"]}) for index in range(7)],
     )
+    await session.commit()
+    await ensure_active_snapshots(session, workspace_id, now=NOW)
     ids = sorted(
         (
             await session.execute(
@@ -160,13 +169,7 @@ async def _seed_groups(session, workspace_id):
         (groups.Y, "low", 2),
     ]
     for client_id, priority, order in assignments:
-        await session.execute(
-            text(
-                "UPDATE stock_report_items SET priority = :priority, "
-                "priority_order = :order WHERE client_id = :client_id"
-            ),
-            {"priority": priority, "order": order, "client_id": client_id},
-        )
+        await set_snapshot_position(session, client_id, priority, order)
     # `high`'s order 1 must carry the group's largest client_id (plan 12 §6).
     assert groups.A > groups.B > groups.C > groups.D
     await session.commit()
@@ -174,22 +177,15 @@ async def _seed_groups(session, workspace_id):
 
 
 async def _state(session, workspace_id):
-    """`(priority, priority_order)` of every non-deleted row in the workspace."""
-    rows = (
-        await session.execute(
-            select(
-                StockReportItem.client_id,
-                StockReportItem.priority,
-                StockReportItem.priority_order,
-            ).where(
-                StockReportItem.workspace_id == workspace_id,
-                StockReportItem.is_deleted.is_(False),
-            )
-        )
-    ).all()
+    """`(priority, priority_order)` of every live row's active snapshot."""
+    return await snapshot_positions(session, workspace_id)
+
+
+async def _snapshot_ids(session, groups):
+    """Label -> the label's active snapshot id, for event assertions."""
     return {
-        client_id: (priority.value if priority is not None else None, order)
-        for client_id, priority, order in rows
+        label: await snapshot_id_of(session, getattr(groups, label))
+        for label in "ABCDXYN"
     }
 
 
@@ -372,11 +368,13 @@ async def test_move_up_shifts_only_the_block_it_enters(db_session, monkeypatch):
                 1,
             )
         ]
-        # Exactly three `:updated` — the mover and the two shifted neighbours.
+        # Exactly three snapshot `:updated` — the mover and the two shifted
+        # neighbours, addressed by their **snapshot** ids.
+        snap = await _snapshot_ids(db_session, g)
         assert [(e.event_name, e.client_id) for e in captured] == [
-            ("stock_report_item:updated", g.C),
-            ("stock_report_item:updated", g.A),
-            ("stock_report_item:updated", g.B),
+            ("stock_report_item_snapshot:updated", snap["C"]),
+            ("stock_report_item_snapshot:updated", snap["A"]),
+            ("stock_report_item_snapshot:updated", snap["B"]),
         ]
         # Every payload carries the position **after** the move (C6(a)), not the one
         # the row held when the command started.
@@ -386,10 +384,10 @@ async def test_move_up_shifts_only_the_block_it_enters(db_session, monkeypatch):
         ] == [("high", 1), ("high", 2), ("high", 3)]
         # Only the mover is stamped (MC-17): A and B are shifted and must not be,
         # D is untouched.
-        assert (await _row(db_session, g.C)).updated_at == ctx.now
-        assert (await _row(db_session, g.A)).updated_at is None
-        assert (await _row(db_session, g.B)).updated_at is None
-        assert (await _row(db_session, g.D)).updated_at is None
+        assert (await active_snapshot(db_session, g.C)).updated_at == ctx.now
+        assert (await active_snapshot(db_session, g.A)).updated_at is None
+        assert (await active_snapshot(db_session, g.B)).updated_at is None
+        assert (await active_snapshot(db_session, g.D)).updated_at is None
         await assert_stock_report_clean(db_session, workspace_id)
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
@@ -436,10 +434,10 @@ async def test_move_to_the_held_position_writes_nothing(db_session, monkeypatch)
         assert await _state(db_session, workspace_id) == before
         assert await _records(db_session, workspace_id) == []
         assert captured == []
-        assert (await _row(db_session, g.B)).updated_at is None
+        assert (await active_snapshot(db_session, g.B)).updated_at is None
         # B2: not one write reaches any of the four tables.
         assert count_writes(statements, WRITE_TABLES) == 0
-        assert result["stock_report_item"]["priority_order"] == 2
+        assert result["stock_report_item"]["snapshot"]["priority_order"] == 2
         await assert_stock_report_clean(db_session, workspace_id)
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
@@ -640,19 +638,20 @@ async def test_priority_change_closes_the_source_gap_and_appends(
         assert record.created_by_id == actor
         assert record.created_at == ctx.now
 
+        snap = await _snapshot_ids(db_session, g)
         assert [(e.event_name, e.client_id) for e in captured] == [
-            ("stock_report_item:updated", g.B),
-            ("stock_report_item:updated", g.C),
-            ("stock_report_item:updated", g.D),
+            ("stock_report_item_snapshot:updated", snap["B"]),
+            ("stock_report_item_snapshot:updated", snap["C"]),
+            ("stock_report_item_snapshot:updated", snap["D"]),
         ]
         assert captured[0].extra["priority"] == "low"
         # C5(a): the mover is stamped and nothing else in the workspace is —
         # neither the shifted rows (C, D) nor the untouched ones (A, X, Y).
-        mover = await _row(db_session, g.B)
+        mover = await active_snapshot(db_session, g.B)
         assert mover.updated_by_id == actor
         assert mover.updated_at == ctx.now
         for label in ("A", "C", "D", "X", "Y"):
-            other = await _row(db_session, getattr(g, label))
+            other = await active_snapshot(db_session, getattr(g, label))
             assert other.updated_at is None, label
             assert other.updated_by_id is None, label
         await assert_stock_report_clean(db_session, workspace_id)
@@ -829,7 +828,7 @@ async def test_setting_the_priority_a_row_already_has_writes_nothing(
         assert await _state(db_session, workspace_id) == before
         assert await _records(db_session, workspace_id) == []
         assert captured == []
-        assert (await _row(db_session, client_id)).updated_at is None
+        assert (await active_snapshot(db_session, client_id)).updated_at is None
         # B2: zero writes (plan 12 C1(k)/C1(l)).
         assert count_writes(statements, WRITE_TABLES) == 0
         await assert_stock_report_clean(db_session, workspace_id)
@@ -887,4 +886,52 @@ async def test_priority_lookup_refuses_foreign_deleted_and_absent_rows(db_sessio
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
         await purge_stock_report_workspace(db_session, foreign_id)
+        await db_session.commit()
+
+
+# ---------------------------------------------------------------------------
+# The snapshot boundary (2026-09-26)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("command", ["SP", "SO"])
+async def test_a_row_without_an_active_snapshot_cannot_be_ordered(db_session, command):
+    """A row Scanner created since the last version has no snapshot and therefore no
+    position to set: both routes refuse with `STOCK_REPORT_NO_ACTIVE_SNAPSHOT`, and
+    nothing is written. The row itself still resolves (it is not a 404)."""
+    seeded = await seed_stock_report_workspace(db_session)
+    await db_session.commit()
+    workspace_id = seeded.workspace.client_id
+    S = _seller(db_session, seeded)
+    try:
+        g = await _seed_groups(db_session, workspace_id)
+        # A row minted after the version: no snapshot.
+        await _AD(db_session, workspace_id, [_entry(9, {"wood_group": ["late"]})])
+        await db_session.commit()
+        late = next(
+            client_id
+            for client_id in (
+                await db_session.scalars(
+                    select(StockReportItem.client_id).where(
+                        StockReportItem.workspace_id == workspace_id
+                    )
+                )
+            ).all()
+            if client_id not in (g.A, g.B, g.C, g.D, g.X, g.Y, g.N)
+        )
+        assert await active_snapshot(db_session, late) is None
+        before = await _state(db_session, workspace_id)
+
+        with pytest.raises(ValidationError) as excinfo:
+            if command == "SP":
+                await _SP(db_session, S, late, "high")
+            else:
+                await _SO(db_session, S, late, 1)
+        await db_session.rollback()
+
+        assert str(excinfo.value).startswith("STOCK_REPORT_NO_ACTIVE_SNAPSHOT:")
+        assert await _state(db_session, workspace_id) == before
+        assert await _records(db_session, workspace_id) == []
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
         await db_session.commit()

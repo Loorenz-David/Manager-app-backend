@@ -31,6 +31,8 @@ from beyo_manager.services.queries.stock_report.list_stock_report_items import (
     list_stock_report_items,
 )
 from tests.helpers.stock_report import (
+    ensure_active_snapshots,
+    set_snapshot_position,
     make_ctx,
     purge_stock_report_workspace,
     seed_stock_report_workspace,
@@ -50,11 +52,28 @@ ROW_KEYS = {
     "quantity_in_queue",
     "quantity_in_progress",
     "quantity_awaiting",
-    "priority",
-    "priority_order",
     "created_at",
     "updated_at",
     "created_by_id",
+    "updated_by_id",
+    "snapshot",
+}
+SNAPSHOT_KEYS = {
+    "client_id",
+    "version_id",
+    "stock_report_item_id",
+    "quantity_requested",
+    "quantity_in_queue",
+    "quantity_in_progress",
+    "quantity_awaiting",
+    "quantity_missing",
+    "quantity_resolved",
+    "priority",
+    "priority_order",
+    "active_at",
+    "closed_at",
+    "created_at",
+    "updated_at",
     "updated_by_id",
 }
 CATEGORY_KEYS = {"client_id", "name", "major_category", "image_url"}
@@ -84,13 +103,13 @@ async def _AD(session, workspace_id, entries):
 
 
 async def _set_order(session, client_id, priority, order):
-    await session.execute(
-        text(
-            "UPDATE stock_report_items SET priority = :priority, "
-            "priority_order = :order WHERE client_id = :client_id"
-        ),
-        {"priority": priority, "order": order, "client_id": client_id},
-    )
+    await set_snapshot_position(session, client_id, priority, order)
+
+
+async def _version(session, workspace_id):
+    """Every live row gets an active snapshot (the board is a snapshot read)."""
+    await ensure_active_snapshots(session, workspace_id, now=NOW)
+    await session.commit()
 
 
 async def _ids(session, workspace_id):
@@ -117,6 +136,8 @@ async def _list(
     include_zero_requested=False,
     item_major_categories=None,
     item_category_ids=None,
+    live_stock=False,
+    missing_only=False,
 ):
     ctx = ServiceContext(
         identity=identity,
@@ -126,6 +147,8 @@ async def _list(
             "include_zero_requested": include_zero_requested,
             "item_major_categories": item_major_categories,
             "item_category_ids": item_category_ids,
+            "live_stock": live_stock,
+            "missing_only": missing_only,
         },
         session=session,
     )
@@ -146,6 +169,7 @@ async def test_read_order_is_high_medium_low_then_priority_order(db_session):
                 for index in range(7)
             ],
         )
+        await _version(db_session, workspace_id)
         A, B, C, D, M, X, Y = await _ids(db_session, workspace_id)
         for client_id, priority, order in (
             (A, "high", 1),
@@ -191,6 +215,7 @@ async def test_no_filter_lists_only_null_priority_rows_by_created_at(db_session)
         await db_session.commit()
         await _AD(db_session, workspace_id, [_entry(0, "Dining Chairs", "teak2")])
         await db_session.commit()
+        await _version(db_session, workspace_id)
 
         # A ULID carries no monotonic counter (master plan §10), so *which* row is
         # back-dated is chosen from the **sorted real ids**: N1 is the null row with
@@ -246,6 +271,7 @@ async def test_zero_requested_rows_are_hidden_unless_explicitly_included(db_sess
             ],
         )
         await db_session.commit()
+        await _version(db_session, workspace_id)
 
         rows_by_quantity = {
             row["quantity_requested"]: row["client_id"]
@@ -285,6 +311,7 @@ async def test_category_filters_narrow_rows_and_combine_with_each_other(db_sessi
             ],
         )
         await db_session.commit()
+        await _version(db_session, workspace_id)
 
         all_rows = (await _list(db_session, identity))["stock_report_items"]
         ids_by_category = {
@@ -351,6 +378,8 @@ async def test_row_shape_carries_the_four_key_category_including_a_null_image(
                 _entry(1, "Coffee Tables", "teak1"),
             ],
         )
+        await db_session.commit()
+        await _version(db_session, workspace_id)
         await db_session.execute(
             text(
                 "UPDATE item_categories SET image_url = :url WHERE name = "
@@ -386,8 +415,13 @@ async def test_row_shape_carries_the_four_key_category_including_a_null_image(
         assert by_name["Coffee Tables"]["item_category"]["image_url"] is None
         assert by_name["Dining Chairs"]["item_category"]["major_category"] == "seat"
         assert by_name["Dining Chairs"]["properties"] == {"wood_group": ["teak0"]}
-        assert by_name["Dining Chairs"]["priority"] is None
-        assert by_name["Dining Chairs"]["priority_order"] is None
+        snapshot = by_name["Dining Chairs"]["snapshot"]
+        assert set(snapshot) == SNAPSHOT_KEYS
+        assert snapshot["priority"] is None
+        assert snapshot["priority_order"] is None
+        assert snapshot["quantity_missing"] == 0
+        assert snapshot["closed_at"] is None
+        assert snapshot["stock_report_item_id"] == by_name["Dining Chairs"]["client_id"]
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
         await db_session.commit()
@@ -408,9 +442,12 @@ async def test_soft_deleted_and_foreign_rows_are_not_listed(db_session):
         )
         live, deleted = sorted(await _ids(db_session, workspace_id))
         await db_session.commit()
+        await _version(db_session, workspace_id)
         # The foreign row is a cross-workspace reference: same category name, same
         # properties, same `high` group with the same order.
         await _AD(db_session, foreign_id, [_entry(0, "Dining Chairs", "teak0")])
+        await db_session.commit()
+        await _version(db_session, foreign_id)
         foreign_row = (await _ids(db_session, foreign_id))[0]
         await _set_order(db_session, foreign_row, "high", 1)
         await db_session.execute(
@@ -448,6 +485,8 @@ async def test_a_row_whose_category_was_soft_deleted_still_serializes_its_name(
     identity = make_ctx(db_session, seeded).identity
     try:
         await _AD(db_session, workspace_id, [_entry(0, "Dining Chairs", "teak0")])
+        await db_session.commit()
+        await _version(db_session, workspace_id)
         await db_session.execute(
             text(
                 "UPDATE item_categories SET is_deleted = true WHERE name = "
@@ -461,6 +500,137 @@ async def test_a_row_whose_category_was_soft_deleted_still_serializes_its_name(
 
         assert len(rows) == 1
         assert rows[0]["item_category"]["name"] == "Dining Chairs"
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()
+
+
+# ---------------------------------------------------------------------------
+# The snapshot read (2026-09-26): default vs `live_stock`, `missing_only`
+# ---------------------------------------------------------------------------
+
+
+async def _set_missing(session, client_id, missing):
+    await session.execute(
+        text(
+            "UPDATE stock_report_item_snapshots SET quantity_missing = :missing "
+            "WHERE stock_report_item_id = :client_id AND closed_at IS NULL"
+        ),
+        {"missing": missing, "client_id": client_id},
+    )
+
+
+async def test_default_read_hides_rows_without_an_active_snapshot_and_live_shows_them(
+    db_session,
+):
+    """A row Scanner created since the last version is invisible on the board until
+    the next version — and visible on `live_stock=true` with `snapshot: null`."""
+    seeded = await seed_stock_report_workspace(db_session)
+    await db_session.commit()
+    workspace_id = seeded.workspace.client_id
+    identity = make_ctx(db_session, seeded).identity
+    try:
+        await _AD(db_session, workspace_id, [_entry(0, "Dining Chairs", "teak0")])
+        await db_session.commit()
+        await _version(db_session, workspace_id)
+        await _AD(db_session, workspace_id, [_entry(0, "Dining Chairs", "late")])
+        await db_session.commit()
+        snapshotted, late = (
+            row["client_id"]
+            for row in sorted(
+                (await _list(db_session, identity, live_stock=True))[
+                    "stock_report_items"
+                ],
+                key=lambda row: row["snapshot"] is None,
+            )
+        )
+
+        listed = (await _list(db_session, identity))["stock_report_items"]
+        assert [row["client_id"] for row in listed] == [snapshotted]
+        assert listed[0]["snapshot"] is not None
+
+        live = (await _list(db_session, identity, live_stock=True))["stock_report_items"]
+        by_id = {row["client_id"]: row for row in live}
+        assert set(by_id) == {snapshotted, late}
+        assert by_id[late]["snapshot"] is None
+        assert by_id[snapshotted]["snapshot"]["quantity_requested"] == 10
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()
+
+
+async def test_outstanding_is_requested_minus_missing_and_missing_only_filters(
+    db_session,
+):
+    """Default hides a snapshot whose `requested - missing <= 0`;
+    `include_zero_requested` shows it; `missing_only` keeps only `missing > 0`."""
+    seeded = await seed_stock_report_workspace(db_session)
+    await db_session.commit()
+    workspace_id = seeded.workspace.client_id
+    identity = make_ctx(db_session, seeded).identity
+    try:
+        await _AD(
+            db_session,
+            workspace_id,
+            [
+                _entry(0, "Dining Chairs", "all-missing", quantity=3),
+                _entry(1, "Dining Chairs", "some-missing", quantity=5),
+                _entry(2, "Dining Chairs", "none-missing", quantity=4),
+            ],
+        )
+        await db_session.commit()
+        await _version(db_session, workspace_id)
+        by_quantity = {
+            row["quantity_requested"]: row["client_id"]
+            for row in (await _list(db_session, identity))["stock_report_items"]
+        }
+        all_missing, some_missing, none_missing = (
+            by_quantity[3], by_quantity[5], by_quantity[4]
+        )
+        await _set_missing(db_session, all_missing, 3)
+        await _set_missing(db_session, some_missing, 2)
+        await db_session.commit()
+
+        default = {
+            row["client_id"]
+            for row in (await _list(db_session, identity))["stock_report_items"]
+        }
+        assert default == {some_missing, none_missing}
+        included = {
+            row["client_id"]
+            for row in (
+                await _list(db_session, identity, include_zero_requested=True)
+            )["stock_report_items"]
+        }
+        assert included == {all_missing, some_missing, none_missing}
+        missing = {
+            row["client_id"]: row["snapshot"]["quantity_missing"]
+            for row in (
+                await _list(
+                    db_session, identity, missing_only=True, include_zero_requested=True
+                )
+            )["stock_report_items"]
+        }
+        assert missing == {all_missing: 3, some_missing: 2}
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()
+
+
+@pytest.mark.parametrize(
+    "params", [{"priority": "high"}, {"missing_only": True}, {"priority": ""}]
+)
+async def test_snapshot_filters_are_refused_on_a_live_read(db_session, params):
+    seeded = await seed_stock_report_workspace(db_session)
+    await db_session.commit()
+    workspace_id = seeded.workspace.client_id
+    identity = make_ctx(db_session, seeded).identity
+    try:
+        with pytest.raises(ValidationError) as excinfo:
+            await _list(db_session, identity, live_stock=True, **params)
+        assert str(excinfo.value).startswith(
+            "STOCK_REPORT_LIVE_STOCK_FILTER_CONFLICT:"
+        )
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
         await db_session.commit()

@@ -30,6 +30,9 @@ from beyo_manager.models.tables.stock_report.stock_report_history_record import 
     StockReportHistoryRecord,
 )
 from beyo_manager.models.tables.stock_report.stock_report_item import StockReportItem
+from beyo_manager.models.tables.stock_report.stock_report_item_snapshot import (
+    StockReportItemSnapshot,
+)
 from beyo_manager.services.commands.stock_report._demand_lookup import (
     discover_live_rows_by_identity,
     resolve_categories_for_entries,
@@ -47,7 +50,18 @@ from beyo_manager.services.infra.location_tracker.webhook_verifier import (
     refuse_webhook_auth,
 )
 
-_PRIORITY_COLUMN_TYPE = StockReportItem.__table__.c.priority.type
+def _active_snapshot_column(column, workspace_id, row_id):
+    """`column` of `row_id`'s active item snapshot as a scalar subquery — NULL when
+    the row has no active snapshot (a row created since the last version)."""
+    return (
+        select(column)
+        .where(
+            StockReportItemSnapshot.workspace_id == workspace_id,
+            StockReportItemSnapshot.stock_report_item_id == row_id,
+            StockReportItemSnapshot.closed_at.is_(None),
+        )
+        .scalar_subquery()
+    )
 
 
 async def apply_stock_demand(
@@ -225,22 +239,24 @@ async def apply_stock_demand(
                     "r.quantity_requested AS quantity_requested, "
                     "r.quantity_in_queue AS quantity_in_queue, "
                     "r.quantity_in_progress AS quantity_in_progress, "
-                    "r.quantity_awaiting AS quantity_awaiting, "
-                    "r.priority AS priority, r.priority_order AS priority_order"
+                    "r.quantity_awaiting AS quantity_awaiting"
                 ).columns(
                     client_id=String,
                     quantity_requested=Integer,
                     quantity_in_queue=Integer,
                     quantity_in_progress=Integer,
                     quantity_awaiting=Integer,
-                    priority=_PRIORITY_COLUMN_TYPE,
-                    priority_order=Integer,
                 ),
                 params,
             )
             updated_rows = list(update_result.mappings().all())
 
         if to_credit:
+            # The goal record still snapshots a priority, and since 2026-09-26 that
+            # is the row's **active item snapshot's** (null when the row has none).
+            # Read as two correlated scalar subqueries inside the one INSERT, so the
+            # D6 statement plan keeps its bound (C6: the count is constant in the
+            # batch size and at most 8) — a separate SELECT would be a ninth.
             history_values = [
                 {
                     "workspace_id": workspace_id,
@@ -248,12 +264,16 @@ async def apply_stock_demand(
                     "type": StockReportHistoryRecordTypeEnum.QUANTITY_REQUESTED_CHANGE,
                     "quantity_requested": new_quantity,
                     "quantity_awaiting": 0,
-                    "priority": row.priority,
-                    "priority_order": row.priority_order,
+                    "priority": _active_snapshot_column(
+                        StockReportItemSnapshot.priority, workspace_id, client_id
+                    ),
+                    "priority_order": _active_snapshot_column(
+                        StockReportItemSnapshot.priority_order, workspace_id, client_id
+                    ),
                     "created_at": now,
                     "created_by_id": None,
                 }
-                for client_id, new_quantity, row in to_credit
+                for client_id, new_quantity, _row in to_credit
             ]
             await session.execute(pg_insert(StockReportHistoryRecord).values(history_values))
 

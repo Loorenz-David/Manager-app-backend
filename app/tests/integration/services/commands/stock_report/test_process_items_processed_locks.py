@@ -110,3 +110,73 @@ async def test_c8a_fresh_session_reads_the_committed_resolve(db_session, monkeyp
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
         await db_session.commit()
+
+
+async def test_lock_order_is_rows_then_active_snapshots_then_assignments(
+    db_session, monkeypatch
+):
+    """Addendum 2026-09-26: the resolve credits the row's active snapshot, so the
+    webhook takes the snapshot lock class between rows and assignments (MC-1 order:
+    stock_report_items -> stock_report_item_snapshots -> stock_task_assignments)."""
+    from tests.helpers.statement_listener import record_statements
+    from tests.helpers.stock_report import create_snapshot_version
+
+    seeded = await seed_stock_report_workspace(db_session)
+    criteria = {"wood_group": ["teak"]}
+    row = StockReportItem(
+        workspace_id=seeded.workspace.client_id,
+        item_category_id=seeded.categories[0].client_id,
+        properties=criteria,
+        properties_signature=compute_stock_criteria_signature(criteria),
+        quantity_requested=10,
+    )
+    db_session.add(row)
+    await db_session.flush()
+    workspace_id = seeded.workspace.client_id
+    await create_stock_task_assignments(
+        make_ctx(
+            db_session,
+            seeded,
+            role_name="worker",
+            incoming_data={
+                "entries": [
+                    {
+                        "stock_report_item_id": row.client_id,
+                        "task_id": seeded.task.client_id,
+                        "item_id": seeded.item.client_id,
+                        "override_property_mismatch": False,
+                    }
+                ]
+            },
+        )
+    )
+    await create_snapshot_version(
+        db_session, workspace_id, now=NOW, user_id=seeded.manager.client_id
+    )
+    await db_session.commit()
+
+    try:
+        _configure(monkeypatch, workspace_id=workspace_id)
+        async with record_statements(db_session) as statements:
+            await process_items_processed(
+                _pr_ctx(db_session, numbers=[seeded.item.article_number])
+            )
+        locked_tables = []
+        for statement in statements:
+            if "FOR UPDATE" not in statement.upper():
+                continue
+            for table in (
+                "stock_report_items",
+                "stock_report_item_snapshots",
+                "stock_task_assignments",
+            ):
+                if f"FROM {table}" in statement:
+                    locked_tables.append(table)
+        assert locked_tables == [
+            "stock_report_items",
+            "stock_report_item_snapshots",
+            "stock_task_assignments",
+        ], statements
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()

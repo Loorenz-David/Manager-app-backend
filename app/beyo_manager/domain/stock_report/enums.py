@@ -45,6 +45,8 @@ class StockReportRepairTargetKindEnum(enum.Enum):
     HISTORY_RECORD = "history_record"
     TASK = "task"
     GROUP = "group"
+    # The priority-order repairs target the active snapshot since 2026-09-26.
+    ITEM_SNAPSHOT = "item_snapshot"
 
 
 class StockCriteriaMismatchReasonEnum(enum.Enum):

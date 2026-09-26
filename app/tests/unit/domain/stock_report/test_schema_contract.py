@@ -111,3 +111,95 @@ def test_stock_report_migration_declares_all_owned_counter_checks():
         "ck_stock_report_history_records_quantity_awaiting_nonneg",
     ):
         assert constraint_name in source
+
+
+# ---------------------------------------------------------------------------
+# The snapshot layer (2026-09-26)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_snapshot_tables_exist_and_the_row_lost_its_position_columns():
+    tables = Base.metadata.tables
+    assert {"stock_report_snapshot_versions", "stock_report_item_snapshots"} <= set(tables)
+    row_columns = {column.name for column in tables["stock_report_items"].columns}
+    assert "priority" not in row_columns
+    assert "priority_order" not in row_columns
+    assert "ix_stock_report_items_workspace_priority_order" not in {
+        index.name for index in tables["stock_report_items"].indexes
+    }
+
+
+@pytest.mark.unit
+def test_one_active_version_and_one_active_snapshot_per_row_are_database_facts():
+    versions = {
+        index.name: index
+        for index in Base.metadata.tables["stock_report_snapshot_versions"].indexes
+    }
+    snapshots = {
+        index.name: index
+        for index in Base.metadata.tables["stock_report_item_snapshots"].indexes
+    }
+    active_version = versions["uix_stock_report_snapshot_versions_active"]
+    assert active_version.unique
+    assert [column.name for column in active_version.columns] == ["workspace_id"]
+    assert "closed_at IS NULL" in str(
+        active_version.dialect_options["postgresql"]["where"]
+    )
+    active_snapshot = snapshots["uix_stock_report_item_snapshots_row_active"]
+    assert active_snapshot.unique
+    assert [column.name for column in active_snapshot.columns] == [
+        "workspace_id",
+        "stock_report_item_id",
+    ]
+    assert "closed_at IS NULL" in str(
+        active_snapshot.dialect_options["postgresql"]["where"]
+    )
+    board = snapshots["ix_stock_report_item_snapshots_workspace_priority_order"]
+    assert [column.name for column in board.columns] == [
+        "workspace_id",
+        "priority",
+        "priority_order",
+    ]
+
+
+@pytest.mark.unit
+def test_snapshot_checks_pair_the_position_and_floor_every_quantity():
+    names = {
+        constraint.name
+        for constraint in Base.metadata.tables["stock_report_item_snapshots"].constraints
+        if constraint.name
+    }
+    assert {
+        "ck_stock_report_item_snapshots_priority_order_pairing",
+        "ck_stock_report_item_snapshots_quantity_requested_nonneg",
+        "ck_stock_report_item_snapshots_quantity_in_queue_nonneg",
+        "ck_stock_report_item_snapshots_quantity_in_progress_nonneg",
+        "ck_stock_report_item_snapshots_quantity_awaiting_nonneg",
+        "ck_stock_report_item_snapshots_quantity_missing_nonneg",
+        "ck_stock_report_item_snapshots_quantity_resolved_nonneg",
+        "uq_stock_report_item_snapshots_version_row",
+    } <= names
+    column = Base.metadata.tables["stock_report_item_snapshots"].columns["quantity_resolved"]
+    assert column.nullable is False
+    assert column.server_default.arg == "0"
+
+
+@pytest.mark.unit
+def test_snapshot_migrations_reuse_the_priority_enum_and_drop_the_row_columns():
+    versions = Path(__file__).parents[4] / "migrations/versions"
+    create = (versions / "11e1d0d47686_create_stock_report_snapshot_tables.py").read_text()
+    drop = (
+        versions / "2f7a9c3e5b1d_drop_priority_columns_from_stock_report_items.py"
+    ).read_text()
+    # The shared enum is referenced, never re-created and never dropped.
+    assert 'name="stock_report_priority_enum", create_type=False' in create
+    assert "DROP TYPE stock_report_priority_enum" not in create
+    assert "ADD VALUE IF NOT EXISTS 'item_snapshot'" in create
+    # The completion memory (2026-09-26 addendum) is in the create revision, amended
+    # before publication — no fourth revision.
+    assert 'sa.Column("quantity_resolved", sa.Integer(), server_default="0", nullable=False)' in create
+    assert "ck_stock_report_item_snapshots_quantity_resolved_nonneg" in create
+    assert 'op.drop_column("stock_report_items", "priority")' in drop
+    assert 'op.drop_column("stock_report_items", "priority_order")' in drop
+    assert 'op.drop_index(\n        "ix_stock_report_items_workspace_priority_order"' in drop

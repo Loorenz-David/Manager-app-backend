@@ -63,6 +63,21 @@ class SetStockReportItemPriorityOrderRequest(BaseModel):
     priority_order: StrictInt
 
 
+class SetStockReportItemSnapshotMissingQuantityRequest(BaseModel):
+    """`PATCH /stock-report/items/{client_id}/missing-quantity` (2026-09-26).
+
+    `client_id` is the **row's** id from the path, as on the two priority routes; the
+    command resolves the row's active snapshot itself. `quantity_missing` is
+    `StrictInt` for the same reason `priority_order` is; the ceiling check is business
+    policy and lives in the command, not here.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    client_id: str
+    quantity_missing: StrictInt
+
+
 def _raise_validation_error(exc) -> None:
     from pydantic import ValidationError as PydanticValidationError
 
@@ -112,5 +127,17 @@ def parse_set_stock_report_item_priority_order_request(
 
     try:
         return SetStockReportItemPriorityOrderRequest.model_validate(data)
+    except PydanticValidationError as exc:
+        _raise_validation_error(exc)
+
+
+def parse_set_stock_report_item_snapshot_missing_quantity_request(
+    data: dict,
+) -> SetStockReportItemSnapshotMissingQuantityRequest:
+    """See `parse_set_stock_report_item_priority_request`."""
+    from pydantic import ValidationError as PydanticValidationError
+
+    try:
+        return SetStockReportItemSnapshotMissingQuantityRequest.model_validate(data)
     except PydanticValidationError as exc:
         _raise_validation_error(exc)

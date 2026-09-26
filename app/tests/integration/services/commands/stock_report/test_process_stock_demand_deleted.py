@@ -89,6 +89,11 @@ from tests.helpers.statement_listener import (
     record_statements,
 )
 from tests.helpers.stock_report import (
+    active_snapshot,
+    ensure_active_snapshots,
+    latest_snapshot,
+    snapshot_id_of,
+    snapshot_positions,
     assert_stock_report_clean,
     capture_dispatch,
     make_ctx,
@@ -447,16 +452,12 @@ async def _counters(session, row_id):
 
 
 async def _orders(session, workspace_id):
+    """`row_id -> priority_order` over the live rows' **active snapshots**."""
     return {
-        client_id: order
-        for client_id, order in (
-            await session.execute(
-                select(StockReportItem.client_id, StockReportItem.priority_order).where(
-                    StockReportItem.workspace_id == workspace_id,
-                    StockReportItem.is_deleted.is_(False),
-                )
-            )
-        ).all()
+        row_id: order
+        for row_id, (_priority, order) in (
+            await snapshot_positions(session, workspace_id)
+        ).items()
     }
 
 
@@ -512,6 +513,10 @@ async def _seed_group(env: Env, ordered_ids, priority="high", *, space: Space | 
     """
     where = _space(env, space)
     identity = where.identity
+    # Positions live on the active item snapshot (2026-09-26): every live row of
+    # the space gets one first, through the shipped version command.
+    await ensure_active_snapshots(env.session, where.workspace_id, now=NOW)
+    await env.session.commit()
     for client_id in ordered_ids:
         await set_stock_report_item_priority(
             ServiceContext(
@@ -1070,7 +1075,10 @@ async def test_c3c_the_group_closes_its_gap_and_the_deleted_row_keeps_its_own_or
     orders = await _orders(env.session, env.workspace_id)
     assert orders[A] == 1
     assert orders[C] == 2
-    deleted = await _fresh_row(env.session, row_id)
+    assert (await _fresh_row(env.session, row_id)).is_deleted is True
+    # R's snapshot is closed with the row and keeps the position it held.
+    deleted = await latest_snapshot(env.session, row_id)
+    assert deleted.closed_at is not None
     assert deleted.priority.value == "high"
     assert deleted.priority_order == 2
     await assert_stock_report_clean(env.session, env.workspace_id)
@@ -1094,7 +1102,7 @@ async def test_c3d_the_coalesced_event_list_is_exactly_these_events(env, monkeyp
     assert sorted(names) == sorted(
         ["stock_report_item:deleted"]
         + ["stock_task_assignment:deleted"] * 6
-        + ["stock_report_item:updated"]
+        + ["stock_report_item_snapshot:updated"]
     )
     assert all(event.workspace_id == env.workspace_id for event in captured)
 
@@ -1113,9 +1121,14 @@ async def test_c3d_the_coalesced_event_list_is_exactly_these_events(env, monkeyp
     }
 
     updated = [
-        event for event in captured if event.event_name == "stock_report_item:updated"
+        event
+        for event in captured
+        if event.event_name == "stock_report_item_snapshot:updated"
     ]
-    assert [event.client_id for event in updated] == [C]
+    assert [event.client_id for event in updated] == [
+        await snapshot_id_of(env.session, C)
+    ]
+    assert updated[0].extra["stock_report_item_id"] == C
     assert updated[0].extra["priority_order"] == 2
     deleted_rows = [
         event.client_id
@@ -1142,8 +1155,8 @@ async def test_c3e_a_later_demand_for_the_same_identity_creates_a_fresh_row(env)
     assert new_row_id != row_id
     new_row = await _fresh_row(env.session, new_row_id)
     assert new_row.quantity_requested == 6
-    assert new_row.priority is None
-    assert new_row.priority_order is None
+    # A fresh row has no snapshot at all until the next version is opened.
+    assert await active_snapshot(env.session, new_row_id) is None
     assert (
         new_row.quantity_in_queue,
         new_row.quantity_in_progress,
@@ -1316,8 +1329,8 @@ async def test_c5b_two_rows_of_one_group_each_close_their_own_gap(env, monkeypat
     orders = await _orders(env.session, env.workspace_id)
     assert orders[A] == 1
     assert orders[D] == 2
-    assert (await _fresh_row(env.session, row_r)).priority_order == 2
-    assert (await _fresh_row(env.session, row_c)).priority_order == 2
+    assert (await latest_snapshot(env.session, row_r)).priority_order == 2
+    assert (await latest_snapshot(env.session, row_c)).priority_order == 2
     assert (await _fresh_assignment(env.session, a_r)).is_deleted is True
     assert (await _fresh_assignment(env.session, a_c)).is_deleted is True
 
@@ -1328,13 +1341,17 @@ async def test_c5b_two_rows_of_one_group_each_close_their_own_gap(env, monkeypat
             "stock_report_item:deleted",
             "stock_task_assignment:deleted",
             "stock_task_assignment:deleted",
-            "stock_report_item:updated",
+            "stock_report_item_snapshot:updated",
         ]
     )
     updated = [
-        event for event in captured if event.event_name == "stock_report_item:updated"
+        event
+        for event in captured
+        if event.event_name == "stock_report_item_snapshot:updated"
     ]
-    assert [event.client_id for event in updated] == [D]
+    assert [event.client_id for event in updated] == [
+        await snapshot_id_of(env.session, D)
+    ]
     assert updated[0].extra["priority_order"] == 2
 
     upper = [statement.upper() for statement in statements]

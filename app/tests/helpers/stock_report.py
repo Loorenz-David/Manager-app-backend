@@ -19,6 +19,12 @@ from beyo_manager.models.tables.stock_report.stock_report_history_record import 
     StockReportHistoryRecord,
 )
 from beyo_manager.models.tables.stock_report.stock_report_item import StockReportItem
+from beyo_manager.models.tables.stock_report.stock_report_item_snapshot import (
+    StockReportItemSnapshot,
+)
+from beyo_manager.models.tables.stock_report.stock_report_snapshot_version import (
+    StockReportSnapshotVersion,
+)
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.users.user import User
@@ -135,6 +141,137 @@ def capture_dispatch(monkeypatch, import_site: str) -> list:
     return captured
 
 
+async def create_snapshot_version(session, workspace_id, *, now, user_id=None):
+    """Open a board version through the shipped command (closes the previous one)."""
+    from beyo_manager.services.commands.stock_report.create_stock_report_snapshot_version import (
+        create_stock_report_snapshot_version,
+    )
+
+    return await create_stock_report_snapshot_version(
+        ServiceContext(
+            identity={
+                "workspace_id": workspace_id,
+                "user_id": user_id,
+                "role_name": "manager",
+            },
+            incoming_data={},
+            session=session,
+            now=now,
+        )
+    )
+
+
+async def ensure_active_snapshots(session, workspace_id, *, now, user_id=None):
+    """Every live row of the workspace has an active snapshot afterwards.
+
+    Creates a version through the shipped command when the workspace has none; a
+    row minted **after** that version (a fixture seeding in two steps) gets its
+    snapshot inserted directly into the active version — a test-only seam, the
+    production path being "the next version picks it up".
+    """
+    version_id = await session.scalar(
+        select(StockReportSnapshotVersion.client_id).where(
+            StockReportSnapshotVersion.workspace_id == workspace_id,
+            StockReportSnapshotVersion.closed_at.is_(None),
+        )
+    )
+    if version_id is None:
+        result = await create_snapshot_version(
+            session, workspace_id, now=now, user_id=user_id
+        )
+        return result["stock_report_snapshot_version"]["client_id"]
+    covered = select(StockReportItemSnapshot.stock_report_item_id).where(
+        StockReportItemSnapshot.workspace_id == workspace_id,
+        StockReportItemSnapshot.closed_at.is_(None),
+    )
+    orphans = (
+        await session.execute(
+            select(StockReportItem).where(
+                StockReportItem.workspace_id == workspace_id,
+                StockReportItem.is_deleted.is_(False),
+                StockReportItem.client_id.not_in(covered),
+            )
+        )
+    ).scalars().all()
+    for row in orphans:
+        session.add(
+            StockReportItemSnapshot(
+                workspace_id=workspace_id,
+                version_id=version_id,
+                stock_report_item_id=row.client_id,
+                quantity_requested=row.quantity_requested,
+                quantity_in_queue=row.quantity_in_queue,
+                quantity_in_progress=row.quantity_in_progress,
+                quantity_awaiting=row.quantity_awaiting,
+                active_at=now,
+                created_at=now,
+            )
+        )
+    await session.flush()
+    return version_id
+
+
+async def set_snapshot_position(session, row_id, priority, order):
+    """Raw-SQL seed of a row's **active** snapshot position (the fixture shape the
+    ordering tests used on the row before 2026-09-26)."""
+    from sqlalchemy import text
+
+    await session.execute(
+        text(
+            "UPDATE stock_report_item_snapshots SET priority = :priority, "
+            "priority_order = :order WHERE stock_report_item_id = :row_id "
+            "AND closed_at IS NULL"
+        ),
+        {"priority": priority, "order": order, "row_id": row_id},
+    )
+
+
+async def active_snapshot(session, row_id):
+    return await session.scalar(
+        select(StockReportItemSnapshot)
+        .where(
+            StockReportItemSnapshot.stock_report_item_id == row_id,
+            StockReportItemSnapshot.closed_at.is_(None),
+        )
+        .execution_options(populate_existing=True)
+    )
+
+
+async def latest_snapshot(session, row_id):
+    """The row's newest snapshot, active or closed (a deleted row's closed one)."""
+    return await session.scalar(
+        select(StockReportItemSnapshot)
+        .where(StockReportItemSnapshot.stock_report_item_id == row_id)
+        .order_by(
+            StockReportItemSnapshot.created_at.desc(),
+            StockReportItemSnapshot.client_id.desc(),
+        )
+        .limit(1)
+        .execution_options(populate_existing=True)
+    )
+
+
+async def snapshot_positions(session, workspace_id, *, include_closed=False):
+    """`row_id -> (priority value | None, priority_order)` over the workspace's
+    active snapshots (or every snapshot when `include_closed`)."""
+    statement = select(
+        StockReportItemSnapshot.stock_report_item_id,
+        StockReportItemSnapshot.priority,
+        StockReportItemSnapshot.priority_order,
+    ).where(StockReportItemSnapshot.workspace_id == workspace_id)
+    if not include_closed:
+        statement = statement.where(StockReportItemSnapshot.closed_at.is_(None))
+    return {
+        row_id: (priority.value if priority is not None else None, order)
+        for row_id, priority, order in (await session.execute(statement)).all()
+    }
+
+
+async def snapshot_id_of(session, row_id):
+    snapshot = await latest_snapshot(session, row_id)
+    return snapshot.client_id if snapshot is not None else None
+
+
 async def assert_stock_report_clean(session, workspace_id):
     from beyo_manager.services.queries.stock_report.consistency import (
         compute_stock_report_divergences,
@@ -156,6 +293,8 @@ async def purge_stock_report_workspace(session, workspace_id):
         StockReportRepairRecord,
         StockTaskAssignment,
         StockReportHistoryRecord,
+        StockReportItemSnapshot,
+        StockReportSnapshotVersion,
         StockReportItem,
         TaskItem,
         Task,

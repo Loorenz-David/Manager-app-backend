@@ -39,6 +39,12 @@ from beyo_manager.domain.stock_report.enums import StockTaskAssignmentStateEnum
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.items.item_category import ItemCategory
 from beyo_manager.models.tables.stock_report.stock_report_item import StockReportItem
+from beyo_manager.models.tables.stock_report.stock_report_item_snapshot import (
+    StockReportItemSnapshot,
+)
+from beyo_manager.models.tables.stock_report.stock_report_snapshot_version import (
+    StockReportSnapshotVersion,
+)
 from beyo_manager.models.tables.stock_report.stock_task_assignment import (
     StockTaskAssignment,
 )
@@ -60,7 +66,7 @@ _CURRENT_HANDOFF = (
     _PROJECT
     / "handoffs"
     / "to_frontend"
-    / "HANDOFF_TO_FRONTEND_stock_report_api_20260922.md"
+    / "HANDOFF_TO_FRONTEND_stock_report_snapshots_20260926.md"
 )
 
 _SOURCE = _BACKEND / "app" / "beyo_manager"
@@ -90,11 +96,23 @@ _MASTER_PLAN_EVENT_NAMES = frozenset(
         "stock_task_assignment:deleted",
     }
 )
+# The snapshot layer's three names (2026-09-26), added beside the ratified six so
+# both roots keep failing in both directions.
+_SNAPSHOT_EVENT_NAMES = frozenset(
+    {
+        "stock_report_item_snapshot:updated",
+        "stock_report_snapshot_version:created",
+        "stock_report_snapshot_version:closed",
+    }
+)
+_MASTER_PLAN_EVENT_NAMES = _MASTER_PLAN_EVENT_NAMES | _SNAPSHOT_EVENT_NAMES
 # The three kinds `build_stock_task_assignment_event` is called with (§6.5).
 _ASSIGNMENT_EVENT_KINDS = ("created", "state-changed", "deleted")
 
 _SERIALIZER_MODELS = {
     "row": StockReportItem,
+    "snapshot": StockReportItemSnapshot,
+    "version": StockReportSnapshotVersion,
     "category": ItemCategory,
     "assignment": StockTaskAssignment,
     "item": Item,
@@ -315,7 +333,7 @@ def _documented_fields(serializer_name: str) -> dict[str, tuple[bool, str]]:
 def test_c1a_api_md_carries_every_route_with_its_roles():
     api_md = _normalized(_API_MD)
     routes = _declared_routes()
-    assert len(routes) == 13, routes
+    assert len(routes) == 19, routes
     for method, path, roles in routes:
         row = f"| `{method}` | `{path}` | " + ", ".join(f"`{role}`" for role in roles)
         assert row in api_md, f"missing from api.md: {row}"
@@ -337,7 +355,7 @@ def test_c1b_every_event_name_the_code_builds_is_in_the_handoff():
     handoff = _normalized(_CURRENT_HANDOFF)
     built = _event_names_in_code()
     # A scan that returned nothing would make this loop pass over nothing, which is
-    # the vacuity C1(a)'s `len(routes) == 13` already forbids (review 1, N6). The
+    # the vacuity C1(a)'s `len(routes) == 19` already forbids (review 1, N6). The
     # contract is "the scan finds event names", not a pinned count (charter r13).
     assert built, "the `event_name=` scan found nothing"
     for name in sorted(_MASTER_PLAN_EVENT_NAMES | built):
@@ -350,7 +368,8 @@ def test_c1b_the_handoff_names_no_event_no_site_builds():
     buildable = _MASTER_PLAN_EVENT_NAMES | _event_names_in_code()
     documented = set(
         re.findall(
-            r"`(stock_report_item:[a-z-]+|stock_task_assignment:[a-z-]+)`",
+            r"`(stock_report_item:[a-z-]+|stock_report_item_snapshot:[a-z-]+"
+            r"|stock_report_snapshot_version:[a-z-]+|stock_task_assignment:[a-z-]+)`",
             _read(_CURRENT_HANDOFF),
         )
     )
@@ -398,6 +417,8 @@ def test_c1d_every_assignment_state_appears(document):
     "serializer_name",
     [
         "serialize_stock_report_item",
+        "serialize_stock_report_item_snapshot",
+        "serialize_stock_report_snapshot_version",
         "serialize_stock_task_assignment",
         "serialize_item_compact",
         "serialize_task_compact",

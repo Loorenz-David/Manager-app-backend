@@ -14,6 +14,12 @@ from beyo_manager.routers.utils.jwt_dep import require_roles
 from beyo_manager.routers.utils.roles import ADMIN, MANAGER, SELLER, WORKER
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.run_service import run_service
+from beyo_manager.services.commands.stock_report.apply_stock_report_snapshot_version_priorities import (
+    apply_stock_report_snapshot_version_priorities,
+)
+from beyo_manager.services.commands.stock_report.create_stock_report_snapshot_version import (
+    create_stock_report_snapshot_version,
+)
 from beyo_manager.services.commands.stock_report.create_stock_task_assignments import (
     create_stock_task_assignments,
 )
@@ -32,11 +38,23 @@ from beyo_manager.services.commands.stock_report.set_stock_report_item_priority 
 from beyo_manager.services.commands.stock_report.set_stock_report_item_priority_order import (
     set_stock_report_item_priority_order,
 )
+from beyo_manager.services.commands.stock_report.set_stock_report_item_snapshot_missing_quantity import (
+    set_stock_report_item_snapshot_missing_quantity,
+)
+from beyo_manager.services.queries.stock_report.get_stock_report_active_snapshot_version import (
+    get_stock_report_active_snapshot_version,
+)
 from beyo_manager.services.queries.stock_report.get_stock_report_consistency import (
     get_stock_report_consistency,
 )
+from beyo_manager.services.queries.stock_report.get_stock_report_missing_summary import (
+    get_stock_report_missing_summary,
+)
 from beyo_manager.services.queries.stock_report.list_stock_report_items import (
     list_stock_report_items,
+)
+from beyo_manager.services.queries.stock_report.list_stock_report_snapshot_versions import (
+    list_stock_report_snapshot_versions,
 )
 from beyo_manager.services.queries.stock_report.list_stock_task_assignments import (
     list_stock_task_assignments,
@@ -82,6 +100,13 @@ class _SetStockReportItemPriorityOrderBody(BaseModel):
 
     # Strict: pydantic's lax mode would coerce the string "2" to 2 (plan 12 C1(n)).
     priority_order: StrictInt
+
+
+class _SetStockReportItemSnapshotMissingQuantityBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Strict for the same reason as `priority_order`: "3" must not become 3.
+    quantity_missing: StrictInt
 
 
 class _PreviewStockTaskAssignmentBody(BaseModel):
@@ -185,12 +210,69 @@ async def route_preview_stock_task_assignment_match(
     )
 
 
+@router.get("/snapshots/versions")
+async def route_list_stock_report_snapshot_versions(
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+    limit: int = Query(20, le=200),
+    offset: int = Query(0, ge=0),
+):
+    return await _run(
+        list_stock_report_snapshot_versions,
+        claims,
+        session,
+        query_params={"limit": limit, "offset": offset},
+    )
+
+
+@router.get("/snapshots/versions/active")
+async def route_get_stock_report_active_snapshot_version(
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+):
+    # Static segment, declared before any `/snapshots/versions/{client_id}/…` route.
+    return await _run(get_stock_report_active_snapshot_version, claims, session)
+
+
+@router.post("/snapshots/versions")
+async def route_create_stock_report_snapshot_version(
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    # No body: a version is taken of every live row, there is nothing to choose.
+    return await _run(create_stock_report_snapshot_version, claims, session)
+
+
+@router.post("/snapshots/versions/{client_id}/apply-priorities")
+async def route_apply_stock_report_snapshot_version_priorities(
+    client_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        apply_stock_report_snapshot_version_priorities,
+        claims,
+        session,
+        incoming_data={"client_id": client_id},
+    )
+
+
+@router.get("/snapshots/missing-summary")
+async def route_get_stock_report_missing_summary(
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(get_stock_report_missing_summary, claims, session)
+
+
 @router.get("/items")
 async def route_list_stock_report_items(
     priority: str | None = None,
     include_zero_requested: bool = False,
     item_major_categories: list[ItemMajorCategoryEnum] | None = Query(None),
     item_category_ids: list[str] | None = Query(None),
+    live_stock: bool = False,
+    missing_only: bool = False,
     claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
     session: AsyncSession = Depends(get_db),
 ):
@@ -203,7 +285,24 @@ async def route_list_stock_report_items(
             "include_zero_requested": include_zero_requested,
             "item_major_categories": item_major_categories,
             "item_category_ids": item_category_ids,
+            "live_stock": live_stock,
+            "missing_only": missing_only,
         },
+    )
+
+
+@router.patch("/items/{client_id}/missing-quantity")
+async def route_set_stock_report_item_snapshot_missing_quantity(
+    client_id: str,
+    body: _SetStockReportItemSnapshotMissingQuantityBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        set_stock_report_item_snapshot_missing_quantity,
+        claims,
+        session,
+        incoming_data={**body.model_dump(), "client_id": client_id},
     )
 
 

@@ -7,7 +7,6 @@ from beyo_manager.domain.items.enums import ItemStateEnum
 from beyo_manager.domain.stock_report.criteria_normalization import (
     compute_stock_criteria_signature,
 )
-from beyo_manager.domain.stock_report.enums import StockReportPriorityEnum
 from beyo_manager.domain.stock_report.enums import StockTaskAssignmentStateEnum as S
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
 from beyo_manager.models.tables.items.item import Item
@@ -45,7 +44,7 @@ PROPERTIES = {"wood_type": "Teak", "upholstery": "Down"}
 # ---------------------------------------------------------------------------
 
 
-async def _make_row(db_session, seeded, *, counters=None, priority=None, priority_order=None):
+async def _make_row(db_session, seeded, *, counters=None):
     counters = counters or {}
     row = StockReportItem(
         workspace_id=seeded.workspace.client_id,
@@ -56,8 +55,6 @@ async def _make_row(db_session, seeded, *, counters=None, priority=None, priorit
         quantity_in_queue=counters.get("quantity_in_queue", 0),
         quantity_in_progress=counters.get("quantity_in_progress", 0),
         quantity_awaiting=counters.get("quantity_awaiting", 0),
-        priority=priority,
-        priority_order=priority_order,
     )
     db_session.add(row)
     await db_session.flush()
@@ -216,8 +213,6 @@ def _assert_row_event(
     quantity_in_queue,
     quantity_in_progress,
     quantity_awaiting,
-    priority=None,
-    priority_order=None,
 ):
     assert event.event_name == "stock_report_item:updated"
     assert event.client_id == client_id
@@ -227,8 +222,6 @@ def _assert_row_event(
         "quantity_in_queue": quantity_in_queue,
         "quantity_in_progress": quantity_in_progress,
         "quantity_awaiting": quantity_awaiting,
-        "priority": priority,
-        "priority_order": priority_order,
     }
 
 
@@ -557,17 +550,10 @@ async def test_c1_q_r_terminal_delete_moves_no_counter(db_session, from_state, r
 
 async def test_c1_s_in_queue_to_resolved_early(db_session):
     seeded = await seed_stock_report_workspace(db_session)
-    # S3 (batch B1 fix 1, MC-19 payload, owner card 1): priority + priority_order set
-    # on R so the `:updated` payload carries a non-null priority — both fields, or
-    # consistency.py's priority_order_nullness check fails the clean assertion below
-    # for an unrelated reason.
-    row = await _make_row(
-        db_session,
-        seeded,
-        counters={"quantity_in_queue": 4},
-        priority=StockReportPriorityEnum.HIGH,
-        priority_order=1,
-    )
+    # S3 (batch B1 fix 1, MC-19 payload, owner card 1) used to set a priority on R so
+    # the `:updated` payload carried one; since 2026-09-26 the row event carries the
+    # four quantities only and priority lives on the item snapshot.
+    row = await _make_row(db_session, seeded, counters={"quantity_in_queue": 4})
     await _seed_flag(db_session, seeded.task, True)
     assignment = await _make_assignment(db_session, seeded, row, state=S.IN_QUEUE)
     await _hold_caller_locks(db_session, row=row, assignment=assignment)
@@ -602,8 +588,6 @@ async def test_c1_s_in_queue_to_resolved_early(db_session):
         quantity_in_queue=0,
         quantity_in_progress=0,
         quantity_awaiting=0,
-        priority="high",
-        priority_order=1,
     )
     await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 

@@ -45,6 +45,49 @@ counter negative is the inline self-heal trigger: the counters are recomputed fr
 live assignments, a `stock_report_repair_records` row is written with the trigger
 `inline:<caller>` and the move proceeds.
 
+## 1.5 The snapshot layer (2026-09-26)
+
+The live tables above are Scanner's mirror. Everything a Manager user sees goes
+through a **version**: `stock_report_snapshot_versions` holds at most one active
+version per workspace (`uix_stock_report_snapshot_versions_active`, a partial unique
+index on `closed_at IS NULL`), and `stock_report_item_snapshots` holds one row per
+live stock-report row inside it.
+
+- `quantity_requested` on the snapshot is **frozen** at creation. The row's own keeps
+  following Scanner.
+- The snapshot's three counters are **derived from the row while the snapshot is
+  active** (the serializer reads the row) and **frozen from the row when it closes**
+  (`create_stock_report_snapshot_version`'s freeze, or the deletion cascade). No
+  assignment move writes the counters on the snapshot table.
+- **Completion never decrements on resolve** (owner ruling, addendum 2026-09-26):
+  `quantity_resolved` on the snapshot is the sum of the quantities of the row's
+  assignments that reached `resolved` / `resolved_early` while the snapshot was
+  active — credited by `_snapshot_resolved.credit_snapshot_resolved` from
+  `resolve_processed_group` (the processed webhook) and from `move_assignment` on a
+  terminal target. Monotonic, never frozen or zeroed. The **wire** `quantity_awaiting`
+  is the live/frozen awaiting **plus** `quantity_resolved`; it still falls when an
+  assignment leaves awaiting for anything but resolved (MC-5 parity). It is not
+  recomputable (assignments carry no resolved timestamp), so no consistency kind
+  covers it. The processed webhook therefore takes the snapshot lock class between
+  rows and assignments (MC-1 order).
+- A version's **progress** (`GET …/snapshots/versions/active`, and per row of
+  `GET …/snapshots/versions`) is computed over its prioritised snapshots whose row is
+  not deleted: target `Σ max(0, requested − missing)`, done `Σ min(target, awaiting)`
+  with the wire awaiting above; live counters while a snapshot is active, frozen ones
+  once closed (the per-snapshot `closed_at`, the serializer's own test).
+- `priority` / `priority_order` live on the snapshot, never on the row (the columns
+  were dropped). A group is `(workspace_id, priority)` over **active** snapshots;
+  the two `PATCH` ordering routes take the row's id and move its active snapshot.
+  `ck_stock_report_item_snapshots_priority_order_pairing` makes a half-null position
+  unstorable, so there is no `priority_order_nullness` check any more.
+- `quantity_missing` is bounded by `max(0, quantity_requested − (in_queue +
+  in_progress + awaiting + quantity_resolved))` and is **clamped down** by `move_assignment` on an
+  assignment's creation — the only move that raises the covered quantity. A new
+  version starts it at 0.
+- Opening a version closes the previous one in the same transaction and takes
+  every live row `FOR UPDATE` for its duration; a concurrent Scanner demand webhook
+  can hit its `lock_timeout` and retry. Accepted.
+
 ## 2. Soft-delete predicates
 
 | Entity | Live means |
@@ -53,6 +96,8 @@ live assignments, a `stock_report_repair_records` row is written with the trigge
 | `stock_task_assignments` | `is_deleted = false`; the two "one active per item / per task" unique indexes additionally require an active state |
 | `stock_report_history_records` | `is_deleted = false` |
 | `stock_report_repair_records` | no soft-delete columns — repair records are append-only and are removed only by the workspace reset |
+| `stock_report_snapshot_versions` | no soft delete: **closing is the lifecycle**. Active means `closed_at IS NULL`; a closed version is immutable history that `apply-priorities` can copy from |
+| `stock_report_item_snapshots` | no soft delete. Active means `closed_at IS NULL` (`uix_stock_report_item_snapshots_row_active`: at most one per row). It closes with its version, or alone when its row is deleted mid-version |
 
 An absent row, a soft-deleted row and a row in another workspace are **one** answer on
 every read: `404`. A soft-deleted row is outside the live-identity predicate, so the
@@ -77,11 +122,13 @@ In order:
 2. the second self-heal trigger runs **once**, after the loop: each counter's
    recomputed value is now 0, and a non-zero stored value is drift — repaired with a
    record, and the deletion proceeds;
-3. the row's priority group closes its gap: every row ordered after the leaving row
-   moves down one, and each shifted neighbour emits `stock_report_item:updated`;
-4. the row is soft-deleted and **keeps its own `priority` and `priority_order`** — it
-   is outside every group now, so its own position is a historical fact, not a
-   position;
+3. the row's **active snapshot** closes its priority group's gap: every active
+   snapshot ordered after it moves down one, and each shifted neighbour emits
+   `stock_report_item_snapshot:updated`; the snapshot is then closed (`closed_at`,
+   counters frozen at 0) and **keeps its own `priority` and `priority_order`** — it is
+   outside every group now, so its position is a historical fact. The version stays
+   open;
+4. the row is soft-deleted;
 5. its history records are soft-deleted (`deleted_*` only — they carry no `updated_*`
    columns);
 6. one `stock_report_item:deleted`. The coalescer drops any `:updated` for a row that
@@ -93,9 +140,9 @@ is recomputed per task and set with a self-assigning `updated_at` so no task tim
 moves.
 
 The Scanner delete webhook may delete **several** rows in one request. It takes the
-locks once — the ordering advisory lock, then tasks, then the candidate rows together
-with every row of their priority groups, then the assignments — and then runs one
-cascade per row in ascending `client_id`. Each cascade closes its own gap against the
+locks once — the ordering advisory lock, then tasks, then the candidate rows, then
+their active snapshots together with every active snapshot of their priority groups,
+then the assignments — and then runs one cascade per row in ascending `client_id`. Each cascade closes its own gap against the
 positions the previous one left, so two rows of the same group both end correct.
 
 ### 3.2 Task deletion, PRIMARY unlink, item deletion
@@ -123,8 +170,11 @@ deletes and they take soft-deleted rows with them, which is what keeps the FK
 | Event | `extra` |
 |---|---|
 | `stock_report_item:created` | `{}` |
-| `stock_report_item:updated` | `quantity_requested`, `quantity_in_queue`, `quantity_in_progress`, `quantity_awaiting`, `priority`, `priority_order` |
+| `stock_report_item:updated` | `quantity_requested`, `quantity_in_queue`, `quantity_in_progress`, `quantity_awaiting` |
 | `stock_report_item:deleted` | `{}` |
+| `stock_report_item_snapshot:updated` | `stock_report_item_id`, `version_id`, `priority`, `priority_order`, `quantity_missing`, `quantity_resolved` — `client_id` is the **snapshot's** |
+| `stock_report_snapshot_version:created` | `snapshot_count` — `client_id` is the version's |
+| `stock_report_snapshot_version:closed` | `snapshot_count` |
 | `stock_task_assignment:created` | `stock_report_item_id`, `task_id`, `state` |
 | `stock_task_assignment:state-changed` | the same three |
 | `stock_task_assignment:deleted` | the same three |
@@ -135,6 +185,7 @@ workspace in their context at all.
 
 Events are built after the transaction block exits normally, from committed values,
 and dispatched once per request by the owning command. Within one request the
-coalescer keeps the net change per entity: the last `:updated` per row, dropped
-entirely when the payload equals the row's initial values or when the same row also
-carries a `:created` or a `:deleted`.
+coalescer keeps the net change per entity: the last `:updated` per row (and per
+snapshot), dropped entirely when the payload equals the entity's initial values, when
+the same row also carries a `:created` or a `:deleted`, or — for a snapshot — when its
+row is deleted in the same request.

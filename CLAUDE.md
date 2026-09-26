@@ -89,6 +89,17 @@ priority board.
 - Archived batch prompts/handoffs live at `archive/batch_<X>/<same relative path>`; citations were
   not rewritten. See `.../archive/README.md`.
 
+**Snapshot layer (2026-09-26):** the board is a snapshot read. A manager opens a *version*
+(`POST /api/v1/stock-report/snapshots/versions`) that freezes every live row's
+`quantity_requested` into `stock_report_item_snapshots`; `priority`/`priority_order` and
+`quantity_missing` live on the snapshot, **not** on `stock_report_items` (the columns are gone).
+`GET /items` shows only rows with an active snapshot unless `live_stock=true`. A snapshot's
+wire `quantity_awaiting` keeps counting units Scanner has resolved (`quantity_resolved`,
+credited by the processed webhook) — completion never goes backwards;
+`GET /snapshots/versions/active` and each row of `GET /snapshots/versions` carry a
+`progress` object over the prioritised snapshots. Contract:
+`.../handoffs/to_frontend/HANDOFF_TO_FRONTEND_stock_report_snapshots_20260926.md`.
+
 The three Scanner webhooks are `POST /api/v1/location-tracker/webhooks/{stock-demand,
 items-processed,stock-demand-deleted}`, all key-authenticated by `X-API-KEY` against
 `MANAGER_API_KEY_TO_LOCATION_TRACKER_APP`. All five distinct 401 causes render an identical body

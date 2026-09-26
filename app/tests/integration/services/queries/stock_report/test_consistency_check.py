@@ -1,5 +1,8 @@
+from datetime import datetime, timezone
+
 import pytest
 from sqlalchemy import func, select, text
+from sqlalchemy.exc import IntegrityError
 from beyo_manager.domain.items.enums import ItemStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
 from beyo_manager.models.tables.items.item import Item
@@ -12,6 +15,12 @@ from beyo_manager.domain.stock_report.criteria_normalization import (
     compute_stock_criteria_signature,
 )
 from beyo_manager.models.tables.stock_report.stock_report_item import StockReportItem
+from beyo_manager.models.tables.stock_report.stock_report_item_snapshot import (
+    StockReportItemSnapshot,
+)
+from beyo_manager.models.tables.stock_report.stock_report_snapshot_version import (
+    StockReportSnapshotVersion,
+)
 from beyo_manager.models.tables.stock_report.stock_report_history_record import (
     StockReportHistoryRecord,
 )
@@ -32,6 +41,52 @@ from beyo_manager.services.queries.stock_report.get_stock_report_consistency imp
 from tests.helpers.stock_report import make_ctx
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
+
+_NOW = datetime(2026, 9, 26, 12, 0, 0, tzinfo=timezone.utc)
+
+
+async def _version(db_session, workspace_id):
+    version = StockReportSnapshotVersion(
+        workspace_id=workspace_id, active_at=_NOW, created_at=_NOW
+    )
+    db_session.add(version)
+    await db_session.flush()
+    return version
+
+
+def _snapshot(version, row, priority, order):
+    """A row's active snapshot carrying the position under test (2026-09-26: the
+    ordering checks read the snapshot, and name it in `client_id`)."""
+    return StockReportItemSnapshot(
+        workspace_id=row.workspace_id,
+        version_id=version.client_id,
+        stock_report_item_id=row.client_id,
+        quantity_requested=row.quantity_requested,
+        priority=priority,
+        priority_order=order,
+        active_at=_NOW,
+        created_at=_NOW,
+    )
+
+
+async def _snapshotted(db_session, seeded, specs):
+    """`[(properties, category_index, priority, priority_order), ...]` -> snapshots."""
+    version = await _version(db_session, seeded.workspace.client_id)
+    snapshots = []
+    for properties, category_index, priority, order in specs:
+        row = StockReportItem(
+            workspace_id=seeded.workspace.client_id,
+            item_category_id=seeded.categories[category_index].client_id,
+            properties=properties,
+            properties_signature=compute_stock_criteria_signature(properties),
+        )
+        db_session.add(row)
+        await db_session.flush()
+        snapshot = _snapshot(version, row, priority, order)
+        db_session.add(snapshot)
+        snapshots.append(snapshot)
+    await db_session.flush()
+    return snapshots
 
 
 async def _foreign_task_item(db_session, seeded, suffix):
@@ -274,86 +329,19 @@ async def test_deleted_active_assignment_does_not_count_toward_row_counter(db_se
     ) == []
 
 
-async def test_null_priority_order_appends_after_the_group_maximum(db_session):
+@pytest.mark.parametrize(("priority", "order"), [(StockReportPriorityEnum.HIGH, None), (None, 1)])
+async def test_a_half_null_position_is_unstorable_so_nullness_needs_no_check(
+    db_session, priority, order
+):
+    """The row table used to allow `priority` without `priority_order` (and the
+    reverse), and `priority_order_nullness` repaired it. On the snapshot table
+    `ck_stock_report_item_snapshots_priority_order_pairing` refuses the state at
+    write time, so the kind was retired with the move (2026-09-26)."""
     seeded = await seed_stock_report_workspace(db_session)
-    rows = [
-        StockReportItem(
-            workspace_id=seeded.workspace.client_id,
-            item_category_id=seeded.categories[0].client_id,
-            properties={"n": number},
-            properties_signature=compute_stock_criteria_signature({"n": number}),
-            priority=StockReportPriorityEnum.HIGH,
-            priority_order=order,
-        )
-    for number, order in ((1, 1), (2, 2), (3, None))
-    ]
-    db_session.add_all(rows)
-    await db_session.flush()
-    divergences = await compute_stock_report_divergences(
-        db_session, seeded.workspace.client_id
-    )
-    nullness = next(
-        divergence
-        for divergence in divergences
-        if divergence["kind"] == "priority_order_nullness"
-    )
-    assert nullness == {
-        "kind": "priority_order_nullness",
-        "client_id": rows[2].client_id,
-        "field": "priority_order",
-        "stored": None,
-        "expected": 3,
-    }
-
-
-async def test_null_priority_order_reports_after_sparse_group_maximum(db_session):
-    seeded = await seed_stock_report_workspace(db_session)
-    rows = [
-        StockReportItem(
-            workspace_id=seeded.workspace.client_id,
-            item_category_id=seeded.categories[0].client_id,
-            properties={"n": number},
-            properties_signature=compute_stock_criteria_signature({"n": number}),
-            priority=StockReportPriorityEnum.HIGH,
-            priority_order=order,
-        )
-        for number, order in ((1, 1), (2, 7), (3, None))
-    ]
-    db_session.add_all(rows)
-    await db_session.flush()
-    nullness = next(
-        divergence
-        for divergence in await compute_stock_report_divergences(
-            db_session, seeded.workspace.client_id
-        )
-        if divergence["kind"] == "priority_order_nullness"
-    )
-    assert nullness["expected"] == 8
-
-
-async def test_null_priority_order_is_reported_when_priority_is_missing(db_session):
-    seeded = await seed_stock_report_workspace(db_session)
-    row = StockReportItem(
-        workspace_id=seeded.workspace.client_id,
-        item_category_id=seeded.categories[0].client_id,
-        properties={"null_priority": True},
-        properties_signature=compute_stock_criteria_signature({"null_priority": True}),
-        priority=None,
-        priority_order=1,
-    )
-    db_session.add(row)
-    await db_session.flush()
-    assert await compute_stock_report_divergences(
-        db_session, seeded.workspace.client_id
-    ) == [
-        {
-            "kind": "priority_order_nullness",
-            "client_id": row.client_id,
-            "field": "priority_order",
-            "stored": 1,
-            "expected": None,
-        }
-    ]
+    with pytest.raises(IntegrityError) as excinfo:
+        await _snapshotted(db_session, seeded, [({"half": True}, 0, priority, order)])
+    assert "ck_stock_report_item_snapshots_priority_order_pairing" in str(excinfo.value)
+    await db_session.rollback()
 
 
 @pytest.mark.parametrize(
@@ -418,10 +406,16 @@ async def test_goal_signature_and_density_divergences_are_reported(db_session):
         item_category_id=seeded.categories[0].client_id,
         properties={"wood_group": ["Teak"]},
         properties_signature="stale",
-        priority=StockReportPriorityEnum.HIGH,
-        priority_order=5,
     )
     db_session.add(row)
+    await db_session.flush()
+    snapshot = _snapshot(
+        await _version(db_session, seeded.workspace.client_id),
+        row,
+        StockReportPriorityEnum.HIGH,
+        5,
+    )
+    db_session.add(snapshot)
     await db_session.flush()
     history = StockReportHistoryRecord(
         workspace_id=seeded.workspace.client_id,
@@ -470,7 +464,7 @@ async def test_goal_signature_and_density_divergences_are_reported(db_session):
     }
     assert found["order_density"] == {
         "kind": "order_density",
-        "client_id": row.client_id,
+        "client_id": snapshot.client_id,
         "field": "priority_order",
         "stored": 5,
         "expected": 1,
@@ -479,19 +473,14 @@ async def test_goal_signature_and_density_divergences_are_reported(db_session):
 
 async def test_order_density_reports_only_the_row_that_needs_renumbering(db_session):
     seeded = await seed_stock_report_workspace(db_session)
-    rows = [
-        StockReportItem(
-            workspace_id=seeded.workspace.client_id,
-            item_category_id=seeded.categories[index % 2].client_id,
-            properties={"order": order},
-            properties_signature=compute_stock_criteria_signature({"order": order}),
-            priority=StockReportPriorityEnum.HIGH,
-            priority_order=order,
-        )
-        for index, order in enumerate((1, 2, 5))
-    ]
-    db_session.add_all(rows)
-    await db_session.flush()
+    rows = await _snapshotted(
+        db_session,
+        seeded,
+        [
+            ({"order": order}, index % 2, StockReportPriorityEnum.HIGH, order)
+            for index, order in enumerate((1, 2, 5))
+        ],
+    )
     density = [
         divergence
         for divergence in await compute_stock_report_divergences(
@@ -599,31 +588,16 @@ async def test_consistency_does_not_report_foreign_workspace_drift(db_session):
     db_session.add(signature_row)
     await db_session.flush()
 
-    nullness_row = StockReportItem(
-        workspace_id=foreign.workspace.client_id,
-        item_category_id=foreign.categories[0].client_id,
-        properties={"foreign_nullness": True},
-        properties_signature=compute_stock_criteria_signature(
-            {"foreign_nullness": True}
-        ),
-        priority=StockReportPriorityEnum.HIGH,
-        priority_order=None,
+    # Foreign ordering drift lives on the foreign workspace's snapshots (density
+    # only: a half-null position is unstorable since 2026-09-26).
+    await _snapshotted(
+        db_session,
+        foreign,
+        [
+            ({"foreign_density": 1}, 0, StockReportPriorityEnum.HIGH, 1),
+            ({"foreign_density": 3}, 0, StockReportPriorityEnum.HIGH, 3),
+        ],
     )
-    density_rows = [
-        StockReportItem(
-            workspace_id=foreign.workspace.client_id,
-            item_category_id=foreign.categories[0].client_id,
-            properties={"foreign_density": order},
-            properties_signature=compute_stock_criteria_signature(
-                {"foreign_density": order}
-            ),
-            priority=StockReportPriorityEnum.HIGH,
-            priority_order=order,
-        )
-        for order in (1, 3)
-    ]
-    db_session.add_all([nullness_row, *density_rows])
-    await db_session.flush()
 
     foreign_goal_row = StockReportItem(
         workspace_id=foreign.workspace.client_id,

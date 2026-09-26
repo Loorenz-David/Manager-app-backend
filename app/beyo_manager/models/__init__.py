@@ -1,7 +1,9 @@
 from beyo_manager.models.base.base import Base  # noqa: F401
 from beyo_manager.models.tables.stock_report import stock_report_history_record  # noqa: F401
 from beyo_manager.models.tables.stock_report import stock_report_item  # noqa: F401
+from beyo_manager.models.tables.stock_report import stock_report_item_snapshot  # noqa: F401
 from beyo_manager.models.tables.stock_report import stock_report_repair_record  # noqa: F401
+from beyo_manager.models.tables.stock_report import stock_report_snapshot_version  # noqa: F401
 from beyo_manager.models.tables.stock_report import stock_task_assignment  # noqa: F401
 
 # Import every table module here so Alembic detects schema changes.

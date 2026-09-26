@@ -32,6 +32,9 @@ from beyo_manager.errors.stock_report import (
 )
 from beyo_manager.models.tables.images.image import Image
 from beyo_manager.models.tables.images.image_link import ImageLink
+from beyo_manager.models.tables.stock_report.stock_report_item_snapshot import (
+    StockReportItemSnapshot,
+)
 from beyo_manager.models.tables.stock_report.stock_task_assignment import (
     StockTaskAssignment,
 )
@@ -40,12 +43,16 @@ from beyo_manager.services.commands.stock_report._events import (
 )
 from beyo_manager.services.commands.stock_report._locks import (
     lock_items,
+    lock_stock_report_item_snapshots,
     lock_stock_report_items,
     lock_tasks,
 )
 from beyo_manager.services.commands.stock_report._task_flag import set_task_stock_flag
 from beyo_manager.services.commands.stock_report._move_assignment import move_assignment
 from beyo_manager.services.commands.stock_report._row_values import row_values
+from beyo_manager.services.commands.stock_report._snapshot_values import (
+    snapshot_values,
+)
 from beyo_manager.services.commands.stock_report.requests import (
     parse_create_stock_task_assignments_request,
 )
@@ -78,14 +85,33 @@ async def create_stock_task_assignments(ctx: ServiceContext) -> dict:
         task_ids = {entry.task_id for entry in entries}
         row_ids = {entry.stock_report_item_id for entry in entries}
 
-        # Phase 2 — locks, MC-1 order (items -> tasks -> stock_report_items).
+        # Phase 2 — locks, MC-1 order (items -> tasks -> stock_report_items ->
+        # stock_report_item_snapshots). The rows' active snapshots are locked because
+        # creation is the one move that clamps `quantity_missing` (§5.3); their ids
+        # are discovered unlocked first, which only decides what to lock.
         locked_items = await lock_items(ctx.session, ctx.workspace_id, item_ids)
         locked_tasks = await lock_tasks(ctx.session, ctx.workspace_id, task_ids)
         locked_rows = await lock_stock_report_items(
             ctx.session, ctx.workspace_id, row_ids
         )
+        active_snapshot_ids = (
+            await ctx.session.scalars(
+                select(StockReportItemSnapshot.client_id).where(
+                    StockReportItemSnapshot.workspace_id == ctx.workspace_id,
+                    StockReportItemSnapshot.stock_report_item_id.in_(row_ids),
+                    StockReportItemSnapshot.closed_at.is_(None),
+                )
+            )
+        ).all()
+        locked_snapshots = await lock_stock_report_item_snapshots(
+            ctx.session, ctx.workspace_id, active_snapshot_ids
+        )
         initial_row_values = {
             row_id: row_values(row) for row_id, row in locked_rows.items()
+        }
+        initial_snapshot_values = {
+            snapshot_id: snapshot_values(snapshot)
+            for snapshot_id, snapshot in locked_snapshots.items()
         }
 
         (
@@ -216,7 +242,9 @@ async def create_stock_task_assignments(ctx: ServiceContext) -> dict:
                 images_by_item.setdefault(item_id, []).append(image)
 
     dispatch_events = coalesce_stock_report_events(
-        events, initial_row_values=initial_row_values
+        events,
+        initial_row_values=initial_row_values,
+        initial_snapshot_values=initial_snapshot_values,
     )
     await dispatch(dispatch_events)
 

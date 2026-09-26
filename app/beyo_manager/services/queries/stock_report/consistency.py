@@ -9,10 +9,17 @@ from beyo_manager.domain.stock_report.enums import (
     ACTIVE_ASSIGNMENT_STATES,
     StockReportHistoryRecordTypeEnum,
 )
+from beyo_manager.domain.stock_report.snapshot_rules import missing_quantity_ceiling
 from beyo_manager.models.tables.stock_report.stock_report_history_record import (
     StockReportHistoryRecord,
 )
 from beyo_manager.models.tables.stock_report.stock_report_item import StockReportItem
+from beyo_manager.models.tables.stock_report.stock_report_item_snapshot import (
+    StockReportItemSnapshot,
+)
+from beyo_manager.models.tables.stock_report.stock_report_snapshot_version import (
+    StockReportSnapshotVersion,
+)
 from beyo_manager.models.tables.stock_report.stock_task_assignment import (
     StockTaskAssignment,
 )
@@ -134,10 +141,7 @@ async def compute_stock_report_divergences(
         .scalars()
         .all()
     )
-    priority_groups = {}
-    for row in rows:
-        if row.priority is not None:
-            priority_groups.setdefault(row.priority, []).append(row)
+    rows_by_id = {row.client_id: row for row in rows}
     for row in rows:
         expected = counters.get(
             row.client_id,
@@ -166,37 +170,87 @@ async def compute_stock_report_divergences(
                     "expected": signature,
                 }
             )
-        if (row.priority is None) != (row.priority_order is None):
-            expected = None
-            if row.priority is not None:
-                assigned_orders = [
-                    candidate.priority_order
-                    for candidate in priority_groups[row.priority]
-                    if candidate.priority_order is not None
-                ]
-                expected = max(assigned_orders, default=0) + 1
+
+    # The snapshot layer (2026-09-26): the ordering checks moved to the **active**
+    # snapshots (`client_id` is the snapshot's), plus the missing-quantity ceiling
+    # and the one half-applied-close shape a version close could leave behind.
+    # There is no `priority_order_nullness` kind any more: the snapshot table's
+    # `ck_stock_report_item_snapshots_priority_order_pairing` makes a half-null
+    # position unstorable, so the check would be unreachable.
+    snapshots = (
+        (
+            await session.execute(
+                select(StockReportItemSnapshot)
+                .where(
+                    StockReportItemSnapshot.workspace_id == workspace_id,
+                    StockReportItemSnapshot.closed_at.is_(None),
+                )
+                .execution_options(populate_existing=True)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    closed_version_closed_at = {
+        version_id: closed_at
+        for version_id, closed_at in (
+            await session.execute(
+                select(
+                    StockReportSnapshotVersion.client_id,
+                    StockReportSnapshotVersion.closed_at,
+                ).where(
+                    StockReportSnapshotVersion.workspace_id == workspace_id,
+                    StockReportSnapshotVersion.closed_at.is_not(None),
+                )
+            )
+        ).all()
+    }
+    priority_groups = {}
+    for snapshot in snapshots:
+        if snapshot.priority is not None:
+            priority_groups.setdefault(snapshot.priority, []).append(snapshot)
+    for snapshot in snapshots:
+        row = rows_by_id.get(snapshot.stock_report_item_id)
+        if row is not None:
+            ceiling = missing_quantity_ceiling(
+                quantity_requested=snapshot.quantity_requested,
+                quantity_in_queue=row.quantity_in_queue,
+                quantity_in_progress=row.quantity_in_progress,
+                quantity_awaiting=row.quantity_awaiting,
+                quantity_resolved=snapshot.quantity_resolved,
+            )
+            if snapshot.quantity_missing > ceiling:
+                found.append(
+                    {
+                        "kind": "missing_over_ceiling",
+                        "client_id": snapshot.client_id,
+                        "field": "quantity_missing",
+                        "stored": snapshot.quantity_missing,
+                        "expected": ceiling,
+                    }
+                )
+        if snapshot.version_id in closed_version_closed_at:
             found.append(
                 {
-                    "kind": "priority_order_nullness",
-                    "client_id": row.client_id,
-                    "field": "priority_order",
-                    "stored": row.priority_order,
-                    "expected": expected,
+                    "kind": "snapshot_version_closed_mismatch",
+                    "client_id": snapshot.client_id,
+                    "field": "closed_at",
+                    "stored": None,
+                    "expected": closed_version_closed_at[snapshot.version_id].isoformat(),
                 }
             )
     for group in priority_groups.values():
         valid = sorted(
-            (row for row in group if row.priority_order is not None),
-            key=lambda row: (row.priority_order, row.client_id),
+            group, key=lambda snapshot: (snapshot.priority_order, snapshot.client_id)
         )
-        for expected, row in enumerate(valid, 1):
-            if row.priority_order != expected:
+        for expected, snapshot in enumerate(valid, 1):
+            if snapshot.priority_order != expected:
                 found.append(
                     {
                         "kind": "order_density",
-                        "client_id": row.client_id,
+                        "client_id": snapshot.client_id,
                         "field": "priority_order",
-                        "stored": row.priority_order,
+                        "stored": snapshot.priority_order,
                         "expected": expected,
                     }
                 )

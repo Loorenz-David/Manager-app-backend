@@ -11,9 +11,9 @@ created assignment without a second request.
 from beyo_manager.domain.images.serializers import serialize_image_light
 
 
-def serialize_stock_report_item(row, *, category) -> dict:
+def serialize_stock_report_item(row, *, category, snapshot) -> dict:
     """The stock-report row's read shape (intention §9 "Response shapes"; master plan
-    §6.1) — the payload of `GET /stock-report/items` and of both `PATCH` responses.
+    §6.1) — the payload of `GET /stock-report/items` and of the `PATCH` responses.
 
     `item_category` is **four** keys: `client_id`, `name`, `major_category` and
     `image_url` (owner addition 2026-09-21, plan 12 C4(e)). `ItemCategory.image_url`
@@ -25,6 +25,10 @@ def serialize_stock_report_item(row, *, category) -> dict:
     `ItemCategory` today, and MC-16 says a row whose category is later deleted keeps
     working and serializes the deleted category's name — so the caller loads
     categories **by id**, never through a filtered join.
+
+    `snapshot` is the row's active `StockReportItemSnapshot`, or `None` on a live read
+    (`live_stock=true`) of a row that has none. Since 2026-09-26 `priority` and
+    `priority_order` are the snapshot's, not the row's — there are no such keys here.
 
     There is no `item_type` key (intention §9: no "ItemType" concept leaks ahead of
     the Item Domain migration) and no pagination key (master plan §5: this endpoint
@@ -44,12 +48,69 @@ def serialize_stock_report_item(row, *, category) -> dict:
         "quantity_in_queue": row.quantity_in_queue,
         "quantity_in_progress": row.quantity_in_progress,
         "quantity_awaiting": row.quantity_awaiting,
-        "priority": row.priority.value if row.priority is not None else None,
-        "priority_order": row.priority_order,
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
         "created_by_id": row.created_by_id,
         "updated_by_id": row.updated_by_id,
+        "snapshot": (
+            serialize_stock_report_item_snapshot(snapshot, row=row)
+            if snapshot is not None
+            else None
+        ),
+    }
+
+
+def serialize_stock_report_item_snapshot(snapshot, *, row) -> dict:
+    """One row's frozen demand inside one version.
+
+    `quantity_requested` is the snapshot's own (frozen). The three counters are the
+    **row's live values while the snapshot is active** and the snapshot's frozen
+    copies once it is closed — the owner's "derive while active, freeze on close"
+    ruling (2026-09-26), which is why no assignment move ever writes this table.
+
+    `quantity_awaiting` is the exception on the wire: it is that live/frozen awaiting
+    **plus `quantity_resolved`**, the units Scanner processed while the snapshot was
+    active. Completion never goes down because Scanner processed a shelf (owner
+    ruling 2026-09-26, addendum); it does go down when an assignment leaves awaiting
+    for anything else, exactly like MC-5's goal credit.
+    """
+    active = snapshot.closed_at is None
+    return {
+        "client_id": snapshot.client_id,
+        "version_id": snapshot.version_id,
+        "stock_report_item_id": snapshot.stock_report_item_id,
+        "quantity_requested": snapshot.quantity_requested,
+        "quantity_in_queue": (
+            row.quantity_in_queue if active else snapshot.quantity_in_queue
+        ),
+        "quantity_in_progress": (
+            row.quantity_in_progress if active else snapshot.quantity_in_progress
+        ),
+        "quantity_awaiting": (
+            (row.quantity_awaiting if active else snapshot.quantity_awaiting)
+            + snapshot.quantity_resolved
+        ),
+        "quantity_missing": snapshot.quantity_missing,
+        "quantity_resolved": snapshot.quantity_resolved,
+        "priority": snapshot.priority.value if snapshot.priority is not None else None,
+        "priority_order": snapshot.priority_order,
+        "active_at": snapshot.active_at.isoformat() if snapshot.active_at else None,
+        "closed_at": snapshot.closed_at.isoformat() if snapshot.closed_at else None,
+        "created_at": snapshot.created_at.isoformat() if snapshot.created_at else None,
+        "updated_at": snapshot.updated_at.isoformat() if snapshot.updated_at else None,
+        "updated_by_id": snapshot.updated_by_id,
+    }
+
+
+def serialize_stock_report_snapshot_version(version) -> dict:
+    return {
+        "client_id": version.client_id,
+        "active_at": version.active_at.isoformat() if version.active_at else None,
+        "closed_at": version.closed_at.isoformat() if version.closed_at else None,
+        "snapshot_count": version.snapshot_count,
+        "created_at": version.created_at.isoformat() if version.created_at else None,
+        "created_by_id": version.created_by_id,
+        "closed_by_id": version.closed_by_id,
     }
 
 
