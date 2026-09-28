@@ -101,16 +101,24 @@ priority board.
 `quantity_missing` live on the snapshot, **not** on `stock_report_items` (the columns are gone).
 `GET /items` shows only rows with an active snapshot unless `live_stock=true`. A snapshot's
 wire `quantity_awaiting` keeps counting units Scanner has resolved (`quantity_resolved`,
-credited by the processed webhook) — completion never goes backwards;
+credited by the processed webhook) — completion never goes backwards, except after a refresh
+or a manual requested change on the active version;
 `GET /snapshots/versions/active` and each row of `GET /snapshots/versions` carry a
 `progress` object and a `filtered_snapshot_count` (the stored `snapshot_count` under the
 filter, deleted rows included) over the snapshots their `priority` param selects — the same parser
 and meaning as `GET /items` (`services/queries/stock_report/_priority_filter.py`).
+
+**Draft versions (2026-09-28):** a version is `draft | active | closed`, derived from
+`active_at`/`closed_at` — *open* is `closed_at IS NULL`, *active* is both; every predicate lives
+in `services/commands/stock_report/_predicates.py`, so use it rather than writing
+`closed_at IS NULL` for "active". A **draft is live**: its rows follow Scanner (the demand
+webhook adds new rows to every draft), its requested is the row's until activation freezes
+`quantity_requested_scanner`, and its missing is borrowed from the active version unless typed.
+The wire `quantity_requested` is the *effective* value (manual override, else Scanner's). A
+draft can be scheduled; see "Running the app" for the processes that fire it.
 Contract:
-`.../handoffs/to_frontend/HANDOFF_TO_FRONTEND_stock_report_snapshots_v6_20260926.md`
-(v2 added `priority=all` on `GET /items`, v3 fixed `missing_only` hiding fully missing
-rows, v4 paginated `GET /items` with a default of 20, v5 put `priority` on the version
-reads, v6 added `filtered_snapshot_count`; earlier versions are in `archived/`).
+`.../handoffs/to_frontend/HANDOFF_TO_FRONTEND_stock_report_snapshots_v11_20260928.md` — the
+one current file (v7–v10 were deltas, merged into it); v6 and earlier are in `archived/`.
 
 The three Scanner webhooks are `POST /api/v1/location-tracker/webhooks/{stock-demand,
 items-processed,stock-demand-deleted}`, all key-authenticated by `X-API-KEY` against

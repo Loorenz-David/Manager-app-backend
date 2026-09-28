@@ -50,11 +50,36 @@ live assignments, a `stock_report_repair_records` row is written with the trigge
 The live tables above are Scanner's mirror. Everything a Manager user sees goes
 through a **version**: `stock_report_snapshot_versions` holds at most one active
 version per workspace (`uix_stock_report_snapshot_versions_active`, a partial unique
-index on `closed_at IS NULL`), and `stock_report_item_snapshots` holds one row per
-live stock-report row inside it.
+index on `active_at IS NOT NULL AND closed_at IS NULL`), and
+`stock_report_item_snapshots` holds one row per live stock-report row inside it.
 
-- `quantity_requested` on the snapshot is **frozen** at creation. The row's own keeps
-  following Scanner.
+**Lifecycle (draft versions, 2026-09-28): `draft → active → closed`**, derived from two
+dates and never stored — draft = neither, active = `active_at` only, closed = both
+(`closed_implies_activated` makes "closed, never active" unstorable). *Open* means
+`closed_at IS NULL` (draft or active); every predicate is in
+`services/commands/stock_report/_predicates.py`. Many drafts may exist. A draft goes
+live by activation — by hand, or by its `scheduled_activation_at` through the delayed
+scheduler (§5 of the plan; skipped when superseded) — which closes the active version
+in the same transaction. A draft can be **hard-deleted**, the one exception to
+"closing is the lifecycle" (§2).
+
+- **A draft is live.** Its row set follows Scanner (the demand webhook inserts a
+  snapshot into every draft for each row it creates; the deletion cascade removes
+  it), and so do its values until activation freezes them.
+- **Requested quantity — two columns, one derived value.**
+  `quantity_requested_scanner` is NULL on a draft and frozen from the row at
+  activation (re-frozen by a refresh of the active version);
+  `quantity_requested_manual` is a user's override on a draft or the active version.
+  The value in force is `COALESCE(manual, CASE WHEN active_at IS NULL THEN row ELSE
+  scanner END)` — the one expression every reader uses, in SQL and in Python. The
+  check `scanner_iff_activated` ties the Scanner column to `active_at`, so activation
+  freezes, settles missing and stamps `active_at` in **one** statement.
+- **Missing on a draft is borrowed unless typed.** `quantity_missing` is NULL on a
+  draft row nothing was typed for; the read shows the active version's value for the
+  same row (else 0). Activation settles it: typed stays, the rest keep the closing
+  board's value or reset to 0 (the activate body's `keep_active_missing`, or the
+  draft's stored flag for a scheduled activation), then clamped
+  (`missing_set_once_activated` forbids a NULL once active).
 - The snapshot's three counters are **derived from the row while the snapshot is
   active** (the serializer reads the row) and **frozen from the row when it closes**
   (`create_stock_report_snapshot_version`'s freeze, or the deletion cascade). No
@@ -70,20 +95,23 @@ live stock-report row inside it.
   recomputable (assignments carry no resolved timestamp), so no consistency kind
   covers it. The processed webhook therefore takes the snapshot lock class between
   rows and assignments (MC-1 order).
-- A version's **progress** (`GET …/snapshots/versions/active`, and per row of
-  `GET …/snapshots/versions`) is computed over its prioritised snapshots whose row is
-  not deleted: target `Σ max(0, requested − missing)`, done `Σ min(target, awaiting)`
-  with the wire awaiting above; live counters while a snapshot is active, frozen ones
-  once closed (the per-snapshot `closed_at`, the serializer's own test).
+- A version's **progress** (the version reads) is computed over the snapshots its
+  `priority` filter selects whose row is not deleted: target `Σ max(0, requested −
+  missing)` over the values in force, done `Σ min(target, awaiting)` with the wire
+  awaiting above; live counters while a snapshot is open, frozen ones once closed.
+  Completion goes backwards only after a refresh of the active version or a manual
+  requested change on it.
 - `priority` / `priority_order` live on the snapshot, never on the row (the columns
-  were dropped). A group is `(workspace_id, priority)` over **active** snapshots;
-  the two `PATCH` ordering routes take the row's id and move its active snapshot.
+  were dropped). A group is `(version_id, priority)` over **open** snapshots, so a
+  draft is ordered within itself; the board shortcuts take the row's id and move its
+  active snapshot, the versioned routes name the version.
   `ck_stock_report_item_snapshots_priority_order_pairing` makes a half-null position
   unstorable, so there is no `priority_order_nullness` check any more.
 - `quantity_missing` is bounded by `max(0, quantity_requested − (in_queue +
   in_progress + awaiting + quantity_resolved))` and is **clamped down** by `move_assignment` on an
-  assignment's creation — the only move that raises the covered quantity. A new
-  version starts it at 0.
+  assignment's creation — the only move that raises the covered quantity; that clamp
+  and the resolved credit touch the **active** snapshot only, never a draft. A direct
+  active create starts it at 0.
 - Opening a version closes the previous one in the same transaction and takes
   every live row `FOR UPDATE` for its duration; a concurrent Scanner demand webhook
   can hit its `lock_timeout` and retry. Accepted.
@@ -96,8 +124,8 @@ live stock-report row inside it.
 | `stock_task_assignments` | `is_deleted = false`; the two "one active per item / per task" unique indexes additionally require an active state |
 | `stock_report_history_records` | `is_deleted = false` |
 | `stock_report_repair_records` | no soft-delete columns — repair records are append-only and are removed only by the workspace reset |
-| `stock_report_snapshot_versions` | no soft delete: **closing is the lifecycle**. Active means `closed_at IS NULL`; a closed version is immutable history that `apply-priorities` can copy from |
-| `stock_report_item_snapshots` | no soft delete. Active means `closed_at IS NULL` (`uix_stock_report_item_snapshots_row_active`: at most one per row). It closes with its version, or alone when its row is deleted mid-version |
+| `stock_report_snapshot_versions` | no soft delete: **closing is the lifecycle** — with one exception, a **draft** is hard-deleted (`DELETE …/snapshots/versions/{id}`) with its snapshots and its pending scheduled activation. Open means `closed_at IS NULL`; active means `active_at IS NOT NULL AND closed_at IS NULL`; a closed version is immutable history that `apply-priorities` can copy from |
+| `stock_report_item_snapshots` | no soft delete. Open means `closed_at IS NULL`; active adds `active_at IS NOT NULL` (`uix_stock_report_item_snapshots_row_active`: at most one active per row; one per row per version, `uq_stock_report_item_snapshots_version_row`). An active snapshot closes with its version, or alone when its row is deleted mid-version; a draft's snapshot is hard-deleted then |
 
 An absent row, a soft-deleted row and a row in another workspace are **one** answer on
 every read: `404`. A soft-deleted row is outside the live-identity predicate, so the
@@ -122,12 +150,14 @@ In order:
 2. the second self-heal trigger runs **once**, after the loop: each counter's
    recomputed value is now 0, and a non-zero stored value is drift — repaired with a
    record, and the deletion proceeds;
-3. the row's **active snapshot** closes its priority group's gap: every active
-   snapshot ordered after it moves down one, and each shifted neighbour emits
-   `stock_report_item_snapshot:updated`; the snapshot is then closed (`closed_at`,
-   counters frozen at 0) and **keeps its own `priority` and `priority_order`** — it is
-   outside every group now, so its position is a historical fact. The version stays
-   open;
+3. each of the row's **open snapshots** closes its gap in its own version's group:
+   every snapshot ordered after it moves up one, and each shifted neighbour emits
+   `stock_report_item_snapshot:updated` with that version's `version_id`. Then the
+   **active** snapshot is closed (`closed_at`, counters frozen at 0) and **keeps its
+   own `priority` and `priority_order`** — it is outside every group now, so its
+   position is a historical fact, and the version stays open; each **draft**
+   snapshot is hard-deleted (a draft snapshot cannot be closed) and that draft's
+   `snapshot_count` drops by 1, with no event of its own;
 4. the row is soft-deleted;
 5. its history records are soft-deleted (`deleted_*` only — they carry no `updated_*`
    columns);
@@ -145,6 +175,12 @@ their active snapshots together with every active snapshot of their priority gro
 then the assignments — and then runs one cascade per row in ascending `client_id`. Each cascade closes its own gap against the
 positions the previous one left, so two rows of the same group both end correct.
 
+**The mirror image, creation:** the Scanner demand webhook — the only creator of rows —
+locks every draft version row `FOR UPDATE` and inserts one draft snapshot per row it
+created (unprioritised, nothing typed, both requested columns NULL), raising each
+draft's `snapshot_count`. The draft delete locks its version row **before** its
+snapshots, so a webhook queued behind it adds nothing to the deleted draft.
+
 ### 3.2 Task deletion, PRIMARY unlink, item deletion
 
 A task's deletion, the removal of a task's PRIMARY item, and an item's deletion each
@@ -160,10 +196,12 @@ category.` on both item writers.
 
 ### 3.4 The workspace reset
 
-`reset_app` deletes the four stock-report tables **first**, before `delete_tasks` —
-repair records, assignments, history records, rows, in that order. They are hard
-deletes and they take soft-deleted rows with them, which is what keeps the FK
-`RESTRICT` on `tasks` and `items` satisfiable.
+`reset_app` deletes the stock-report tables **first**, before `delete_tasks` — repair
+records, assignments, history records, snapshots, versions, rows, in that order. They
+are hard deletes and they take soft-deleted rows with them, which is what keeps the FK
+`RESTRICT` on `tasks` and `items` satisfiable. Immediately before the versions go, the
+workspace's `ACTIVE` scheduled-activation rows in `delayed_schedulers` are cancelled
+(that table has no workspace column; the rows are found by version id).
 
 ## 4. Events
 
@@ -172,9 +210,13 @@ deletes and they take soft-deleted rows with them, which is what keeps the FK
 | `stock_report_item:created` | `{}` |
 | `stock_report_item:updated` | `quantity_requested`, `quantity_in_queue`, `quantity_in_progress`, `quantity_awaiting` |
 | `stock_report_item:deleted` | `{}` |
-| `stock_report_item_snapshot:updated` | `stock_report_item_id`, `version_id`, `priority`, `priority_order`, `quantity_missing`, `quantity_resolved` — `client_id` is the **snapshot's** |
-| `stock_report_snapshot_version:created` | `snapshot_count` — `client_id` is the version's |
+| `stock_report_item_snapshot:updated` | `stock_report_item_id`, `version_id`, `priority`, `priority_order`, `quantity_missing`, `quantity_resolved`, `quantity_requested_scanner`, `quantity_requested_manual` — the **stored** values, all eight on every emission; `client_id` is the **snapshot's** |
+| `stock_report_snapshot_version:created` | `snapshot_count`, `state`, `title` — `client_id` is the version's |
 | `stock_report_snapshot_version:closed` | `snapshot_count` |
+| `stock_report_snapshot_version:activated` | `snapshot_count`, `title`, `scheduled`, `keep_active_missing` — no per-snapshot event accompanies an activation |
+| `stock_report_snapshot_version:refreshed` | `snapshot_count`, `changed`, `added`, `keep_manual_requested` |
+| `stock_report_snapshot_version:updated` | `title`, `scheduled_activation_at`, `scheduled_activation_keeps_active_missing` — the PATCH-version route, and a skipped scheduled activation |
+| `stock_report_snapshot_version:deleted` | `{}` — a draft deleted |
 | `stock_task_assignment:created` | `stock_report_item_id`, `task_id`, `state` |
 | `stock_task_assignment:state-changed` | the same three |
 | `stock_task_assignment:deleted` | the same three |
