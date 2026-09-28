@@ -71,6 +71,8 @@ async def _snapshotted(db_session, seeded, specs):
             workspace_id=seeded.workspace.client_id,
             version_id=version.client_id,
             stock_report_item_id=row.client_id,
+            quantity_requested_scanner=row.quantity_requested,
+            quantity_missing=0,
             priority=priority,
             priority_order=order,
             active_at=_NOW,

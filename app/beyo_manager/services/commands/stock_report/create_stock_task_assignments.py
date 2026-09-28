@@ -41,6 +41,7 @@ from beyo_manager.models.tables.stock_report.stock_task_assignment import (
 from beyo_manager.services.commands.stock_report._events import (
     coalesce_stock_report_events,
 )
+from beyo_manager.services.commands.stock_report._predicates import snapshot_is_active
 from beyo_manager.services.commands.stock_report._locks import (
     lock_items,
     lock_stock_report_item_snapshots,
@@ -99,7 +100,7 @@ async def create_stock_task_assignments(ctx: ServiceContext) -> dict:
                 select(StockReportItemSnapshot.client_id).where(
                     StockReportItemSnapshot.workspace_id == ctx.workspace_id,
                     StockReportItemSnapshot.stock_report_item_id.in_(row_ids),
-                    StockReportItemSnapshot.closed_at.is_(None),
+                    snapshot_is_active(),
                 )
             )
         ).all()

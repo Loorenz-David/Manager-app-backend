@@ -9,7 +9,11 @@ from beyo_manager.domain.stock_report.enums import (
     ACTIVE_ASSIGNMENT_STATES,
     StockReportHistoryRecordTypeEnum,
 )
-from beyo_manager.domain.stock_report.snapshot_rules import missing_quantity_ceiling
+from beyo_manager.domain.stock_report.snapshot_rules import (
+    effective_quantity_requested,
+    is_snapshot_active,
+    missing_quantity_ceiling,
+)
 from beyo_manager.models.tables.stock_report.stock_report_history_record import (
     StockReportHistoryRecord,
 )
@@ -24,6 +28,7 @@ from beyo_manager.models.tables.stock_report.stock_task_assignment import (
     StockTaskAssignment,
 )
 from beyo_manager.models.tables.tasks.task import Task
+from beyo_manager.services.commands.stock_report._predicates import snapshot_is_open
 
 
 class Divergence(TypedDict):
@@ -171,10 +176,14 @@ async def compute_stock_report_divergences(
                 }
             )
 
-    # The snapshot layer (2026-09-26): the ordering checks moved to the **active**
-    # snapshots (`client_id` is the snapshot's), plus the missing-quantity ceiling
-    # and the one half-applied-close shape a version close could leave behind.
-    # There is no `priority_order_nullness` kind any more: the snapshot table's
+    # The snapshot layer (2026-09-26, drafts 2026-09-28): the ordering checks read
+    # the **open** snapshots, drafts included, grouped by `(version_id, priority)`
+    # (`client_id` is the snapshot's) — the same set, grouped the same way, that
+    # repair locks and densifies. Plus the missing-quantity ceiling on the **active**
+    # snapshots only (a draft's missing is a guide, re-clamped at activation), over
+    # the effective requested value, and the one-directional state kinds a
+    # half-applied close or activation could leave behind. There is no
+    # `priority_order_nullness` kind: the snapshot table's
     # `ck_stock_report_item_snapshots_priority_order_pairing` makes a half-null
     # position unstorable, so the check would be unreachable.
     snapshots = (
@@ -183,7 +192,7 @@ async def compute_stock_report_divergences(
                 select(StockReportItemSnapshot)
                 .where(
                     StockReportItemSnapshot.workspace_id == workspace_id,
-                    StockReportItemSnapshot.closed_at.is_(None),
+                    snapshot_is_open(),
                 )
                 .execution_options(populate_existing=True)
             )
@@ -191,29 +200,29 @@ async def compute_stock_report_divergences(
         .scalars()
         .all()
     )
-    closed_version_closed_at = {
-        version_id: closed_at
-        for version_id, closed_at in (
+    version_dates = {
+        version_id: (active_at, closed_at)
+        for version_id, active_at, closed_at in (
             await session.execute(
                 select(
                     StockReportSnapshotVersion.client_id,
+                    StockReportSnapshotVersion.active_at,
                     StockReportSnapshotVersion.closed_at,
-                ).where(
-                    StockReportSnapshotVersion.workspace_id == workspace_id,
-                    StockReportSnapshotVersion.closed_at.is_not(None),
-                )
+                ).where(StockReportSnapshotVersion.workspace_id == workspace_id)
             )
         ).all()
     }
     priority_groups = {}
     for snapshot in snapshots:
         if snapshot.priority is not None:
-            priority_groups.setdefault(snapshot.priority, []).append(snapshot)
+            priority_groups.setdefault(
+                (snapshot.version_id, snapshot.priority), []
+            ).append(snapshot)
     for snapshot in snapshots:
         row = rows_by_id.get(snapshot.stock_report_item_id)
-        if row is not None:
+        if row is not None and is_snapshot_active(snapshot):
             ceiling = missing_quantity_ceiling(
-                quantity_requested=snapshot.quantity_requested,
+                quantity_requested=effective_quantity_requested(snapshot, row=row),
                 quantity_in_queue=row.quantity_in_queue,
                 quantity_in_progress=row.quantity_in_progress,
                 quantity_awaiting=row.quantity_awaiting,
@@ -229,14 +238,44 @@ async def compute_stock_report_divergences(
                         "expected": ceiling,
                     }
                 )
-        if snapshot.version_id in closed_version_closed_at:
+        version_active_at, version_closed_at = version_dates[snapshot.version_id]
+        if version_closed_at is not None:
+            # (i) An open snapshot in a closed version: close it (never reopen a
+            # closed snapshot in an open version — that is every cascade-closed row).
             found.append(
                 {
-                    "kind": "snapshot_version_closed_mismatch",
+                    "kind": "snapshot_version_state_mismatch",
                     "client_id": snapshot.client_id,
                     "field": "closed_at",
                     "stored": None,
-                    "expected": closed_version_closed_at[snapshot.version_id].isoformat(),
+                    "expected": version_closed_at.isoformat(),
+                }
+            )
+        elif version_active_at is not None and snapshot.active_at != version_active_at:
+            # (ii) An activated version whose snapshot is unstamped or stamped
+            # differently: copy the version's.
+            found.append(
+                {
+                    "kind": "snapshot_version_state_mismatch",
+                    "client_id": snapshot.client_id,
+                    "field": "active_at",
+                    "stored": (
+                        snapshot.active_at.isoformat()
+                        if snapshot.active_at is not None
+                        else None
+                    ),
+                    "expected": version_active_at.isoformat(),
+                }
+            )
+        elif version_active_at is None and snapshot.active_at is not None:
+            # (iii) A draft's snapshot carrying a stamp: clear it.
+            found.append(
+                {
+                    "kind": "snapshot_version_state_mismatch",
+                    "client_id": snapshot.client_id,
+                    "field": "active_at",
+                    "stored": snapshot.active_at.isoformat(),
+                    "expected": None,
                 }
             )
     for group in priority_groups.values():

@@ -212,6 +212,8 @@ async def test_set_missing_writes_the_active_snapshot_and_emits_one_event(
                     "priority_order": None,
                     "quantity_missing": 3,
                     "quantity_resolved": 0,
+                    "quantity_requested_scanner": 10,
+                    "quantity_requested_manual": None,
                 },
             )
         ]

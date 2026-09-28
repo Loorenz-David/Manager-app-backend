@@ -1,11 +1,13 @@
 """Dense ordering — MC-7's shift statements (master plan §6.5, phase 12), retargeted
-to the **active item snapshots** on 2026-09-26 when priority left the row.
+to the item snapshots on 2026-09-26 when priority left the row, and to **one
+version's** snapshots on 2026-09-28 when drafts arrived.
 
-A *group* is `(workspace_id, priority)` over **active** snapshots (`closed_at IS
-NULL`), `priority ∈ {high, medium, low}`; orders are 1-based and dense. Every shift
-here is **one** column-referencing `UPDATE … RETURNING`, never a read-then-assign and
-never an ORM attribute write (master plan §9 rule 3): each returned row's fields feed
-one `stock_report_item_snapshot:updated`.
+A *group* is `(version_id, priority)` over **open** snapshots (`closed_at IS
+NULL`), `priority ∈ {high, medium, low}`; orders are 1-based and dense. A draft's
+`high` group is numbered independently of the board's. Every shift here is **one**
+column-referencing `UPDATE … RETURNING`, never a read-then-assign and never an ORM
+attribute write (master plan §9 rule 3): each returned row's fields feed one
+`stock_report_item_snapshot:updated`.
 
 The caller holds `pg_advisory_xact_lock(hashtext('stock_report_order:' || ws))` and
 the group's `FOR UPDATE`, and has read its positions **after** those locks (MC-7
@@ -19,8 +21,9 @@ from sqlalchemy import func, select, update
 from beyo_manager.models.tables.stock_report.stock_report_item_snapshot import (
     StockReportItemSnapshot,
 )
+from beyo_manager.services.commands.stock_report._predicates import snapshot_is_open
 
-# The five fields of a `stock_report_item_snapshot:updated` payload, plus the
+# The fields of a `stock_report_item_snapshot:updated` payload, plus the
 # snapshot's own id so the caller can address each shifted neighbour.
 _RETURNING_COLUMNS = (
     StockReportItemSnapshot.client_id,
@@ -30,18 +33,20 @@ _RETURNING_COLUMNS = (
     StockReportItemSnapshot.priority_order,
     StockReportItemSnapshot.quantity_missing,
     StockReportItemSnapshot.quantity_resolved,
+    StockReportItemSnapshot.quantity_requested_scanner,
+    StockReportItemSnapshot.quantity_requested_manual,
 )
 
 
-def _group_where(workspace_id, priority):
+def _group_where(version_id, priority):
     return (
-        StockReportItemSnapshot.workspace_id == workspace_id,
+        StockReportItemSnapshot.version_id == version_id,
         StockReportItemSnapshot.priority == priority,
-        StockReportItemSnapshot.closed_at.is_(None),
+        snapshot_is_open(),
     )
 
 
-async def _shift(session, *, workspace_id, priority, low, high, delta):
+async def _shift(session, *, version_id, priority, low, high, delta):
     """One column-referencing UPDATE over the order band `[low, high]`; `high=None`
     means "everything from `low` upwards"."""
     if high is not None and low > high:
@@ -51,27 +56,27 @@ async def _shift(session, *, workspace_id, priority, low, high, delta):
         band.append(StockReportItemSnapshot.priority_order <= high)
     statement = (
         update(StockReportItemSnapshot)
-        .where(*_group_where(workspace_id, priority), *band)
+        .where(*_group_where(version_id, priority), *band)
         .values(priority_order=StockReportItemSnapshot.priority_order + delta)
         .returning(*_RETURNING_COLUMNS)
     )
     return [dict(row) for row in (await session.execute(statement)).mappings().all()]
 
 
-async def close_priority_gap(session, *, workspace_id, priority, removed_order):
+async def close_priority_gap(session, *, version_id, priority, removed_order):
     """MC-7 "source closes its gap": every snapshot of the group ordered **after** the
     vacated position moves down one.
 
     `removed_order` is the position the leaving snapshot held. It still sits at
     `removed_order`, so the band starting at `removed_order + 1` is what keeps it out
     of the shift — that matters for the deletion cascade, where the snapshot is
-    closed afterwards and keeps its own `priority_order`.
+    closed (or, on a draft, deleted) afterwards and keeps its own `priority_order`.
     """
     if removed_order is None:
         return []
     return await _shift(
         session,
-        workspace_id=workspace_id,
+        version_id=version_id,
         priority=priority,
         low=removed_order + 1,
         high=None,
@@ -79,20 +84,20 @@ async def close_priority_gap(session, *, workspace_id, priority, removed_order):
     )
 
 
-async def append_to_priority_group(session, *, workspace_id, priority):
+async def append_to_priority_group(session, *, version_id, priority):
     """MC-7's `max + 1` (1 when the group is empty), computed over the group as it
     stands — the mover is never a member of its destination group when this is
     called (`X == Y` is short-circuited by the caller as a no-op, B2).
     """
     current_max = await session.scalar(
         select(func.max(StockReportItemSnapshot.priority_order)).where(
-            *_group_where(workspace_id, priority)
+            *_group_where(version_id, priority)
         )
     )
     return (current_max or 0) + 1
 
 
-async def shift_within_group(session, *, workspace_id, priority, from_order, to_order):
+async def shift_within_group(session, *, version_id, priority, from_order, to_order):
     """MC-7's two in-group bands, by direction.
 
     `from_order` is the mover's current position `p`, `to_order` its target `t`:
@@ -111,7 +116,7 @@ async def shift_within_group(session, *, workspace_id, priority, from_order, to_
     if to_order < from_order:
         return await _shift(
             session,
-            workspace_id=workspace_id,
+            version_id=version_id,
             priority=priority,
             low=to_order,
             high=from_order - 1,
@@ -119,7 +124,7 @@ async def shift_within_group(session, *, workspace_id, priority, from_order, to_
         )
     return await _shift(
         session,
-        workspace_id=workspace_id,
+        version_id=version_id,
         priority=priority,
         low=from_order + 1,
         high=to_order,

@@ -22,6 +22,7 @@ from beyo_manager.domain.stock_report.serializers import (
 from beyo_manager.models.tables.stock_report.stock_report_snapshot_version import (
     StockReportSnapshotVersion,
 )
+from beyo_manager.services.commands.stock_report._predicates import version_is_active
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.stock_report._priority_filter import (
     parse_priority_filter,
@@ -33,10 +34,11 @@ from beyo_manager.services.queries.stock_report._version_progress import (
 
 async def get_stock_report_active_snapshot_version(ctx: ServiceContext) -> dict:
     priorities = parse_priority_filter(ctx.query_params.get("priority"))
+    # The active pair, never a draft (drafts are open too, 2026-09-28).
     version = await ctx.session.scalar(
         select(StockReportSnapshotVersion).where(
             StockReportSnapshotVersion.workspace_id == ctx.workspace_id,
-            StockReportSnapshotVersion.closed_at.is_(None),
+            version_is_active(),
         )
     )
     if version is None:

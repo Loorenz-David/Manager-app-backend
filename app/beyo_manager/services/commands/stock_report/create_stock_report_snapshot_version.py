@@ -2,8 +2,10 @@
 
 Opens a new board version: one `stock_report_item_snapshots` row per **live**
 stock-report row (zero-requested rows included — owner ruling 2026-09-26), each with
-the row's current `quantity_requested` frozen, its counters copied, no priority and
-`quantity_missing = 0`. The previously active version, if any, is closed in the same
+the row's current `quantity_requested` frozen into `quantity_requested_scanner`, no
+manual value, its counters copied, no priority and `quantity_missing = 0`. Drafts
+(2026-09-28) are never closed, locked or read here: every predicate is the
+**active** pair. The previously active version, if any, is closed in the same
 transaction: its open snapshots get `closed_at` and their counters **frozen from the
 rows** (the "derive while active, freeze on close" ruling). Postgres enforces "one
 active version per workspace" (`uix_stock_report_snapshot_versions_active`); two
@@ -35,6 +37,11 @@ from beyo_manager.models.tables.stock_report.stock_report_snapshot_version impor
 from beyo_manager.services.commands.stock_report._locks import (
     acquire_stock_report_order_lock,
 )
+from beyo_manager.services.commands.stock_report._predicates import (
+    SNAPSHOT_ACTIVE_SQL,
+    snapshot_is_active,
+    version_is_active,
+)
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import dispatch
@@ -49,7 +56,7 @@ _FREEZE_STATEMENT = text(
     "updated_at = :now, updated_by_id = :actor "
     "FROM stock_report_items AS r "
     "WHERE r.client_id = s.stock_report_item_id "
-    "AND s.workspace_id = :ws AND s.closed_at IS NULL"
+    f"AND s.workspace_id = :ws AND {SNAPSHOT_ACTIVE_SQL}"
 ).bindparams(bindparam("now", type_=DateTime(timezone=True)))
 
 
@@ -97,7 +104,7 @@ async def create_stock_report_snapshot_version(ctx: ServiceContext) -> dict:
             select(StockReportItemSnapshot.client_id)
             .where(
                 StockReportItemSnapshot.workspace_id == ctx.workspace_id,
-                StockReportItemSnapshot.closed_at.is_(None),
+                snapshot_is_active(),
             )
             .order_by(StockReportItemSnapshot.client_id)
             .with_for_update()
@@ -107,7 +114,7 @@ async def create_stock_report_snapshot_version(ctx: ServiceContext) -> dict:
             select(StockReportSnapshotVersion)
             .where(
                 StockReportSnapshotVersion.workspace_id == ctx.workspace_id,
-                StockReportSnapshotVersion.closed_at.is_(None),
+                version_is_active(),
             )
             .with_for_update()
         )
@@ -142,7 +149,8 @@ async def create_stock_report_snapshot_version(ctx: ServiceContext) -> dict:
                         "workspace_id": ctx.workspace_id,
                         "version_id": version.client_id,
                         "stock_report_item_id": row.client_id,
-                        "quantity_requested": row.quantity_requested,
+                        "quantity_requested_scanner": row.quantity_requested,
+                        "quantity_requested_manual": None,
                         "quantity_in_queue": row.quantity_in_queue,
                         "quantity_in_progress": row.quantity_in_progress,
                         "quantity_awaiting": row.quantity_awaiting,

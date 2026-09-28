@@ -13,6 +13,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from beyo_manager.domain.stock_report.enums import (
     StockReportHistoryRecordTypeEnum,
     StockReportPriorityEnum,
+    StockReportQuantityRequestedSourceEnum,
 )
 from beyo_manager.models.base.base import Base
 from beyo_manager.models.base.identity import IdentityMixin
@@ -47,6 +48,21 @@ class StockReportHistoryRecord(IdentityMixin, Base):
     )
     quantity_requested: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
+    )
+    # Where `quantity_requested` came from (draft versions, 2026-09-28): Scanner's
+    # value, or a user's manual override on the snapshot the record was written
+    # against. Scanner's own `quantity_requested_change` records are always `scanner`.
+    quantity_requested_source: Mapped[StockReportQuantityRequestedSourceEnum] = (
+        mapped_column(
+            SAEnum(
+                StockReportQuantityRequestedSourceEnum,
+                name="stock_report_quantity_requested_source_enum",
+                create_type=True,
+            ),
+            nullable=False,
+            default=StockReportQuantityRequestedSourceEnum.SCANNER,
+            server_default="scanner",
+        )
     )
     quantity_awaiting: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"

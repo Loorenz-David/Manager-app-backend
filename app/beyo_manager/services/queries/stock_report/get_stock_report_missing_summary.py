@@ -10,6 +10,7 @@ from sqlalchemy import case, func, select
 from beyo_manager.models.tables.stock_report.stock_report_item_snapshot import (
     StockReportItemSnapshot,
 )
+from beyo_manager.services.commands.stock_report._predicates import snapshot_is_active
 from beyo_manager.services.context import ServiceContext
 
 
@@ -26,7 +27,10 @@ async def get_stock_report_missing_summary(ctx: ServiceContext) -> dict:
                 ),
             ).where(
                 StockReportItemSnapshot.workspace_id == ctx.workspace_id,
-                StockReportItemSnapshot.closed_at.is_(None),
+                # The board only: a draft's (typed or borrowed) missing is a
+                # plan, not the buyer's counter. No row join, so no effective
+                # value is needed — an active snapshot's own column is its number.
+                snapshot_is_active(),
             )
         )
     ).one()

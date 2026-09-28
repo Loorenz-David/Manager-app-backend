@@ -16,6 +16,7 @@ from __future__ import annotations
 from sqlalchemy import or_, select, update
 
 from beyo_manager.domain.stock_report.enums import StockReportHistoryRecordTypeEnum
+from beyo_manager.domain.stock_report.snapshot_rules import is_snapshot_active
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.stock_report.stock_report_history_record import (
@@ -36,6 +37,7 @@ from beyo_manager.services.commands.stock_report._load_row_with_snapshot import 
 from beyo_manager.services.commands.stock_report._locks import (
     acquire_stock_report_order_lock,
 )
+from beyo_manager.services.commands.stock_report._predicates import snapshot_is_open
 from beyo_manager.services.commands.stock_report._ordering import (
     append_to_priority_group,
     close_priority_gap,
@@ -58,6 +60,8 @@ _MOVER_RETURNING = (
     StockReportItemSnapshot.priority_order,
     StockReportItemSnapshot.quantity_missing,
     StockReportItemSnapshot.quantity_resolved,
+    StockReportItemSnapshot.quantity_requested_scanner,
+    StockReportItemSnapshot.quantity_requested_manual,
 )
 
 NO_ACTIVE_SNAPSHOT_MESSAGE = (
@@ -82,9 +86,12 @@ async def find_row(session, workspace_id, client_id):
     return row
 
 
-async def lock_snapshot_and_groups(session, workspace_id, snapshot_id, priorities):
-    """One statement, ordered by `client_id`: the target snapshot plus every active
-    snapshot of the named groups (MC-7 "Serialization")."""
+async def lock_snapshot_and_groups(
+    session, workspace_id, version_id, snapshot_id, priorities
+):
+    """One statement, ordered by `client_id`: the target snapshot plus every open
+    snapshot of the named groups **in that version** (MC-7 "Serialization"; a
+    group is `(version_id, priority)` since drafts, 2026-09-28)."""
     named = [priority for priority in priorities if priority is not None]
     predicate = StockReportItemSnapshot.client_id == snapshot_id
     if named:
@@ -95,7 +102,8 @@ async def lock_snapshot_and_groups(session, workspace_id, snapshot_id, prioritie
                 select(StockReportItemSnapshot)
                 .where(
                     StockReportItemSnapshot.workspace_id == workspace_id,
-                    StockReportItemSnapshot.closed_at.is_(None),
+                    StockReportItemSnapshot.version_id == version_id,
+                    snapshot_is_open(),
                     predicate,
                 )
                 .order_by(StockReportItemSnapshot.client_id)
@@ -128,12 +136,13 @@ async def set_stock_report_item_priority(ctx: ServiceContext) -> dict:
         locked = await lock_snapshot_and_groups(
             ctx.session,
             ctx.workspace_id,
+            discovered.version_id,
             discovered.client_id,
             (discovered.priority, target_priority),
         )
         # Re-read after the lock and decide on that (§9 rule 4).
         snapshot = locked.get(discovered.client_id)
-        if snapshot is None or snapshot.closed_at is not None:
+        if snapshot is None or not is_snapshot_active(snapshot):
             raise ValidationError(NO_ACTIVE_SNAPSHOT_MESSAGE)
 
         source_priority = snapshot.priority
@@ -155,7 +164,7 @@ async def set_stock_report_item_priority(ctx: ServiceContext) -> dict:
         if source_priority is not None:
             shifted = await close_priority_gap(
                 ctx.session,
-                workspace_id=ctx.workspace_id,
+                version_id=snapshot.version_id,
                 priority=source_priority,
                 removed_order=source_order,
             )
@@ -163,7 +172,7 @@ async def set_stock_report_item_priority(ctx: ServiceContext) -> dict:
         target_order = None
         if target_priority is not None:
             target_order = await append_to_priority_group(
-                ctx.session, workspace_id=ctx.workspace_id, priority=target_priority
+                ctx.session, version_id=snapshot.version_id, priority=target_priority
             )
 
         mover = (

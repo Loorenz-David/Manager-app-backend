@@ -7,8 +7,9 @@ still-uncovered units are missing from the inventory, or lowers that number ("th
 is, search"). The value is absolute, never a delta.
 
 Bound (owner ruling 2026-09-26): `0 <= quantity_missing <= missing_quantity_ceiling`,
-the ceiling being the snapshot's frozen `quantity_requested` minus the row's **live**
-counters and the snapshot's `quantity_resolved` (units Scanner already processed
+the ceiling being the snapshot's **effective** requested quantity (the manual
+override, else the frozen Scanner value) minus the row's **live** counters and the
+snapshot's `quantity_resolved` (units Scanner already processed
 against this demand cannot be missing). Locks: row -> its active snapshot (MC-1
 order; no advisory lock — no position moves).
 """
@@ -17,7 +18,11 @@ from __future__ import annotations
 
 from sqlalchemy import update
 
-from beyo_manager.domain.stock_report.snapshot_rules import missing_quantity_ceiling
+from beyo_manager.domain.stock_report.snapshot_rules import (
+    effective_quantity_requested,
+    is_snapshot_active,
+    missing_quantity_ceiling,
+)
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.stock_report.stock_report_item_snapshot import (
@@ -52,6 +57,8 @@ _RETURNING = (
     StockReportItemSnapshot.priority_order,
     StockReportItemSnapshot.quantity_missing,
     StockReportItemSnapshot.quantity_resolved,
+    StockReportItemSnapshot.quantity_requested_scanner,
+    StockReportItemSnapshot.quantity_requested_manual,
 )
 
 
@@ -80,11 +87,12 @@ async def set_stock_report_item_snapshot_missing_quantity(ctx: ServiceContext) -
             ctx.session, ctx.workspace_id, [discovered.client_id]
         )
         snapshot = locked.get(discovered.client_id)
-        if snapshot is None or snapshot.closed_at is not None:
+        if snapshot is None or not is_snapshot_active(snapshot):
             raise ValidationError(NO_ACTIVE_SNAPSHOT_MESSAGE)
 
+        requested = effective_quantity_requested(snapshot, row=row)
         ceiling = missing_quantity_ceiling(
-            quantity_requested=snapshot.quantity_requested,
+            quantity_requested=requested,
             quantity_in_queue=row.quantity_in_queue,
             quantity_in_progress=row.quantity_in_progress,
             quantity_awaiting=row.quantity_awaiting,
@@ -93,7 +101,7 @@ async def set_stock_report_item_snapshot_missing_quantity(ctx: ServiceContext) -
         if target < 0 or target > ceiling:
             raise ValidationError(
                 f"STOCK_REPORT_MISSING_EXCEEDS_CEILING: {target} is outside 0..{ceiling}; "
-                f"only {ceiling} of the snapshot's {snapshot.quantity_requested} "
+                f"only {ceiling} of the snapshot's {requested} "
                 "requested units are still uncovered."
             )
 

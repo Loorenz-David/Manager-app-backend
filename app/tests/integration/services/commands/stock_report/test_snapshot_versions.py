@@ -238,7 +238,7 @@ async def test_first_version_snapshots_every_live_row_including_zero_requested(
         # Labelled by frozen quantity, never by id order (a ULID is not creation
         # order, master plan §10).
         assert sorted(
-            (s.quantity_requested, s.quantity_missing, s.priority, s.priority_order)
+            (s.quantity_requested_scanner, s.quantity_missing, s.priority, s.priority_order)
             for s in snapshots.values()
         ) == [(0, 0, None, None), (3, 0, None, None), (10, 0, None, None)]
         assert all(s.closed_at is None and s.active_at == NOW for s in snapshots.values())
@@ -307,10 +307,10 @@ async def test_second_version_closes_the_first_and_freezes_its_counters(
         old = (await _snapshots_of(db_session, first["client_id"]))[row_id]
         new = (await _snapshots_of(db_session, second["client_id"]))[row_id]
         assert old.closed_at == LATER
-        assert (old.quantity_requested, old.quantity_missing, old.priority_order) == (10, 2, 1)
+        assert (old.quantity_requested_scanner, old.quantity_missing, old.priority_order) == (10, 2, 1)
         assert (old.quantity_in_queue, old.quantity_in_progress, old.quantity_awaiting) == (4, 0, 0)
         assert new.closed_at is None
-        assert (new.quantity_requested, new.quantity_missing, new.priority, new.priority_order) == (25, 0, None, None)
+        assert (new.quantity_requested_scanner, new.quantity_missing, new.priority, new.priority_order) == (25, 0, None, None)
         assert (await active_snapshot(db_session, row_id)).client_id == new.client_id
         assert [(e.event_name, e.client_id) for e in captured] == [
             ("stock_report_snapshot_version:closed", first["client_id"]),

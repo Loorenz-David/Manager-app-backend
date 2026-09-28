@@ -38,6 +38,38 @@ class StockReportHistoryRecordTypeEnum(enum.Enum):
     QUANTITY_REQUESTED_CHANGE = "quantity_requested_change"
     PRIORITY_CHANGE = "priority_change"
     PRIORITY_ORDER_CHANGE = "priority_order_change"
+    # A user set or reverted a snapshot's manual requested quantity on the active
+    # version, or a refresh cleared it (draft versions, 2026-09-28).
+    QUANTITY_REQUESTED_OVERRIDE = "quantity_requested_override"
+
+
+class StockReportSnapshotVersionStateEnum(enum.Enum):
+    """Derived from the two dates, never stored (`snapshot_rules.version_state`):
+    `draft` = neither set, `active` = `active_at` only, `closed` = both."""
+
+    DRAFT = "draft"
+    ACTIVE = "active"
+    CLOSED = "closed"
+
+
+class StockReportQuantityRequestedSourceEnum(enum.Enum):
+    """Which stored column a snapshot's effective requested quantity comes from:
+    the user's `quantity_requested_manual` when set, else Scanner's value (the live
+    row on a draft, the frozen `quantity_requested_scanner` once activated)."""
+
+    SCANNER = "scanner"
+    MANUAL = "manual"
+
+
+class StockReportQuantityMissingSourceEnum(enum.Enum):
+    """Where a snapshot's effective `quantity_missing` comes from: its own column
+    (always once activated; on a draft, when typed), the row's active snapshot
+    (a draft borrowing the board's number), or nothing (a draft with no board
+    value, reading 0)."""
+
+    OWN = "own"
+    ACTIVE = "active"
+    NONE = "none"
 
 
 class StockReportRepairTargetKindEnum(enum.Enum):
@@ -47,6 +79,8 @@ class StockReportRepairTargetKindEnum(enum.Enum):
     GROUP = "group"
     # The priority-order repairs target the active snapshot since 2026-09-26.
     ITEM_SNAPSHOT = "item_snapshot"
+    # Draft membership and schedule repairs target the version (2026-09-28).
+    SNAPSHOT_VERSION = "snapshot_version"
 
 
 class StockCriteriaMismatchReasonEnum(enum.Enum):

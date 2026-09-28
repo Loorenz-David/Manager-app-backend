@@ -9,6 +9,7 @@ from __future__ import annotations
 from sqlalchemy import update
 
 from beyo_manager.domain.stock_report.enums import StockReportHistoryRecordTypeEnum
+from beyo_manager.domain.stock_report.snapshot_rules import is_snapshot_active
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.stock_report.stock_report_history_record import (
     StockReportHistoryRecord,
@@ -51,6 +52,8 @@ _MOVER_RETURNING = (
     StockReportItemSnapshot.priority_order,
     StockReportItemSnapshot.quantity_missing,
     StockReportItemSnapshot.quantity_resolved,
+    StockReportItemSnapshot.quantity_requested_scanner,
+    StockReportItemSnapshot.quantity_requested_manual,
 )
 
 
@@ -68,10 +71,14 @@ async def set_stock_report_item_priority_order(ctx: ServiceContext) -> dict:
         if discovered is None:
             raise ValidationError(NO_ACTIVE_SNAPSHOT_MESSAGE)
         locked = await lock_snapshot_and_groups(
-            ctx.session, ctx.workspace_id, discovered.client_id, (discovered.priority,)
+            ctx.session,
+            ctx.workspace_id,
+            discovered.version_id,
+            discovered.client_id,
+            (discovered.priority,),
         )
         snapshot = locked.get(discovered.client_id)
-        if snapshot is None or snapshot.closed_at is not None:
+        if snapshot is None or not is_snapshot_active(snapshot):
             raise ValidationError(NO_ACTIVE_SNAPSHOT_MESSAGE)
 
         priority = snapshot.priority
@@ -107,7 +114,7 @@ async def set_stock_report_item_priority_order(ctx: ServiceContext) -> dict:
 
         shifted = await shift_within_group(
             ctx.session,
-            workspace_id=ctx.workspace_id,
+            version_id=snapshot.version_id,
             priority=priority,
             from_order=position,
             to_order=target,

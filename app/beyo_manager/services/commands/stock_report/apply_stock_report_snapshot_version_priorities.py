@@ -15,7 +15,7 @@ Locks: advisory -> every active snapshot (one statement). The write is one
 
 from __future__ import annotations
 
-from sqlalchemy import Integer, String, select, text
+from sqlalchemy import select, text
 
 from beyo_manager.domain.stock_report.enums import (
     StockReportHistoryRecordTypeEnum,
@@ -43,6 +43,14 @@ from beyo_manager.services.commands.stock_report._load_row_with_snapshot import 
 )
 from beyo_manager.services.commands.stock_report._locks import (
     acquire_stock_report_order_lock,
+)
+from beyo_manager.services.commands.stock_report._predicates import (
+    SNAPSHOT_ACTIVE_SQL,
+    snapshot_is_active,
+)
+from beyo_manager.services.commands.stock_report._snapshot_missing import (
+    SNAPSHOT_EVENT_RETURNING_COLUMNS,
+    SNAPSHOT_EVENT_RETURNING_SQL,
 )
 from beyo_manager.services.commands.stock_report._snapshot_values import (
     snapshot_values,
@@ -80,7 +88,7 @@ async def apply_stock_report_snapshot_version_priorities(ctx: ServiceContext) ->
                     select(StockReportItemSnapshot)
                     .where(
                         StockReportItemSnapshot.workspace_id == ctx.workspace_id,
-                        StockReportItemSnapshot.closed_at.is_(None),
+                        snapshot_is_active(),
                     )
                     .order_by(StockReportItemSnapshot.client_id)
                     .with_for_update()
@@ -136,22 +144,9 @@ async def apply_stock_report_snapshot_version_priorities(ctx: ServiceContext) ->
                             "updated_at = :now, updated_by_id = :actor "
                             f"FROM (VALUES {values_sql}) AS v(id, p, o) "
                             "WHERE s.client_id = v.id AND s.workspace_id = :ws "
-                            "AND s.closed_at IS NULL "
-                            "RETURNING s.client_id AS client_id, "
-                            "s.stock_report_item_id AS stock_report_item_id, "
-                            "s.version_id AS version_id, s.priority AS priority, "
-                            "s.priority_order AS priority_order, "
-                            "s.quantity_missing AS quantity_missing, "
-                            "s.quantity_resolved AS quantity_resolved"
-                        ).columns(
-                            client_id=String,
-                            stock_report_item_id=String,
-                            version_id=String,
-                            priority=String,
-                            priority_order=Integer,
-                            quantity_missing=Integer,
-                            quantity_resolved=Integer,
-                        ),
+                            f"AND {SNAPSHOT_ACTIVE_SQL} "
+                            f"{SNAPSHOT_EVENT_RETURNING_SQL}"
+                        ).columns(**SNAPSHOT_EVENT_RETURNING_COLUMNS),
                         params,
                     )
                 )

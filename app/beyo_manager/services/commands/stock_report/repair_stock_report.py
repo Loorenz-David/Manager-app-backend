@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import DateTime, bindparam, select, text, update
 from beyo_manager.domain.stock_report.enums import StockReportRepairTargetKindEnum
 from beyo_manager.models.tables.stock_report.stock_report_history_record import (
     StockReportHistoryRecord,
@@ -22,6 +22,7 @@ from beyo_manager.services.commands.stock_report._repair_records import (
     write_repair_record,
 )
 from beyo_manager.services.commands.stock_report._task_flag import set_task_stock_flag
+from beyo_manager.services.commands.stock_report._predicates import snapshot_is_open
 from beyo_manager.services.commands.stock_report._locks import (
     acquire_stock_report_order_lock,
     lock_stock_report_item_snapshots,
@@ -48,12 +49,32 @@ _TARGETS = {
     # makes a half-null position unstorable.
     "order_density": StockReportRepairTargetKindEnum.GROUP,
     "missing_over_ceiling": StockReportRepairTargetKindEnum.ITEM_SNAPSHOT,
-    "snapshot_version_closed_mismatch": StockReportRepairTargetKindEnum.ITEM_SNAPSHOT,
+    "snapshot_version_state_mismatch": StockReportRepairTargetKindEnum.ITEM_SNAPSHOT,
 }
+
+# State repair (ii): stamp the version's `active_at` onto a snapshot that lacks
+# it. `ck_…_scanner_iff_activated` and `ck_…_missing_set_once_activated` are
+# per-statement, so the Scanner column (from the row, when NULL) and the
+# missing (0, when NULL) land in the same statement as the stamp.
+_STAMP_ACTIVE_AT = text(
+    "UPDATE stock_report_item_snapshots AS s "
+    "SET active_at = :active_at, "
+    "quantity_requested_scanner = COALESCE(s.quantity_requested_scanner, "
+    "r.quantity_requested), "
+    "quantity_missing = COALESCE(s.quantity_missing, 0), "
+    "updated_at = :now, updated_by_id = :actor "
+    "FROM stock_report_items AS r "
+    "WHERE r.client_id = s.stock_report_item_id "
+    "AND s.workspace_id = :ws AND s.client_id = :id"
+).bindparams(
+    bindparam("active_at", type_=DateTime(timezone=True)),
+    bindparam("now", type_=DateTime(timezone=True)),
+)
 
 
 async def _repair_priority_orders(ctx, repaired, changed_snapshot_ids):
-    """Densify each priority group of the **active snapshots** and record the net,
+    """Densify each `(version_id, priority)` group of the **open snapshots** — the
+    board's and every draft's, each within its own version — and record the net,
     not intermediate, changes. Every prioritised snapshot has an order (the pairing
     check), so densification is the only ordering repair."""
     snapshots = (
@@ -62,7 +83,7 @@ async def _repair_priority_orders(ctx, repaired, changed_snapshot_ids):
                 select(StockReportItemSnapshot)
                 .where(
                     StockReportItemSnapshot.workspace_id == ctx.workspace_id,
-                    StockReportItemSnapshot.closed_at.is_(None),
+                    snapshot_is_open(),
                 )
                 .order_by(
                     StockReportItemSnapshot.priority,
@@ -119,7 +140,9 @@ async def _repair_priority_orders(ctx, repaired, changed_snapshot_ids):
     groups = {}
     for snapshot in snapshots:
         if snapshot.priority is not None:
-            groups.setdefault(snapshot.priority, []).append(snapshot)
+            groups.setdefault((snapshot.version_id, snapshot.priority), []).append(
+                snapshot
+            )
     for group_snapshots in groups.values():
         ordered = sorted(
             group_snapshots,
@@ -174,7 +197,7 @@ async def repair_stock_report(ctx) -> dict:
                 await ctx.session.scalars(
                     select(StockReportItemSnapshot.client_id).where(
                         StockReportItemSnapshot.workspace_id == ctx.workspace_id,
-                        StockReportItemSnapshot.closed_at.is_(None),
+                        snapshot_is_open(),
                     )
                 )
             ).all(),
@@ -247,9 +270,46 @@ async def repair_stock_report(ctx) -> dict:
                         "missing-quantity repair affected an unexpected number of rows"
                     )
                 changed_snapshot_ids.add(divergence["client_id"])
-            elif kind == "snapshot_version_closed_mismatch":
-                # Never reopen: the snapshot follows its version into the past. Its
-                # counters are frozen from the row exactly as a version close does.
+            elif (
+                kind == "snapshot_version_state_mismatch"
+                and divergence["field"] == "active_at"
+            ):
+                # (ii) stamp the version's `active_at` (Scanner column and missing
+                # settled in the same statement); (iii) clear a draft snapshot's
+                # stamp, and with it the Scanner column the check ties to it.
+                if divergence["expected"] is not None:
+                    result = await ctx.session.execute(
+                        _STAMP_ACTIVE_AT,
+                        {
+                            "active_at": datetime.fromisoformat(divergence["expected"]),
+                            "now": ctx.now,
+                            "actor": ctx.user_id,
+                            "ws": ctx.workspace_id,
+                            "id": divergence["client_id"],
+                        },
+                    )
+                else:
+                    result = await ctx.session.execute(
+                        update(StockReportItemSnapshot)
+                        .where(
+                            StockReportItemSnapshot.workspace_id == ctx.workspace_id,
+                            StockReportItemSnapshot.client_id
+                            == divergence["client_id"],
+                        )
+                        .values(
+                            active_at=None,
+                            quantity_requested_scanner=None,
+                            updated_at=ctx.now,
+                            updated_by_id=ctx.user_id,
+                        )
+                    )
+                if result.rowcount != 1:
+                    raise RuntimeError(
+                        "snapshot-state repair affected an unexpected number of rows"
+                    )
+            elif kind == "snapshot_version_state_mismatch":
+                # (i) Never reopen: the snapshot follows its version into the past.
+                # Its counters are frozen from the row exactly as a version close does.
                 row_counters = (
                     await ctx.session.execute(
                         select(

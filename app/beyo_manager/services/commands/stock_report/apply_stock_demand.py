@@ -40,6 +40,7 @@ from beyo_manager.services.commands.stock_report._demand_lookup import (
 from beyo_manager.services.commands.stock_report._events import (
     build_stock_report_item_updated_event,
 )
+from beyo_manager.services.commands.stock_report._predicates import snapshot_is_active
 from beyo_manager.services.commands.stock_report.stock_demand_entries import (
     DemandOutcome,
     StockDemandResult,
@@ -52,13 +53,14 @@ from beyo_manager.services.infra.location_tracker.webhook_verifier import (
 
 def _active_snapshot_column(column, workspace_id, row_id):
     """`column` of `row_id`'s active item snapshot as a scalar subquery — NULL when
-    the row has no active snapshot (a row created since the last version)."""
+    the row has no active snapshot (a row created since the last version). Drafts
+    are not "the board": the predicate is the active pair."""
     return (
         select(column)
         .where(
             StockReportItemSnapshot.workspace_id == workspace_id,
             StockReportItemSnapshot.stock_report_item_id == row_id,
-            StockReportItemSnapshot.closed_at.is_(None),
+            snapshot_is_active(),
         )
         .scalar_subquery()
     )

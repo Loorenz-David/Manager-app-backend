@@ -7,7 +7,7 @@ router injects it into `incoming_data`, so there is no request model to parse.
 
 from __future__ import annotations
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, tuple_
 
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.stock_report.stock_report_item import StockReportItem
@@ -28,6 +28,7 @@ from beyo_manager.services.commands.stock_report._locks import (
     lock_stock_task_assignments,
     lock_tasks,
 )
+from beyo_manager.services.commands.stock_report._predicates import snapshot_is_open
 from beyo_manager.services.commands.stock_report._row_values import row_values
 from beyo_manager.services.commands.stock_report._snapshot_values import (
     snapshot_values,
@@ -57,22 +58,21 @@ async def _lock_row(session, workspace_id, client_id):
 
 
 async def lock_active_snapshots_and_groups(session, workspace_id, row_ids):
-    """The rows' active snapshots **and** every active snapshot of their priority
-    groups, in one `SELECT … FOR UPDATE ORDER BY client_id` (MC-7 "Serialization",
-    on the snapshot table since 2026-09-26). Shared with the Scanner delete webhook.
+    """The rows' **open** snapshots (the active one and every draft's, 2026-09-28)
+    **and** every open snapshot of their `(version_id, priority)` groups, in one
+    `SELECT … FOR UPDATE ORDER BY client_id` (MC-7 "Serialization", on the snapshot
+    table since 2026-09-26). Shared with the Scanner delete webhook.
     """
     row_ids = sorted(set(row_ids))
     if not row_ids:
         return {}
-    group_priorities = (
-        select(StockReportItemSnapshot.priority)
-        .where(
-            StockReportItemSnapshot.workspace_id == workspace_id,
-            StockReportItemSnapshot.stock_report_item_id.in_(row_ids),
-            StockReportItemSnapshot.closed_at.is_(None),
-            StockReportItemSnapshot.priority.is_not(None),
-        )
-        .scalar_subquery()
+    group_keys = select(
+        StockReportItemSnapshot.version_id, StockReportItemSnapshot.priority
+    ).where(
+        StockReportItemSnapshot.workspace_id == workspace_id,
+        StockReportItemSnapshot.stock_report_item_id.in_(row_ids),
+        snapshot_is_open(),
+        StockReportItemSnapshot.priority.is_not(None),
     )
     snapshots = (
         (
@@ -80,10 +80,13 @@ async def lock_active_snapshots_and_groups(session, workspace_id, row_ids):
                 select(StockReportItemSnapshot)
                 .where(
                     StockReportItemSnapshot.workspace_id == workspace_id,
-                    StockReportItemSnapshot.closed_at.is_(None),
+                    snapshot_is_open(),
                     or_(
                         StockReportItemSnapshot.stock_report_item_id.in_(row_ids),
-                        StockReportItemSnapshot.priority.in_(group_priorities),
+                        tuple_(
+                            StockReportItemSnapshot.version_id,
+                            StockReportItemSnapshot.priority,
+                        ).in_(group_keys),
                     ),
                 )
                 .order_by(StockReportItemSnapshot.client_id)

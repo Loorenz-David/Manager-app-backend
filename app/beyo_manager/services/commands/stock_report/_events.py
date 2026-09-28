@@ -41,6 +41,10 @@ def build_stock_report_item_snapshot_updated_event(*, client_id, workspace_id, v
             "priority_order": values["priority_order"],
             "quantity_missing": values["quantity_missing"],
             "quantity_resolved": values["quantity_resolved"],
+            # The two **stored** requested columns (draft versions, 2026-09-28);
+            # the effective value is `manual ?? scanner ?? the row's live value`.
+            "quantity_requested_scanner": values["quantity_requested_scanner"],
+            "quantity_requested_manual": values["quantity_requested_manual"],
         },
     )
 

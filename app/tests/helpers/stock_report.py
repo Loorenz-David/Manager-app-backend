@@ -172,6 +172,7 @@ async def ensure_active_snapshots(session, workspace_id, *, now, user_id=None):
     version_id = await session.scalar(
         select(StockReportSnapshotVersion.client_id).where(
             StockReportSnapshotVersion.workspace_id == workspace_id,
+            StockReportSnapshotVersion.active_at.is_not(None),
             StockReportSnapshotVersion.closed_at.is_(None),
         )
     )
@@ -182,6 +183,7 @@ async def ensure_active_snapshots(session, workspace_id, *, now, user_id=None):
         return result["stock_report_snapshot_version"]["client_id"]
     covered = select(StockReportItemSnapshot.stock_report_item_id).where(
         StockReportItemSnapshot.workspace_id == workspace_id,
+        StockReportItemSnapshot.active_at.is_not(None),
         StockReportItemSnapshot.closed_at.is_(None),
     )
     orphans = (
@@ -199,10 +201,12 @@ async def ensure_active_snapshots(session, workspace_id, *, now, user_id=None):
                 workspace_id=workspace_id,
                 version_id=version_id,
                 stock_report_item_id=row.client_id,
-                quantity_requested=row.quantity_requested,
+                quantity_requested_scanner=row.quantity_requested,
+                quantity_requested_manual=None,
                 quantity_in_queue=row.quantity_in_queue,
                 quantity_in_progress=row.quantity_in_progress,
                 quantity_awaiting=row.quantity_awaiting,
+                quantity_missing=0,
                 active_at=now,
                 created_at=now,
             )
@@ -220,17 +224,19 @@ async def set_snapshot_position(session, row_id, priority, order):
         text(
             "UPDATE stock_report_item_snapshots SET priority = :priority, "
             "priority_order = :order WHERE stock_report_item_id = :row_id "
-            "AND closed_at IS NULL"
+            "AND active_at IS NOT NULL AND closed_at IS NULL"
         ),
         {"priority": priority, "order": order, "row_id": row_id},
     )
 
 
 async def active_snapshot(session, row_id):
+    """The row's snapshot in the **active** version (the pair, never a draft's)."""
     return await session.scalar(
         select(StockReportItemSnapshot)
         .where(
             StockReportItemSnapshot.stock_report_item_id == row_id,
+            StockReportItemSnapshot.active_at.is_not(None),
             StockReportItemSnapshot.closed_at.is_(None),
         )
         .execution_options(populate_existing=True)

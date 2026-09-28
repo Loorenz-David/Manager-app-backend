@@ -1,21 +1,40 @@
-"""The pure snapshot rules (`domain/stock_report/snapshot_rules.py`, 2026-09-26)."""
+"""The pure snapshot rules (`domain/stock_report/snapshot_rules.py`, 2026-09-26;
+draft versions 2026-09-28)."""
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
 
-from beyo_manager.domain.stock_report.enums import StockReportPriorityEnum as P
+from beyo_manager.domain.stock_report.enums import (
+    StockReportPriorityEnum as P,
+    StockReportQuantityMissingSourceEnum as MissingSource,
+    StockReportQuantityRequestedSourceEnum as RequestedSource,
+    StockReportSnapshotVersionStateEnum as State,
+)
 from beyo_manager.domain.stock_report.snapshot_rules import (
     PROGRESS_KEYS,
+    effective_quantity_missing,
+    effective_quantity_requested,
     empty_version_progress,
     fold_version_progress,
     is_snapshot_active,
+    is_snapshot_open,
+    is_version_active,
+    is_version_draft,
     merge_priority_orders,
     missing_quantity_ceiling,
     outstanding_quantity,
+    quantity_missing_source,
+    quantity_requested_source,
+    scanner_quantity_requested,
+    version_state,
 )
 
 pytestmark = pytest.mark.unit
+
+NOW = datetime(2026, 9, 28, 12, 0, 0, tzinfo=timezone.utc)
+LATER = datetime(2026, 9, 29, 12, 0, 0, tzinfo=timezone.utc)
 
 
 @pytest.mark.parametrize(
@@ -48,11 +67,147 @@ def test_ceiling_is_the_uncovered_remainder_floored_at_zero(requested, counters,
     )
 
 
-def test_active_and_outstanding_read_the_snapshot_only():
-    snapshot = SimpleNamespace(closed_at=None, quantity_requested=5, quantity_missing=2)
-    assert is_snapshot_active(snapshot) is True
-    assert outstanding_quantity(snapshot) == 3
-    assert is_snapshot_active(SimpleNamespace(closed_at="x")) is False
+# ---------------------------------------------------------------------------
+# State (draft versions, 2026-09-28)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("active_at", "closed_at", "state"),
+    [
+        (None, None, State.DRAFT),
+        (NOW, None, State.ACTIVE),
+        (NOW, LATER, State.CLOSED),
+    ],
+)
+def test_version_state_is_derived_from_the_two_dates(active_at, closed_at, state):
+    version = SimpleNamespace(active_at=active_at, closed_at=closed_at)
+    assert version_state(version) is state
+    assert is_version_draft(version) is (state is State.DRAFT)
+    assert is_version_active(version) is (state is State.ACTIVE)
+
+
+def test_the_unstorable_pair_raises_rather_than_reading_as_a_state():
+    with pytest.raises(ValueError):
+        version_state(SimpleNamespace(active_at=None, closed_at=LATER))
+
+
+@pytest.mark.parametrize(
+    ("active_at", "closed_at", "open_", "active"),
+    [
+        (None, None, True, False),  # a draft's snapshot: open, not the board
+        (NOW, None, True, True),  # the board
+        (NOW, LATER, False, False),  # closed
+        (None, LATER, False, False),  # unstorable; still never "active"
+    ],
+)
+def test_open_and_active_are_two_predicates(active_at, closed_at, open_, active):
+    snapshot = SimpleNamespace(active_at=active_at, closed_at=closed_at)
+    assert is_snapshot_open(snapshot) is open_
+    assert is_snapshot_active(snapshot) is active
+
+
+# ---------------------------------------------------------------------------
+# The requested quantity — the three rows of the plan's §3.3 table
+# ---------------------------------------------------------------------------
+
+
+def _snapshot(*, active_at, scanner, manual, missing=None, closed_at=None):
+    return SimpleNamespace(
+        active_at=active_at,
+        closed_at=closed_at,
+        quantity_requested_scanner=scanner,
+        quantity_requested_manual=manual,
+        quantity_missing=missing,
+    )
+
+
+ROW = SimpleNamespace(quantity_requested=10)
+
+
+def test_a_draft_with_no_override_reads_the_live_row():
+    snapshot = _snapshot(active_at=None, scanner=None, manual=None)
+    assert scanner_quantity_requested(snapshot, row=ROW) == 10
+    assert effective_quantity_requested(snapshot, row=ROW) == 10
+    assert quantity_requested_source(snapshot) is RequestedSource.SCANNER
+    # Scanner moves → the draft moves with it.
+    assert effective_quantity_requested(snapshot, row=SimpleNamespace(quantity_requested=12)) == 12
+
+
+def test_a_draft_with_an_override_reads_the_override_and_still_shows_scanner_live():
+    snapshot = _snapshot(active_at=None, scanner=None, manual=7)
+    assert effective_quantity_requested(snapshot, row=ROW) == 7
+    assert scanner_quantity_requested(snapshot, row=ROW) == 10
+    assert quantity_requested_source(snapshot) is RequestedSource.MANUAL
+
+
+def test_an_activated_snapshot_reads_the_frozen_column_and_keeps_its_override():
+    snapshot = _snapshot(active_at=NOW, scanner=12, manual=7)
+    assert effective_quantity_requested(snapshot, row=ROW) == 7
+    assert scanner_quantity_requested(snapshot, row=ROW) == 12
+    snapshot.quantity_requested_manual = None  # revert
+    assert effective_quantity_requested(snapshot, row=ROW) == 12
+    assert quantity_requested_source(snapshot) is RequestedSource.SCANNER
+
+
+def test_a_closed_snapshot_never_reads_the_row():
+    """The row may be gone (a deleted row's closed snapshot); the frozen column
+    is the answer whatever the row says."""
+    snapshot = _snapshot(active_at=NOW, closed_at=LATER, scanner=12, manual=None)
+    assert effective_quantity_requested(snapshot, row=None) == 12
+    assert scanner_quantity_requested(snapshot, row=None) == 12
+
+
+def test_a_pinned_value_equal_to_scanners_is_manual():
+    """Card 6: typing the value Scanner shows stores it; the source says so."""
+    snapshot = _snapshot(active_at=None, scanner=None, manual=10)
+    assert effective_quantity_requested(snapshot, row=ROW) == 10
+    assert quantity_requested_source(snapshot) is RequestedSource.MANUAL
+
+
+# ---------------------------------------------------------------------------
+# The missing quantity — the four rows of the plan's §3.4b table
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("own", "active_missing", "expected", "source"),
+    [
+        (None, 5, 5, MissingSource.ACTIVE),  # nothing typed: borrowed
+        (2, 5, 2, MissingSource.OWN),  # typed 2
+        (0, 5, 0, MissingSource.OWN),  # typed 0 hides the board's 5
+        (None, None, 0, MissingSource.NONE),  # nothing typed, no active version
+    ],
+)
+def test_a_draft_borrows_the_active_missing_unless_typed(
+    own, active_missing, expected, source
+):
+    snapshot = _snapshot(active_at=None, scanner=None, manual=None, missing=own)
+    assert (
+        effective_quantity_missing(snapshot, active_quantity_missing=active_missing)
+        == expected
+    )
+    assert (
+        quantity_missing_source(snapshot, active_quantity_missing=active_missing)
+        is source
+    )
+
+
+def test_an_activated_snapshot_ignores_the_borrowed_value():
+    snapshot = _snapshot(active_at=NOW, scanner=10, manual=None, missing=3)
+    assert effective_quantity_missing(snapshot, active_quantity_missing=5) == 3
+    assert (
+        quantity_missing_source(snapshot, active_quantity_missing=5)
+        is MissingSource.OWN
+    )
+
+
+def test_outstanding_is_effective_requested_minus_effective_missing():
+    active = _snapshot(active_at=NOW, scanner=5, manual=None, missing=2)
+    assert outstanding_quantity(active, row=ROW) == 3
+    draft = _snapshot(active_at=None, scanner=None, manual=None, missing=None)
+    assert outstanding_quantity(draft, row=ROW, active_quantity_missing=4) == 6
+    assert outstanding_quantity(draft, row=ROW) == 10
 
 
 def _snap(client_id, row, priority, order):

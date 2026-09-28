@@ -29,6 +29,7 @@ from beyo_manager.models.tables.stock_report.stock_report_item_snapshot import (
 from beyo_manager.services.commands.stock_report._events import (
     build_stock_report_item_snapshot_updated_event,
 )
+from beyo_manager.services.commands.stock_report._predicates import snapshot_is_active
 
 _RETURNING = (
     StockReportItemSnapshot.client_id,
@@ -38,6 +39,8 @@ _RETURNING = (
     StockReportItemSnapshot.priority_order,
     StockReportItemSnapshot.quantity_missing,
     StockReportItemSnapshot.quantity_resolved,
+    StockReportItemSnapshot.quantity_requested_scanner,
+    StockReportItemSnapshot.quantity_requested_manual,
 )
 
 
@@ -49,7 +52,9 @@ async def credit_snapshot_resolved(session, *, row_id, workspace_id, quantity, n
         .where(
             StockReportItemSnapshot.workspace_id == workspace_id,
             StockReportItemSnapshot.stock_report_item_id == row_id,
-            StockReportItemSnapshot.closed_at.is_(None),
+            # The active snapshot only: a draft's completion memory starts at 0
+            # when it is activated.
+            snapshot_is_active(),
         )
         .values(
             quantity_resolved=StockReportItemSnapshot.quantity_resolved + quantity,
