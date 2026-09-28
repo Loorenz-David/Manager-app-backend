@@ -28,6 +28,7 @@ class TaskType(enum.Enum):
     DELAYED_REMINDER            = "delayed_reminder"
     DELAYED_BATCH_NOTIFICATION  = "delayed_batch_notification"
     DELAYED_STEP_COMPLETION     = "delayed_step_completion"
+    STOCK_REPORT_VERSION_ACTIVATION = "stock_report_version_activation"
 
     # Recurring scheduler tasks
     RECURRING_SEND_REPORT = "recurring_send_report"

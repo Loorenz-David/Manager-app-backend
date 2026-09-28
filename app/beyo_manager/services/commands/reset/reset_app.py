@@ -78,6 +78,7 @@ from beyo_manager.services.commands.reset.phases.delete_stock_report_history_rec
 from beyo_manager.services.commands.reset.phases.delete_stock_report_items import delete_stock_report_items
 from beyo_manager.services.commands.reset.phases.delete_stock_report_item_snapshots import delete_stock_report_item_snapshots
 from beyo_manager.services.commands.reset.phases.delete_stock_report_snapshot_versions import delete_stock_report_snapshot_versions
+from beyo_manager.services.commands.reset.phases.cancel_stock_report_version_schedulers import cancel_stock_report_version_schedulers
 
 
 async def reset_app(ctx: ServiceContext) -> dict:
@@ -91,8 +92,9 @@ async def reset_app(ctx: ServiceContext) -> dict:
     2. stock_task_assignments
     3. stock_report_history_records
     4. stock_report_item_snapshots
-    5. stock_report_snapshot_versions
-    6. stock_report_items
+    5. delayed_schedulers of the versions' scheduled activations → canceled
+    6. stock_report_snapshot_versions
+    7. stock_report_items
 
     Task system:
     5. task_events
@@ -155,6 +157,8 @@ async def reset_app(ctx: ServiceContext) -> dict:
         await delete_stock_task_assignments(ctx.session, workspace_id)
         await delete_stock_report_history_records(ctx.session, workspace_id)
         await delete_stock_report_item_snapshots(ctx.session, workspace_id)
+        # Needs the version ids the next phase removes (plan §5.1, P-21).
+        await cancel_stock_report_version_schedulers(ctx.session, workspace_id)
         await delete_stock_report_snapshot_versions(ctx.session, workspace_id)
         await delete_stock_report_items(ctx.session, workspace_id)
         # Task system data

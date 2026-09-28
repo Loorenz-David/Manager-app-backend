@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from uuid import uuid4
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from beyo_manager.domain.items.enums import ItemStateEnum, ItemMajorCategoryEnum
 from beyo_manager.domain.tasks.enums import (
     TaskStateEnum,
@@ -301,10 +301,11 @@ async def purge_stock_report_workspace(session, workspace_id):
 
     Guarantee (plan §9, Q-11a): the workspace's version rows and everything hanging
     off them go, **including** the `delayed_schedulers` rows whose
-    `event_client_id` is one of its versions and the execution tasks and payloads
-    those schedulers produced — neither table has a workspace column, so this is
-    the only place they are cleaned. Every test that creates a scheduler row
-    purges in `finally`.
+    `event_client_id` is one of its versions — or whose payload names the
+    workspace, which is how the row of an already-deleted draft is still found —
+    and the execution tasks and payloads those schedulers produced. Neither table
+    has a workspace column, so this is the only place they are cleaned. Every test
+    that creates a scheduler row purges in `finally`.
     """
     version_ids = (
         await session.scalars(
@@ -313,36 +314,39 @@ async def purge_stock_report_workspace(session, workspace_id):
             )
         )
     ).all()
-    if version_ids:
-        scheduler_ids = (
-            await session.scalars(
-                select(DelayedScheduler.client_id).where(
-                    DelayedScheduler.event_client_id.in_(version_ids)
+    scheduler_ids = (
+        await session.scalars(
+            select(DelayedScheduler.client_id).where(
+                or_(
+                    DelayedScheduler.event_client_id.in_(version_ids),
+                    DelayedScheduler.payload_snapshot["workspace_id"].as_string()
+                    == workspace_id,
                 )
             )
-        ).all()
-        if scheduler_ids:
-            task_ids = (
-                await session.scalars(
-                    select(ExecutionPayload.execution_task_id).where(
-                        ExecutionPayload.origin_id.in_(scheduler_ids)
-                    )
-                )
-            ).all()
-            await session.execute(
-                delete(ExecutionPayload).where(
+        )
+    ).all()
+    if scheduler_ids:
+        task_ids = (
+            await session.scalars(
+                select(ExecutionPayload.execution_task_id).where(
                     ExecutionPayload.origin_id.in_(scheduler_ids)
                 )
             )
-            if task_ids:
-                await session.execute(
-                    delete(ExecutionTask).where(ExecutionTask.client_id.in_(task_ids))
-                )
-            await session.execute(
-                delete(DelayedScheduler).where(
-                    DelayedScheduler.client_id.in_(scheduler_ids)
-                )
+        ).all()
+        await session.execute(
+            delete(ExecutionPayload).where(
+                ExecutionPayload.origin_id.in_(scheduler_ids)
             )
+        )
+        if task_ids:
+            await session.execute(
+                delete(ExecutionTask).where(ExecutionTask.client_id.in_(task_ids))
+            )
+        await session.execute(
+            delete(DelayedScheduler).where(
+                DelayedScheduler.client_id.in_(scheduler_ids)
+            )
+        )
     for model in (
         StockReportRepairRecord,
         StockTaskAssignment,

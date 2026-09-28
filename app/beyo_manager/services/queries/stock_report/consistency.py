@@ -28,7 +28,13 @@ from beyo_manager.models.tables.stock_report.stock_task_assignment import (
     StockTaskAssignment,
 )
 from beyo_manager.models.tables.tasks.task import Task
-from beyo_manager.services.commands.stock_report._predicates import snapshot_is_open
+from beyo_manager.services.commands.stock_report._predicates import (
+    snapshot_is_open,
+    version_is_draft,
+)
+from beyo_manager.services.commands.stock_report._version_schedule import (
+    read_activation_schedulers,
+)
 
 
 class Divergence(TypedDict):
@@ -311,6 +317,57 @@ async def compute_stock_report_divergences(
                     "field": "stock_report_item_id",
                     "stored": row_id,
                     "expected": None,
+                }
+            )
+    # Schedule vs scheduler row (plan §7, R-4): a draft with a
+    # `scheduled_activation_at` must have an `ACTIVE` activation row due at that
+    # instant (compared as datetimes, Q-5), and an `ACTIVE` row must match a
+    # draft's column. "ACTIVE only" is deliberate: a fire in flight (runner
+    # committed `FIRED`, worker not yet run) shows here until the worker
+    # activates, and a fire that failed or errored while due shows here for good —
+    # repair recreating the row is its recovery path. The rows are found by
+    # `event_client_id` among the workspace's versions (the table has no
+    # workspace column); an orphan of a deleted version is out of scope.
+    schedules = {
+        version_id: scheduled_at
+        for version_id, scheduled_at in (
+            await session.execute(
+                select(
+                    StockReportSnapshotVersion.client_id,
+                    StockReportSnapshotVersion.scheduled_activation_at,
+                ).where(
+                    StockReportSnapshotVersion.workspace_id == workspace_id,
+                    version_is_draft(),
+                    StockReportSnapshotVersion.scheduled_activation_at.is_not(None),
+                )
+            )
+        ).all()
+    }
+    schedulers = await read_activation_schedulers(session, list(version_dates))
+    for version_id, scheduled_at in sorted(schedules.items()):
+        if not any(
+            scheduler.event_client_id == version_id
+            and scheduler.scheduled_for == scheduled_at
+            for scheduler in schedulers
+        ):
+            found.append(
+                {
+                    "kind": "schedule_scheduler_mismatch",
+                    "client_id": version_id,
+                    "field": "scheduled_activation_at",
+                    "stored": scheduled_at.isoformat(),
+                    "expected": None,
+                }
+            )
+    for scheduler in schedulers:
+        if schedules.get(scheduler.event_client_id) != scheduler.scheduled_for:
+            found.append(
+                {
+                    "kind": "schedule_scheduler_mismatch",
+                    "client_id": scheduler.event_client_id,
+                    "field": "scheduled_activation_at",
+                    "stored": None,
+                    "expected": scheduler.scheduled_for.isoformat(),
                 }
             )
     for group in priority_groups.values():

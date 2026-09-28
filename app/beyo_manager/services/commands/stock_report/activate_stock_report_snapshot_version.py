@@ -26,14 +26,37 @@ source (Q-10). Events: `:closed` for the previous version and one `:activated`; 
 per-snapshot event** — clients refetch on `:activated` (P-16).
 
 Refusals, all raised (nothing written): 404 absent/foreign; 422
-`STOCK_REPORT_VERSION_NOT_DRAFT` unless a draft. The supersede rules of a scheduled
-fire (§4.2 step 2 — moved, hand-published, later plan due), which **return**
-`{"skipped": …}` and commit, and the scheduler row's `CANCELED`, land with plan §5.
+`STOCK_REPORT_VERSION_NOT_DRAFT` unless a draft — which is also how a scheduled
+fire that lost the race to a manual activation ends (the handler logs it).
+
+A scheduled fire is **skipped** when superseded (§4.2 step 2, card 4, card 5), and a
+skip is a **return**, never a raise (Q-2): `maybe_begin` rolls back on an exception,
+which would undo the very schedule clear the skip must commit, and the fire would
+repeat forever through repair. The command returns `{"skipped": <reason>}`:
+
+- `moved` — the stored `scheduled_activation_at` is not the one the scheduler row
+  was made for (moved or cleared since; compared as datetimes, Q-5). Nothing is
+  touched and nothing emitted: the new schedule is still pending.
+- `hand_published` — the active version went live **after** this draft's scheduled
+  time (by hand, or another draft's fire): that board stands.
+- `later_plan_due` — another draft is also due and sorts after this one on
+  `(scheduled_activation_at, created_at, client_id)`: the later plan wins in either
+  processing order, and at equal times the draft created later (card 5).
+
+The last two clear the draft's schedule, cancel its `ACTIVE` scheduler row and
+emit `stock_report_snapshot_version:updated`; the draft stays a draft. Only the
+handler can produce a skip — the HTTP route never sends
+`expected_scheduled_activation_at`.
+
+Every activation, manual or scheduled, cancels the draft's `ACTIVE` scheduler row
+(a fired one is already `FIRED`, plan §5.2).
 
 Locks, in MC-1 order: advisory -> every live row FOR UPDATE (sorted) -> every
 **open** snapshot FOR UPDATE (the board's and every draft's) -> the version FOR
-UPDATE. Holding the rows makes a concurrent demand webhook wait up to its
-`lock_timeout`; Scanner retries.
+UPDATE (then the running board's, as it is closed) -> the draft's `ACTIVE`
+scheduler row, taken last — after every version row, never before one. Holding
+the rows makes a concurrent demand webhook wait up to its `lock_timeout`; Scanner
+retries.
 """
 
 from __future__ import annotations
@@ -72,15 +95,24 @@ from beyo_manager.models.tables.stock_report.stock_report_snapshot_version impor
 from beyo_manager.services.commands.stock_report._locks import (
     acquire_stock_report_order_lock,
 )
-from beyo_manager.services.commands.stock_report._predicates import snapshot_is_open
+from beyo_manager.services.commands.stock_report._predicates import (
+    snapshot_is_open,
+    version_is_active,
+    version_is_draft,
+)
 from beyo_manager.services.commands.stock_report._snapshot_missing import (
     clamp_version_missing_quantities,
+)
+from beyo_manager.services.commands.stock_report._version_schedule import (
+    cancel_activation_schedulers,
+    lock_activation_schedulers,
 )
 from beyo_manager.services.commands.stock_report._versions import (
     VERSION_NOT_DRAFT_MESSAGE,
     close_active_version,
     closed_version_event,
     find_version,
+    updated_version_event,
 )
 from beyo_manager.services.commands.stock_report.create_stock_report_snapshot_version import (
     draft_snapshot_values,
@@ -236,6 +268,61 @@ async def _write_activation_history(session, *, workspace_id, version_id, actor,
     await session.flush()
 
 
+SKIP_MOVED = "moved"
+SKIP_HAND_PUBLISHED = "hand_published"
+SKIP_LATER_PLAN_DUE = "later_plan_due"
+
+
+def _schedule_key(version):
+    return (version.scheduled_activation_at, version.created_at, version.client_id)
+
+
+async def _supersede_reason(session, *, version, expected, now):
+    """Why a scheduled fire must not publish this draft, or None (§4.2 step 2)."""
+    if version.scheduled_activation_at != expected:
+        return SKIP_MOVED
+    active = await session.scalar(
+        select(StockReportSnapshotVersion).where(
+            StockReportSnapshotVersion.workspace_id == version.workspace_id,
+            version_is_active(),
+        )
+    )
+    if active is not None and active.active_at > version.scheduled_activation_at:
+        return SKIP_HAND_PUBLISHED
+    due_drafts = (
+        (
+            await session.execute(
+                select(StockReportSnapshotVersion).where(
+                    StockReportSnapshotVersion.workspace_id == version.workspace_id,
+                    version_is_draft(),
+                    StockReportSnapshotVersion.client_id != version.client_id,
+                    StockReportSnapshotVersion.scheduled_activation_at <= now,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if any(_schedule_key(other) > _schedule_key(version) for other in due_drafts):
+        return SKIP_LATER_PLAN_DUE
+    return None
+
+
+async def _skip(ctx, version, events):
+    """Clear the superseded draft's schedule and cancel its scheduler row; the
+    draft stays a draft (card 4)."""
+    await ctx.session.execute(
+        update(StockReportSnapshotVersion)
+        .where(StockReportSnapshotVersion.client_id == version.client_id)
+        .values(scheduled_activation_at=None)
+        .execution_options(synchronize_session=False)
+    )
+    await lock_activation_schedulers(ctx.session, [version.client_id])
+    await cancel_activation_schedulers(ctx.session, version.client_id, now=ctx.now)
+    version = await find_version(ctx.session, ctx.workspace_id, version.client_id)
+    events.append(updated_version_event(version))
+
+
 async def activate_stock_report_snapshot_version(ctx: ServiceContext) -> dict:
     request = parse_activate_stock_report_snapshot_version_request(ctx.incoming_data)
     events = []
@@ -250,101 +337,126 @@ async def activate_stock_report_snapshot_version(ctx: ServiceContext) -> dict:
         if not is_version_draft(version):
             raise ValidationError(VERSION_NOT_DRAFT_MESSAGE)
 
-        # The flag: the body's on a manual activation, the stored one on a
-        # scheduled fire (R-6, P-5).
-        keep_active_missing = (
-            version.scheduled_activation_keeps_active_missing
+        skipped = (
+            await _supersede_reason(
+                ctx.session,
+                version=version,
+                expected=request.expected_scheduled_activation_at,
+                now=ctx.now,
+            )
             if request.scheduled
-            else request.keep_active_missing
+            else None
         )
-
-        # Step 3 — close the running board before any partial unique index can see
-        # a second active version or a second active snapshot per row (R-2).
-        previous = await close_active_version(
-            ctx.session,
-            workspace_id=ctx.workspace_id,
-            now=ctx.now,
-            actor_user_id=ctx.user_id,
-        )
-        if previous is not None:
-            events.append(closed_version_event(previous))
-
-        # Step 4 — the row set.
-        await _reconcile_membership(
-            ctx.session,
-            workspace_id=ctx.workspace_id,
-            version_id=version.client_id,
-            rows=rows,
-            held={
-                row_id
-                for version_id, row_id in open_snapshots
-                if version_id == version.client_id
-            },
-            now=ctx.now,
-        )
-
-        # Step 5 — freeze, settle, stamp: one statement.
-        await ctx.session.execute(
-            _ACTIVATE_SNAPSHOTS_STATEMENT,
-            {
-                "keep": keep_active_missing,
-                "now": ctx.now,
-                "actor": ctx.user_id or None,
-                "previous": previous.client_id if previous is not None else None,
-                "ws": ctx.workspace_id,
-                "v": version.client_id,
-            },
-        )
-
-        # Step 6 — the version row in one UPDATE; then the bulk clamp, whose
-        # per-snapshot events are not emitted at activation (P-16).
-        await ctx.session.execute(
-            update(StockReportSnapshotVersion)
-            .where(StockReportSnapshotVersion.client_id == version.client_id)
-            .values(
-                active_at=ctx.now,
-                scheduled_activation_at=None,
-                snapshot_count=(
-                    select(func.count())
-                    .select_from(StockReportItemSnapshot)
-                    .where(StockReportItemSnapshot.version_id == version.client_id)
-                    .scalar_subquery()
-                ),
+        if skipped in (SKIP_HAND_PUBLISHED, SKIP_LATER_PLAN_DUE):
+            await _skip(ctx, version, events)
+        if skipped is None:
+            payload = await _go_live(
+                ctx, request, version, rows, open_snapshots, events
             )
-            .execution_options(synchronize_session=False)
-        )
-        await clamp_version_missing_quantities(
-            ctx.session,
-            version_id=version.client_id,
-            workspace_id=ctx.workspace_id,
-            actor_user_id=ctx.user_id,
-            now=ctx.now,
-        )
-
-        # Step 7 — history.
-        await _write_activation_history(
-            ctx.session,
-            workspace_id=ctx.workspace_id,
-            version_id=version.client_id,
-            actor=ctx.user_id,
-            now=ctx.now,
-        )
-
-        version = await find_version(ctx.session, ctx.workspace_id, version.client_id)
-        events.append(
-            WorkspaceEvent(
-                event_name="stock_report_snapshot_version:activated",
-                client_id=version.client_id,
-                workspace_id=ctx.workspace_id,
-                extra={
-                    "snapshot_count": version.snapshot_count,
-                    "title": version.title,
-                    "scheduled": request.scheduled,
-                    "keep_active_missing": keep_active_missing,
-                },
-            )
-        )
-        payload = serialize_stock_report_snapshot_version(version)
 
     await dispatch(events)
+    if skipped is not None:
+        return {"skipped": skipped}
     return {"stock_report_snapshot_version": payload}
+
+
+async def _go_live(ctx, request, version, rows, open_snapshots, events):
+    """§4.2 steps 3–8: close the board, reconcile, freeze/settle/stamp, stamp the
+    version, clamp, history, events. Returns the serialized version."""
+    # The flag: the body's on a manual activation, the stored one on a
+    # scheduled fire (R-6, P-5).
+    keep_active_missing = (
+        version.scheduled_activation_keeps_active_missing
+        if request.scheduled
+        else request.keep_active_missing
+    )
+
+    # Step 3 — close the running board before any partial unique index can see
+    # a second active version or a second active snapshot per row (R-2).
+    previous = await close_active_version(
+        ctx.session,
+        workspace_id=ctx.workspace_id,
+        now=ctx.now,
+        actor_user_id=ctx.user_id,
+    )
+    if previous is not None:
+        events.append(closed_version_event(previous))
+
+    # Step 4 — the row set.
+    await _reconcile_membership(
+        ctx.session,
+        workspace_id=ctx.workspace_id,
+        version_id=version.client_id,
+        rows=rows,
+        held={
+            row_id
+            for version_id, row_id in open_snapshots
+            if version_id == version.client_id
+        },
+        now=ctx.now,
+    )
+
+    # Step 5 — freeze, settle, stamp: one statement.
+    await ctx.session.execute(
+        _ACTIVATE_SNAPSHOTS_STATEMENT,
+        {
+            "keep": keep_active_missing,
+            "now": ctx.now,
+            "actor": ctx.user_id or None,
+            "previous": previous.client_id if previous is not None else None,
+            "ws": ctx.workspace_id,
+            "v": version.client_id,
+        },
+    )
+
+    # Step 6 — the version row in one UPDATE; then the bulk clamp, whose
+    # per-snapshot events are not emitted at activation (P-16).
+    await ctx.session.execute(
+        update(StockReportSnapshotVersion)
+        .where(StockReportSnapshotVersion.client_id == version.client_id)
+        .values(
+            active_at=ctx.now,
+            scheduled_activation_at=None,
+            snapshot_count=(
+                select(func.count())
+                .select_from(StockReportItemSnapshot)
+                .where(StockReportItemSnapshot.version_id == version.client_id)
+                .scalar_subquery()
+            ),
+        )
+        .execution_options(synchronize_session=False)
+    )
+    await lock_activation_schedulers(ctx.session, [version.client_id])
+    await cancel_activation_schedulers(ctx.session, version.client_id, now=ctx.now)
+    await clamp_version_missing_quantities(
+        ctx.session,
+        version_id=version.client_id,
+        workspace_id=ctx.workspace_id,
+        actor_user_id=ctx.user_id,
+        now=ctx.now,
+    )
+
+    # Step 7 — history.
+    await _write_activation_history(
+        ctx.session,
+        workspace_id=ctx.workspace_id,
+        version_id=version.client_id,
+        actor=ctx.user_id,
+        now=ctx.now,
+    )
+
+    version = await find_version(ctx.session, ctx.workspace_id, version.client_id)
+    events.append(
+        WorkspaceEvent(
+            event_name="stock_report_snapshot_version:activated",
+            client_id=version.client_id,
+            workspace_id=ctx.workspace_id,
+            extra={
+                "snapshot_count": version.snapshot_count,
+                "title": version.title,
+                "scheduled": request.scheduled,
+                "keep_active_missing": keep_active_missing,
+            },
+        )
+    )
+    return serialize_stock_report_snapshot_version(version)

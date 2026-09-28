@@ -21,7 +21,8 @@ activation freezes it), `quantity_missing` NULL (borrowed from the active versio
 until typed — O-9), `active_at` NULL on the version and its snapshots, and the
 active version untouched. `scheduled_activation_at` (aware, normalised to UTC by the
 request model, strictly after `ctx.now`) and the stored missing flag are written on
-the draft; the delayed-scheduler row that fires it is plan §5.2. A schedule (a date,
+the draft, and a date gets the delayed-scheduler row that fires it, stamped with
+this user, in the same transaction (plan §5.2). A schedule (a date,
 or the flag `true`) with `draft: false` is refused; the documented default body is
 not (R-9).
 
@@ -55,6 +56,9 @@ from beyo_manager.services.commands.stock_report._locks import (
     acquire_stock_report_order_lock,
 )
 from beyo_manager.services.commands.stock_report._predicates import snapshot_is_active
+from beyo_manager.services.commands.stock_report._version_schedule import (
+    create_activation_scheduler,
+)
 from beyo_manager.services.commands.stock_report._versions import (
     VERSION_NOT_DRAFT_MESSAGE,
     close_active_version,
@@ -171,6 +175,10 @@ async def create_stock_report_snapshot_version(ctx: ServiceContext) -> dict:
                         )
                         for row in rows
                     ],
+                )
+            if version.scheduled_activation_at is not None:
+                await create_activation_scheduler(
+                    ctx.session, version, scheduled_by_user_id=ctx.user_id
                 )
             events.append(_created_event(version))
             payload = serialize_stock_report_snapshot_version(version)

@@ -112,3 +112,25 @@ def closed_version_event(version):
         workspace_id=version.workspace_id,
         extra={"snapshot_count": version.snapshot_count},
     )
+
+
+def updated_version_event(version):
+    """`stock_report_snapshot_version:updated` — the PATCH-version route's event and
+    a skipped scheduled activation's (v9 §5.19, §5.21): the three editable fields as
+    they now stand, the schedule echoed in UTC."""
+    return WorkspaceEvent(
+        event_name="stock_report_snapshot_version:updated",
+        client_id=version.client_id,
+        workspace_id=version.workspace_id,
+        extra={
+            "title": version.title,
+            "scheduled_activation_at": (
+                version.scheduled_activation_at.isoformat()
+                if version.scheduled_activation_at is not None
+                else None
+            ),
+            "scheduled_activation_keeps_active_missing": (
+                version.scheduled_activation_keeps_active_missing
+            ),
+        },
+    )

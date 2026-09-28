@@ -208,6 +208,41 @@ class RefreshStockReportSnapshotVersionRequestedRequest(BaseModel):
     keep_manual_requested: StrictBool = True
 
 
+class UpdateStockReportSnapshotVersionRequest(BaseModel):
+    """`PATCH …/snapshots/versions/{client_id}` (plan §4.5): any subset of the three
+    editable fields. **Absent and `null` differ** and are read from
+    `model_fields_set`: an omitted key is untouched, `title: null` clears the title,
+    `scheduled_activation_at: null` unschedules; `{}` changes nothing (P-14). The
+    two schedule keys are refused on an activated version whatever their value
+    (v7 §5.19: "even as `null`"). The title and schedule rules are the create's."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    client_id: str
+    title: str | None = None
+    scheduled_activation_at: AwareDatetime | None = None
+    scheduled_activation_keeps_active_missing: StrictBool = False
+
+    @field_validator("title")
+    @classmethod
+    def _title(cls, value):
+        return _clean_title(value)
+
+    @field_validator("scheduled_activation_at")
+    @classmethod
+    def _utc(cls, value: datetime | None):
+        return value.astimezone(timezone.utc) if value is not None else None
+
+    def sent(self, field: str) -> bool:
+        return field in self.model_fields_set
+
+    @property
+    def schedule_keys_sent(self) -> bool:
+        return self.sent("scheduled_activation_at") or self.sent(
+            "scheduled_activation_keeps_active_missing"
+        )
+
+
 class ApplyStockReportSnapshotVersionPrioritiesRequest(BaseModel):
     """`POST …/snapshots/versions/{client_id}/apply-priorities` (plan §4.4): the source
     in the path, the target in the optional body — `null` or absent is the active
@@ -294,3 +329,9 @@ def parse_refresh_stock_report_snapshot_version_requested_request(
     data: dict,
 ) -> RefreshStockReportSnapshotVersionRequestedRequest:
     return _parse(RefreshStockReportSnapshotVersionRequestedRequest, data)
+
+
+def parse_update_stock_report_snapshot_version_request(
+    data: dict,
+) -> UpdateStockReportSnapshotVersionRequest:
+    return _parse(UpdateStockReportSnapshotVersionRequest, data)

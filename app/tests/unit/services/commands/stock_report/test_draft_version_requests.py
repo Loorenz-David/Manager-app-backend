@@ -1,5 +1,6 @@
 """The request models draft versions added (2026-09-28): the create body's title
-and schedule rules (plan §4.1, FQ-6, Q-5, R-9), the requested-quantity body
+and schedule rules (plan §4.1, FQ-6, Q-5, R-9), the PATCH-version body (§4.5,
+P-14), the requested-quantity body
 (§4.11, Q-9), the versioned missing body, and the history helper (§3.5, Q-10)."""
 
 from datetime import datetime, timedelta, timezone
@@ -21,6 +22,7 @@ from beyo_manager.services.commands.stock_report.requests import (
     parse_refresh_stock_report_snapshot_version_requested_request,
     parse_set_stock_report_item_snapshot_missing_quantity_request,
     parse_set_stock_report_item_snapshot_requested_quantity_request,
+    parse_update_stock_report_snapshot_version_request,
 )
 
 pytestmark = pytest.mark.unit
@@ -200,6 +202,67 @@ def test_refresh_body_keeps_overrides_by_default_and_is_strict():
     ):
         with pytest.raises(ValidationError):
             parse_refresh_stock_report_snapshot_version_requested_request(body)
+
+
+# ---------------------------------------------------------------------------
+# PATCH /snapshots/versions/{client_id} body (plan §4.5, P-14)
+# ---------------------------------------------------------------------------
+
+
+def test_update_body_tells_an_omitted_key_from_a_null_one():
+    empty = parse_update_stock_report_snapshot_version_request({"client_id": "srv_1"})
+    assert not any(
+        empty.sent(field)
+        for field in (
+            "title",
+            "scheduled_activation_at",
+            "scheduled_activation_keeps_active_missing",
+        )
+    )
+    assert empty.schedule_keys_sent is False
+    cleared = parse_update_stock_report_snapshot_version_request(
+        {"client_id": "srv_1", "title": None, "scheduled_activation_at": None}
+    )
+    assert cleared.sent("title") and cleared.title is None
+    assert cleared.sent("scheduled_activation_at")
+    assert cleared.scheduled_activation_at is None
+    # A schedule key sent as `null` is still a schedule key (v7 §5.19).
+    assert cleared.schedule_keys_sent is True
+    flag_only = parse_update_stock_report_snapshot_version_request(
+        {"client_id": "srv_1", "scheduled_activation_keeps_active_missing": False}
+    )
+    assert flag_only.schedule_keys_sent is True
+    assert not flag_only.sent("scheduled_activation_at")
+    title_only = parse_update_stock_report_snapshot_version_request(
+        {"client_id": "srv_1", "title": "  Monday push  "}
+    )
+    assert title_only.title == "Monday push"
+    assert title_only.schedule_keys_sent is False
+
+
+def test_update_body_applies_the_create_rules():
+    request = parse_update_stock_report_snapshot_version_request(
+        {"client_id": "srv_1", "scheduled_activation_at": "2026-10-05T06:00:00+02:00"}
+    )
+    assert request.scheduled_activation_at == datetime(
+        2026, 10, 5, 4, 0, tzinfo=timezone.utc
+    )
+    assert request.scheduled_activation_at.isoformat().endswith("+00:00")
+    assert (
+        parse_update_stock_report_snapshot_version_request(
+            {"client_id": "srv_1", "title": "   "}
+        ).title
+        is None
+    )
+    for body in (
+        {"client_id": "srv_1", "scheduled_activation_at": "2026-10-05T06:00:00"},
+        {"client_id": "srv_1", "title": "x" * 201},
+        {"client_id": "srv_1", "scheduled_activation_keeps_active_missing": None},
+        {"client_id": "srv_1", "scheduled_activation_keeps_active_missing": 1},
+        {"client_id": "srv_1", "draft": True},
+    ):
+        with pytest.raises(ValidationError):
+            parse_update_stock_report_snapshot_version_request(body)
 
 
 # ---------------------------------------------------------------------------

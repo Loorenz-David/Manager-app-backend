@@ -7,6 +7,7 @@ class DelayedSchedulerTypeEnum(enum.Enum):
     REMINDER            = "reminder"
     BATCH_NOTIFICATION  = "batch_notification"
     PENDING_STEP_COMPLETION = "pending_step_completion"
+    STOCK_REPORT_VERSION_ACTIVATION = "stock_report_version_activation"
 
 
 class RecurringSchedulerTypeEnum(enum.Enum):

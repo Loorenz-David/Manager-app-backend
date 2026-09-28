@@ -55,6 +55,9 @@ from beyo_manager.services.commands.stock_report.set_stock_report_item_snapshot_
 from beyo_manager.services.commands.stock_report.set_stock_report_item_snapshot_requested_quantity import (
     set_stock_report_item_snapshot_requested_quantity,
 )
+from beyo_manager.services.commands.stock_report.update_stock_report_snapshot_version import (
+    update_stock_report_snapshot_version,
+)
 from beyo_manager.services.queries.stock_report.count_stock_report_draft_versions import (
     count_stock_report_draft_versions,
 )
@@ -156,6 +159,19 @@ class _CreateStockReportSnapshotVersionBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     draft: StrictBool = False
+    title: str | None = None
+    scheduled_activation_at: AwareDatetime | None = None
+    scheduled_activation_keeps_active_missing: StrictBool = False
+
+
+class _UpdateStockReportSnapshotVersionBody(BaseModel):
+    """`PATCH /snapshots/versions/{client_id}` (plan §4.5). Optional; the router
+    forwards only the keys sent (`exclude_unset`) — absent and `null` mean
+    different things (untouched vs cleared). The title and schedule rules live in
+    the command's request model."""
+
+    model_config = ConfigDict(extra="forbid")
+
     title: str | None = None
     scheduled_activation_at: AwareDatetime | None = None
     scheduled_activation_keeps_active_missing: StrictBool = False
@@ -381,6 +397,24 @@ async def route_delete_stock_report_snapshot_version(
         claims,
         session,
         incoming_data={"client_id": client_id},
+    )
+
+
+@router.patch("/snapshots/versions/{client_id}")
+async def route_update_stock_report_snapshot_version(
+    client_id: str,
+    body: _UpdateStockReportSnapshotVersionBody | None = None,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        update_stock_report_snapshot_version,
+        claims,
+        session,
+        incoming_data={
+            **(body.model_dump(exclude_unset=True) if body is not None else {}),
+            "client_id": client_id,
+        },
     )
 
 

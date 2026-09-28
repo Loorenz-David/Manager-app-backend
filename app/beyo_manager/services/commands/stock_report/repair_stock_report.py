@@ -34,6 +34,12 @@ from beyo_manager.services.commands.stock_report._predicates import (
 from beyo_manager.services.commands.stock_report.create_stock_report_snapshot_version import (
     draft_snapshot_values,
 )
+from beyo_manager.services.commands.stock_report._version_schedule import (
+    cancel_activation_schedulers,
+    create_activation_scheduler,
+    lock_activation_schedulers,
+)
+from beyo_manager.services.commands.stock_report._versions import find_version
 from beyo_manager.services.commands.stock_report._locks import (
     acquire_stock_report_order_lock,
     lock_stock_report_item_snapshots,
@@ -61,8 +67,10 @@ _TARGETS = {
     "order_density": StockReportRepairTargetKindEnum.GROUP,
     "missing_over_ceiling": StockReportRepairTargetKindEnum.ITEM_SNAPSHOT,
     "snapshot_version_state_mismatch": StockReportRepairTargetKindEnum.ITEM_SNAPSHOT,
-    # Draft membership (plan §4.12) targets the **version** (2026-09-28).
+    # Draft membership (plan §4.12) and the schedule's scheduler row (plan §7,
+    # R-4) target the **version** (2026-09-28).
     "draft_membership_mismatch": StockReportRepairTargetKindEnum.SNAPSHOT_VERSION,
+    "schedule_scheduler_mismatch": StockReportRepairTargetKindEnum.SNAPSHOT_VERSION,
 }
 
 # State repair (ii): stamp the version's `active_at` onto a snapshot that lacks
@@ -150,6 +158,29 @@ async def _repair_draft_membership(ctx, divergence, changed_snapshot_ids):
         raise RuntimeError(
             "draft-membership repair affected an unexpected number of rows"
         )
+
+
+async def _repair_schedule(ctx, divergence):
+    """(a)/(b) a draft's schedule with no `ACTIVE` row due at it: recreate the row,
+    stamped with the **repairing** user — the recovery path of a fire that failed
+    or errored while due; the late fire then activates (card 3) or skips (card 4).
+    (c) an `ACTIVE` row matching no draft's column: cancel it."""
+    if divergence["stored"] is not None:
+        version = await find_version(
+            ctx.session, ctx.workspace_id, divergence["client_id"]
+        )
+        await create_activation_scheduler(
+            ctx.session, version, scheduled_by_user_id=ctx.user_id
+        )
+        return
+    cancelled = await cancel_activation_schedulers(
+        ctx.session,
+        divergence["client_id"],
+        now=ctx.now,
+        scheduled_for=datetime.fromisoformat(divergence["expected"]),
+    )
+    if cancelled < 1:
+        raise RuntimeError("schedule repair cancelled no scheduler row")
 
 
 async def _repair_priority_orders(ctx, repaired, changed_snapshot_ids):
@@ -283,8 +314,8 @@ async def repair_stock_report(ctx) -> dict:
             ).all(),
         )
         # The version rows (drafts', for the membership kind) come after the
-        # snapshots — the order plan §7 fixes (Q-18); the scheduler rows will
-        # follow them.
+        # snapshots, and the scheduler rows of every version come last — the
+        # order plan §7 fixes (Q-18).
         await ctx.session.execute(
             select(StockReportSnapshotVersion.client_id)
             .where(
@@ -293,6 +324,16 @@ async def repair_stock_report(ctx) -> dict:
             )
             .order_by(StockReportSnapshotVersion.client_id)
             .with_for_update()
+        )
+        await lock_activation_schedulers(
+            ctx.session,
+            (
+                await ctx.session.scalars(
+                    select(StockReportSnapshotVersion.client_id).where(
+                        StockReportSnapshotVersion.workspace_id == ctx.workspace_id
+                    )
+                )
+            ).all(),
         )
         await lock_stock_task_assignments(
             ctx.session,
@@ -346,6 +387,8 @@ async def repair_stock_report(ctx) -> dict:
                 )
             elif kind == "draft_membership_mismatch":
                 await _repair_draft_membership(ctx, divergence, changed_snapshot_ids)
+            elif kind == "schedule_scheduler_mismatch":
+                await _repair_schedule(ctx, divergence)
             elif kind == "missing_over_ceiling":
                 result = await ctx.session.execute(
                     update(StockReportItemSnapshot)

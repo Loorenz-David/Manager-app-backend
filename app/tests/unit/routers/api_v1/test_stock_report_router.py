@@ -746,6 +746,73 @@ def test_refresh_route_body_rules(monkeypatch):
     assert len(calls) == served
 
 
+# Draft versions step 4 (2026-09-28): the title/schedule edit.
+from beyo_manager.services.commands.stock_report.update_stock_report_snapshot_version import (  # noqa: E402
+    update_stock_report_snapshot_version,
+)
+
+VERSION = "/api/v1/stock-report/snapshots/versions/srv_1"
+
+
+@pytest.mark.parametrize("role", ["admin", "manager"])
+def test_update_version_route_reaches_service_for_admin_and_manager(monkeypatch, role):
+    http, calls = client(monkeypatch, role)
+    assert http.patch(VERSION, json={"title": "Monday push"}).status_code == 200
+    assert calls[-1][0] is update_stock_report_snapshot_version
+    assert calls[-1][1].incoming_data == {"title": "Monday push", "client_id": "srv_1"}
+
+
+@pytest.mark.parametrize("role", ["worker", "seller"])
+def test_update_version_route_rejects_worker_and_seller(monkeypatch, role):
+    http, calls = client(monkeypatch, role)
+    assert http.patch(VERSION, json={"title": "Monday push"}).status_code == 403
+    assert calls == []
+
+
+def test_update_version_route_forwards_exactly_the_keys_sent(monkeypatch):
+    """P-14: an omitted key is untouched and `null` clears, so the route forwards
+    only what was sent — a default filled in here would read as a clear."""
+    http, calls = client(monkeypatch, "manager")
+    assert http.patch(VERSION).status_code == 200
+    assert calls[-1][1].incoming_data == {"client_id": "srv_1"}
+    assert http.patch(VERSION, json={}).status_code == 200
+    assert calls[-1][1].incoming_data == {"client_id": "srv_1"}
+    assert http.patch(VERSION, json={"title": None}).status_code == 200
+    assert calls[-1][1].incoming_data == {"title": None, "client_id": "srv_1"}
+    assert http.patch(VERSION, json={"scheduled_activation_at": None}).status_code == 200
+    assert calls[-1][1].incoming_data == {
+        "scheduled_activation_at": None,
+        "client_id": "srv_1",
+    }
+    assert (
+        http.patch(
+            VERSION, json={"scheduled_activation_keeps_active_missing": True}
+        ).status_code
+        == 200
+    )
+    assert calls[-1][1].incoming_data == {
+        "scheduled_activation_keeps_active_missing": True,
+        "client_id": "srv_1",
+    }
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"scheduled_activation_at": "2026-10-05T06:00:00"},
+        {"scheduled_activation_keeps_active_missing": "yes"},
+        {"scheduled_activation_refreshes_requested": True},
+        {"draft": True},
+    ],
+)
+def test_update_version_route_refuses_malformed_bodies(monkeypatch, body):
+    """A naive datetime, a non-bool flag, v7's removed refresh flag and a create-only
+    key are 422 before any service runs."""
+    http, calls = client(monkeypatch, "manager")
+    assert http.patch(VERSION, json=body).status_code == 422
+    assert calls == []
+
+
 def test_list_items_route_passes_version_id_through(monkeypatch):
     http, calls = client(monkeypatch, "worker")
     assert http.get("/api/v1/stock-report/items?version_id=srv_1").status_code == 200

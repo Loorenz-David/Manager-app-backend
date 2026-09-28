@@ -18,6 +18,12 @@ cd app && python run.py 2>&1 | tee server.log   # logs go to THIS terminal; noth
 `run.py` silently hunts for a free port if `PORT` (8000) is taken — it will start on 8001 and
 say so in one line that is easy to miss. Kill the old process rather than letting it slide.
 
+`run.py` starts no background process. A stock-report draft's **scheduled activation** needs
+three, from `app/Procfile`: `delayed-scheduler` → `task-router` → `tasks-worker`. Without them
+a scheduled draft just stays overdue; with the scheduler running but not the worker,
+`GET /stock-report/consistency` reports each fired, unprocessed activation as
+`schedule_scheduler_mismatch`.
+
 ## Logging
 
 stdlib `dictConfig` → one StreamHandler → **stdout, as JSON**. No file, no Sentry, no OTel.
