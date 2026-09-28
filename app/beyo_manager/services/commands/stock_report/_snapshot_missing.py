@@ -77,6 +77,36 @@ _CLAMP_STATEMENT = (
 )
 
 
+# The same guarded statement keyed by **version** (plan §4.2 step 6, §4.3d): after
+# an activation settled the new board's missing, and after a refresh re-froze the
+# requested quantities, every snapshot of the version whose missing now exceeds
+# what the live counters leave uncovered is brought down in one statement.
+_VERSION_CLAMP_STATEMENT = (
+    text(
+        "UPDATE stock_report_item_snapshots AS s "
+        f"SET quantity_missing = {_CEILING_SQL}, "
+        "updated_at = :now, updated_by_id = :actor "
+        "FROM stock_report_items AS r "
+        "WHERE r.client_id = s.stock_report_item_id "
+        "AND s.workspace_id = :ws AND s.version_id = :version_id "
+        f"AND {SNAPSHOT_ACTIVE_SQL} "
+        f"AND s.quantity_missing > {_CEILING_SQL} "
+        f"{SNAPSHOT_EVENT_RETURNING_SQL}"
+    )
+    .bindparams(bindparam("now", type_=DateTime(timezone=True)))
+    .columns(**SNAPSHOT_EVENT_RETURNING_COLUMNS)
+)
+
+
+def _events_of(result, workspace_id):
+    return [
+        build_stock_report_item_snapshot_updated_event(
+            client_id=values["client_id"], workspace_id=workspace_id, values=values
+        )
+        for values in result.mappings().all()
+    ]
+
+
 async def clamp_snapshot_missing_quantity(
     session, *, row_id, workspace_id, actor_user_id, now
 ):
@@ -89,9 +119,22 @@ async def clamp_snapshot_missing_quantity(
             "row_id": row_id,
         },
     )
-    return [
-        build_stock_report_item_snapshot_updated_event(
-            client_id=values["client_id"], workspace_id=workspace_id, values=values
-        )
-        for values in result.mappings().all()
-    ]
+    return _events_of(result, workspace_id)
+
+
+async def clamp_version_missing_quantities(
+    session, *, version_id, workspace_id, actor_user_id, now
+):
+    """Every active snapshot of `version_id` above its ceiling, in one statement;
+    one `:updated` event per snapshot touched (activation discards them, P-16;
+    the refresh emits them)."""
+    result = await session.execute(
+        _VERSION_CLAMP_STATEMENT,
+        {
+            "now": now,
+            "actor": actor_user_id or None,
+            "ws": workspace_id,
+            "version_id": version_id,
+        },
+    )
+    return _events_of(result, workspace_id)

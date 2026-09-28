@@ -37,6 +37,9 @@ from beyo_manager.models.tables.stock_report.stock_report_item_snapshot import (
 from beyo_manager.models.tables.stock_report.stock_report_snapshot_version import (
     StockReportSnapshotVersion,
 )
+from beyo_manager.services.commands.stock_report.activate_stock_report_snapshot_version import (
+    activate_stock_report_snapshot_version,
+)
 from beyo_manager.services.commands.stock_report.apply_stock_demand import (
     apply_stock_demand,
 )
@@ -54,6 +57,9 @@ from beyo_manager.services.commands.stock_report.delete_stock_report_item import
 )
 from beyo_manager.services.commands.stock_report.delete_stock_report_snapshot_version import (
     delete_stock_report_snapshot_version,
+)
+from beyo_manager.services.commands.stock_report.refresh_stock_report_snapshot_version_requested import (
+    refresh_stock_report_snapshot_version_requested,
 )
 from beyo_manager.services.commands.stock_report.repair_stock_report import (
     repair_stock_report,
@@ -348,6 +354,64 @@ async def _apply(
     )
     await session.commit()
     return result, captured
+
+
+async def _activate(
+    session, seeded, version_id, *, body=None, now=LATER, monkeypatch=None
+):
+    captured = (
+        capture_dispatch(
+            monkeypatch, f"{_COMMANDS}.activate_stock_report_snapshot_version.dispatch"
+        )
+        if monkeypatch is not None
+        else None
+    )
+    result = await activate_stock_report_snapshot_version(
+        _ctx(
+            session,
+            seeded,
+            incoming_data={**(body or {}), "client_id": version_id},
+            now=now,
+        )
+    )
+    await session.commit()
+    return result["stock_report_snapshot_version"], captured
+
+
+async def _refresh(
+    session, seeded, version_id, *, body=None, now=LATER, monkeypatch=None
+):
+    captured = (
+        capture_dispatch(
+            monkeypatch,
+            f"{_COMMANDS}.refresh_stock_report_snapshot_version_requested.dispatch",
+        )
+        if monkeypatch is not None
+        else None
+    )
+    result = await refresh_stock_report_snapshot_version_requested(
+        _ctx(
+            session,
+            seeded,
+            incoming_data={**(body or {}), "client_id": version_id},
+            now=now,
+        )
+    )
+    await session.commit()
+    return result, captured
+
+
+async def _progress(session, seeded, version_id, *, priority="all"):
+    result = await get_stock_report_snapshot_version(
+        _ctx(
+            session,
+            seeded,
+            incoming_data={"client_id": version_id},
+            query_params={"priority": priority},
+        )
+    )
+    await session.commit()
+    return result["stock_report_snapshot_version"]["progress"]
 
 
 async def _assign_seeded_item(session, seeded, row_id):
@@ -1529,6 +1593,443 @@ async def test_draft_snapshot_count_follows_membership(db_session):
             3,
             3,
         )
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()
+
+
+# ---------------------------------------------------------------------------
+# Activation by hand (§4.2, step 3 of §12) and the refresh (§4.3)
+# ---------------------------------------------------------------------------
+
+
+async def test_activation_freezes_settles_the_missing_and_closes_the_board(
+    db_session, monkeypatch
+):
+    """`keep_active_missing: true`: a typed draft value stays, an untyped row carries
+    the closing board's missing, both clamped to the live ceiling; the Scanner value
+    frozen is the live one of activation time; manual overrides survive; the
+    previous version closes with frozen counters; one `priority_change` per
+    prioritised row with the effective value; no per-snapshot event (P-16)."""
+    seeded = _pin(db_session, await seed_stock_report_workspace(db_session))
+    await db_session.commit()
+    workspace_id = seeded.workspace.client_id
+    try:
+        await _AD(
+            db_session,
+            workspace_id,
+            [_entry(0, "a", 10), _entry(1, "b", 4), _entry(2, "c", 6)],
+        )
+        ids = await _by_token(db_session, workspace_id)
+        a, b, c = ids["a"], ids["b"], ids["c"]
+        v1, _ = await _CV(db_session, seeded)
+        await _SP(db_session, seeded, a, "high")
+        await _assign_seeded_item(db_session, seeded, a)  # a: in_queue 4, live
+        await _SM(db_session, seeded, a, 3)
+        await _SM(db_session, seeded, b, 2)
+        draft, _ = await _draft(
+            db_session, seeded, title="Monday", now=NOW + timedelta(minutes=1)
+        )
+        D = draft["client_id"]
+        await _SP(db_session, seeded, b, "high", version_id=D)
+        await _SP(db_session, seeded, c, "high", version_id=D)
+        await _SR(db_session, seeded, c, 5, version_id=D)  # an override on the draft
+        await _SM(db_session, seeded, b, 1, version_id=D)  # typed on the draft
+        # Scanner moves after the draft was made: a drops to 5 (its board missing 3
+        # now exceeds the live ceiling 5 - 4), and a new row d arrives.
+        await _AD(db_session, workspace_id, [_entry(0, "a", 5), _entry(1, "d", 3)])
+        d = (await _by_token(db_session, workspace_id))["d"]
+        # §4.1's window, forced by hand: the draft lacks d's snapshot.
+        await db_session.execute(
+            text(
+                "DELETE FROM stock_report_item_snapshots WHERE version_id = :v AND stock_report_item_id = :r"
+            ),
+            {"v": D, "r": d},
+        )
+        await db_session.commit()
+        records_before = len(await _records(db_session, workspace_id))
+
+        version, captured = await _activate(
+            db_session,
+            seeded,
+            D,
+            body={"keep_active_missing": True},
+            monkeypatch=monkeypatch,
+        )
+
+        assert (version["state"], version["active_at"], version["snapshot_count"]) == (
+            "active",
+            LATER.isoformat(),
+            4,
+        )
+        assert version["scheduled_activation_at"] is None
+        assert [(e.event_name, e.client_id, e.extra) for e in captured] == [
+            (
+                "stock_report_snapshot_version:closed",
+                v1["client_id"],
+                {"snapshot_count": 3},
+            ),
+            (
+                "stock_report_snapshot_version:activated",
+                D,
+                {
+                    "snapshot_count": 4,
+                    "title": "Monday",
+                    "scheduled": False,
+                    "keep_active_missing": True,
+                },
+            ),
+        ]
+        # The previous version closed with its counters frozen from the rows.
+        previous = await _version_row(db_session, v1["client_id"])
+        assert previous.closed_at == LATER
+        closed_a = (await _snapshots_of(db_session, v1["client_id"]))[a]
+        assert (closed_a.closed_at, closed_a.quantity_in_queue) == (LATER, 4)
+        # The new board: one statement's worth of freeze, settle and stamp.
+        snapshots = await _snapshots_of(db_session, D)
+        assert {
+            r: (
+                s.quantity_requested_scanner,
+                s.quantity_requested_manual,
+                s.quantity_missing,
+                s.active_at,
+                s.priority.value if s.priority else None,
+                s.priority_order,
+            )
+            for r, s in snapshots.items()
+        } == {
+            a: (5, None, 1, LATER, None, None),  # carried 3, clamped to 5 - 4
+            b: (4, None, 1, LATER, "high", 1),  # typed 1 beats the board's 2
+            c: (6, 5, 0, LATER, "high", 2),  # the board had 0 for c; override kept
+            d: (3, None, 0, LATER, None, None),  # reconciled in; no board twin
+        }
+        board = await _items(db_session, seeded)
+        assert set(board) == {a, b, c, d}
+        assert (
+            board[c]["snapshot"]["quantity_requested"],
+            board[c]["snapshot"]["quantity_requested_scanner"],
+            board[c]["snapshot"]["quantity_requested_source"],
+        ) == (5, 6, "manual")
+        assert board[a]["snapshot"]["quantity_missing"] == 1
+        # History: b and c only, with the effective value and its source.
+        records = (await _records(db_session, workspace_id))[records_before:]
+        assert sorted(
+            (
+                r.stock_report_item_id,
+                r.type,
+                r.quantity_requested,
+                r.quantity_requested_source,
+                r.priority.value,
+                r.priority_order,
+            )
+            for r in records
+        ) == sorted(
+            [
+                (
+                    b,
+                    StockReportHistoryRecordTypeEnum.PRIORITY_CHANGE,
+                    4,
+                    StockReportQuantityRequestedSourceEnum.SCANNER,
+                    "high",
+                    1,
+                ),
+                (
+                    c,
+                    StockReportHistoryRecordTypeEnum.PRIORITY_CHANGE,
+                    5,
+                    StockReportQuantityRequestedSourceEnum.MANUAL,
+                    "high",
+                    2,
+                ),
+            ]
+        )
+        assert await _draft_count(db_session, seeded) == 0
+        assert [
+            (v["client_id"], v["state"]) for v in await _versions(db_session, seeded)
+        ] == [
+            (D, "active"),
+            (v1["client_id"], "closed"),
+        ]
+        await assert_stock_report_clean(db_session, workspace_id)
+        # Refusals change nothing: not a draft, absent, v7's body.
+        with pytest.raises(ValidationError, match="STOCK_REPORT_VERSION_NOT_DRAFT"):
+            await _activate(db_session, seeded, D)
+        await db_session.rollback()
+        with pytest.raises(NotFound):
+            await _activate(db_session, seeded, "srv_absent")
+        await db_session.rollback()
+        with pytest.raises(ValidationError, match="refresh_quantity_requested"):
+            await _activate(
+                db_session, seeded, D, body={"refresh_quantity_requested": False}
+            )
+        await db_session.rollback()
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()
+
+
+async def test_activation_resets_untyped_missing_and_needs_no_previous_board(
+    db_session, monkeypatch
+):
+    seeded = _pin(db_session, await seed_stock_report_workspace(db_session))
+    fresh = _pin(db_session, await seed_stock_report_workspace(db_session))
+    await db_session.commit()
+    workspace_id, fresh_id = seeded.workspace.client_id, fresh.workspace.client_id
+    try:
+        await _AD(db_session, workspace_id, [_entry(0, "a", 10), _entry(1, "b", 10)])
+        ids = await _by_token(db_session, workspace_id)
+        a, b = ids["a"], ids["b"]
+        await _CV(db_session, seeded)
+        await _assign_seeded_item(db_session, seeded, a)  # in_queue 4
+        await _SM(db_session, seeded, a, 3)
+        await _SM(db_session, seeded, b, 5)
+        draft, _ = await _draft(db_session, seeded)
+        D = draft["client_id"]
+        await _SM(db_session, seeded, a, 6, version_id=D)  # typed, at the ceiling
+        await _AD(db_session, workspace_id, [_entry(0, "a", 8)])  # ceiling now 4
+
+        version, captured = await _activate(
+            db_session,
+            seeded,
+            D,
+            body={"keep_active_missing": False},
+            monkeypatch=monkeypatch,
+        )
+        assert captured[-1].extra["keep_active_missing"] is False
+        snapshots = await _snapshots_of(db_session, D)
+        assert (snapshots[a].quantity_missing, snapshots[b].quantity_missing) == (4, 0)
+        assert snapshots[a].quantity_requested_scanner == 8
+        await assert_stock_report_clean(db_session, workspace_id)
+
+        # No previous board, a schedule on the draft: activation by hand is a 200
+        # that clears the schedule in the same statement (R-2), emits no `:closed`,
+        # and starts every missing at 0 whatever the flag.
+        await _AD(db_session, fresh_id, [_entry(0, "a", 10)])
+        scheduled, _ = await _CV(
+            db_session,
+            fresh,
+            body={
+                "draft": True,
+                "scheduled_activation_at": "2026-12-01T06:00:00+02:00",
+            },
+        )
+        version, captured = await _activate(
+            db_session,
+            fresh,
+            scheduled["client_id"],
+            body={"keep_active_missing": True},
+            monkeypatch=monkeypatch,
+        )
+        assert (version["state"], version["scheduled_activation_at"]) == (
+            "active",
+            None,
+        )
+        assert [e.event_name for e in captured] == [
+            "stock_report_snapshot_version:activated"
+        ]
+        rows = await _items(db_session, fresh)
+        assert [
+            (r["snapshot"]["quantity_requested"], r["snapshot"]["quantity_missing"])
+            for r in rows.values()
+        ] == [(10, 0)]
+        await assert_stock_report_clean(db_session, fresh_id)
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await purge_stock_report_workspace(db_session, fresh_id)
+        await db_session.commit()
+
+
+async def test_refresh_refreezes_the_active_version(db_session, monkeypatch):
+    seeded = _pin(db_session, await seed_stock_report_workspace(db_session))
+    await db_session.commit()
+    workspace_id = seeded.workspace.client_id
+    try:
+        await _AD(db_session, workspace_id, [_entry(0, "a", 10), _entry(1, "b", 4)])
+        ids = await _by_token(db_session, workspace_id)
+        a, b = ids["a"], ids["b"]
+        v1, _ = await _CV(db_session, seeded)
+        V = v1["client_id"]
+        await _SP(db_session, seeded, a, "high")
+        await _SP(db_session, seeded, b, "high")
+        await _assign_seeded_item(db_session, seeded, a)  # in_queue 4
+        await _SM(db_session, seeded, a, 6)  # ceiling 10 - 4
+        await _SM(db_session, seeded, b, 4)  # target 0: b is complete
+        draft, _ = await _draft(db_session, seeded)
+        assert (await _progress(db_session, seeded, V))["items_completed"] == 1
+        # A manual raise on the active version moves the target: b is no longer
+        # complete (the second exception to "never goes backwards", §4.11).
+        await _SR(db_session, seeded, b, 9, version_id=V)
+        assert (await _progress(db_session, seeded, V))["items_completed"] == 0
+        await _SR(db_session, seeded, b, None, version_id=V)
+        assert (await _progress(db_session, seeded, V))["items_completed"] == 1
+
+        # Scanner moves a (down) and b (up), and c arrives.
+        await _AD(
+            db_session,
+            workspace_id,
+            [_entry(0, "a", 7), _entry(1, "b", 6), _entry(2, "c", 5)],
+        )
+        c = (await _by_token(db_session, workspace_id))["c"]
+        result, captured = await _refresh(
+            db_session, seeded, V, monkeypatch=monkeypatch
+        )
+        assert (result["changed"], result["added"]) == (2, 1)
+        assert result["stock_report_snapshot_version"]["snapshot_count"] == 3
+        snapshots = await _snapshots_of(db_session, V)
+        # a re-frozen and its missing clamped to 7 - 4; b re-frozen, missing kept;
+        # c joined with the version's own `active_at` (P-15), frozen now.
+        assert (
+            snapshots[a].quantity_requested_scanner,
+            snapshots[a].quantity_missing,
+        ) == (7, 3)
+        assert (
+            snapshots[b].quantity_requested_scanner,
+            snapshots[b].quantity_missing,
+        ) == (6, 4)
+        assert (
+            snapshots[c].quantity_requested_scanner,
+            snapshots[c].quantity_missing,
+            snapshots[c].active_at,
+            snapshots[c].priority,
+        ) == (5, 0, NOW, None)
+        # One coalesced event per touched snapshot (a: scanner + clamp), none for
+        # the new row, then `:refreshed`.
+        assert [(e.event_name, e.client_id) for e in captured] == [
+            ("stock_report_item_snapshot:updated", snapshots[a].client_id),
+            ("stock_report_item_snapshot:updated", snapshots[b].client_id),
+            ("stock_report_snapshot_version:refreshed", V),
+        ]
+        assert (
+            captured[0].extra["quantity_requested_scanner"],
+            captured[0].extra["quantity_missing"],
+        ) == (7, 3)
+        assert captured[-1].extra == {
+            "snapshot_count": 3,
+            "changed": 2,
+            "added": 1,
+            "keep_manual_requested": True,
+        }
+        # Progress went backwards (R-10): b's target rose from 0 to 2.
+        assert (await _progress(db_session, seeded, V))["items_completed"] == 0
+        # The draft is untouched by a refresh of the board.
+        assert all(
+            s.quantity_requested_scanner is None
+            for s in (await _snapshots_of(db_session, draft["client_id"])).values()
+        )
+
+        # An override survives `keep_manual_requested: true`: the Scanner-only change
+        # still emits, is not counted as changed, and a later revert lands on the
+        # refreshed value.
+        await _SR(db_session, seeded, b, 9, version_id=V)
+        await _AD(db_session, workspace_id, [_entry(0, "b", 8)])
+        result, captured = await _refresh(
+            db_session, seeded, V, monkeypatch=monkeypatch
+        )
+        assert (result["changed"], result["added"]) == (0, 0)
+        assert [
+            (
+                e.extra["quantity_requested_scanner"],
+                e.extra["quantity_requested_manual"],
+            )
+            for e in captured
+            if e.event_name == "stock_report_item_snapshot:updated"
+        ] == [(8, 9)]
+        reverted, _ = await _SR(db_session, seeded, b, None, version_id=V)
+        assert reverted["snapshot"]["quantity_requested"] == 8
+        # Nothing moved → no snapshot event, only `:refreshed` with zeros.
+        _, captured = await _refresh(db_session, seeded, V, monkeypatch=monkeypatch)
+        assert [e.event_name for e in captured] == [
+            "stock_report_snapshot_version:refreshed"
+        ]
+
+        # `false` clears the overrides with one record each (source scanner).
+        await _SR(db_session, seeded, b, 9, version_id=V)
+        records_before = len(await _records(db_session, workspace_id))
+        result, captured = await _refresh(
+            db_session,
+            seeded,
+            V,
+            body={"keep_manual_requested": False},
+            monkeypatch=monkeypatch,
+        )
+        assert (result["changed"], result["added"]) == (1, 0)
+        assert [
+            e.extra["quantity_requested_manual"]
+            for e in captured
+            if e.event_name == "stock_report_item_snapshot:updated"
+        ] == [None]
+        assert captured[-1].extra["keep_manual_requested"] is False
+        records = (await _records(db_session, workspace_id))[records_before:]
+        assert [
+            (
+                r.stock_report_item_id,
+                r.type,
+                r.quantity_requested,
+                r.quantity_requested_source,
+            )
+            for r in records
+        ] == [
+            (
+                b,
+                StockReportHistoryRecordTypeEnum.QUANTITY_REQUESTED_OVERRIDE,
+                8,
+                StockReportQuantityRequestedSourceEnum.SCANNER,
+            )
+        ]
+        assert (await _items(db_session, seeded))[b]["snapshot"][
+            "quantity_requested_source"
+        ] == "scanner"
+        await assert_stock_report_clean(db_session, workspace_id)
+
+        # Refusals: a draft, a closed version, an absent one.
+        with pytest.raises(ValidationError, match="STOCK_REPORT_VERSION_NOT_ACTIVE"):
+            await _refresh(db_session, seeded, draft["client_id"])
+        await db_session.rollback()
+        await _CV(db_session, seeded, now=LATER)  # closes v1
+        with pytest.raises(ValidationError, match="STOCK_REPORT_VERSION_NOT_ACTIVE"):
+            await _refresh(db_session, seeded, V)
+        await db_session.rollback()
+        with pytest.raises(NotFound):
+            await _refresh(db_session, seeded, "srv_absent")
+        await db_session.rollback()
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()
+
+
+@pytest.mark.parametrize("command", ["activate", "refresh"])
+async def test_lock_order_is_rows_then_snapshots_then_versions(db_session, command):
+    """MC-1: both commands lock the live rows first, then the snapshots, then the
+    version row(s) — never a lower class after a higher one."""
+    seeded = _pin(db_session, await seed_stock_report_workspace(db_session))
+    await db_session.commit()
+    workspace_id = seeded.workspace.client_id
+    try:
+        await _AD(db_session, workspace_id, [_entry(0, "a", 10)])
+        active, _ = await _CV(db_session, seeded)
+        draft, _ = await _draft(db_session, seeded)
+        target = draft["client_id"] if command == "activate" else active["client_id"]
+        run = _activate if command == "activate" else _refresh
+        async with record_statements(db_session) as statements:
+            await run(db_session, seeded, target)
+        classes = [
+            "stock_report_items",
+            "stock_report_item_snapshots",
+            "stock_report_snapshot_versions",
+        ]
+        locked = [
+            table
+            for statement in statements
+            if "FOR UPDATE" in statement.upper()
+            for table in classes
+            if f"FROM {table}" in statement
+        ]
+        assert locked[:2] == classes[:2], statements
+        assert [classes.index(t) for t in locked] == sorted(
+            classes.index(t) for t in locked
+        ), statements
+        if command == "activate":
+            assert "stock_report_snapshot_versions" in locked
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
         await db_session.commit()

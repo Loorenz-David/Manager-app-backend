@@ -36,7 +36,7 @@ statement whatever the board's size.
 
 from __future__ import annotations
 
-from sqlalchemy import DateTime, bindparam, select, text, update
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from beyo_manager.domain.stock_report.serializers import (
@@ -54,13 +54,11 @@ from beyo_manager.models.tables.stock_report.stock_report_snapshot_version impor
 from beyo_manager.services.commands.stock_report._locks import (
     acquire_stock_report_order_lock,
 )
-from beyo_manager.services.commands.stock_report._predicates import (
-    SNAPSHOT_ACTIVE_SQL,
-    snapshot_is_active,
-    version_is_active,
-)
+from beyo_manager.services.commands.stock_report._predicates import snapshot_is_active
 from beyo_manager.services.commands.stock_report._versions import (
     VERSION_NOT_DRAFT_MESSAGE,
+    close_active_version,
+    closed_version_event,
 )
 from beyo_manager.services.commands.stock_report.requests import (
     parse_create_stock_report_snapshot_version_request,
@@ -74,40 +72,19 @@ SCHEDULE_IN_THE_PAST_MESSAGE = (
     "STOCK_REPORT_SCHEDULE_IN_THE_PAST: scheduled_activation_at must be after now."
 )
 
-_FREEZE_STATEMENT = text(
-    "UPDATE stock_report_item_snapshots AS s "
-    "SET closed_at = :now, "
-    "quantity_in_queue = r.quantity_in_queue, "
-    "quantity_in_progress = r.quantity_in_progress, "
-    "quantity_awaiting = r.quantity_awaiting, "
-    "updated_at = :now, updated_by_id = :actor "
-    "FROM stock_report_items AS r "
-    "WHERE r.client_id = s.stock_report_item_id "
-    f"AND s.workspace_id = :ws AND {SNAPSHOT_ACTIVE_SQL}"
-).bindparams(bindparam("now", type_=DateTime(timezone=True)))
 
-
-# Two literal names, not one f-string template: the docs guard expands an
-# `event_name=f"…{kind}"` site over the assignment kinds, and this event has no
-# `:deleted` or `:state-changed` here.
-_VERSION_EVENT_NAMES = {
-    "created": "stock_report_snapshot_version:created",
-    "closed": "stock_report_snapshot_version:closed",
-}
-
-
-def _version_event(kind, version):
-    extra = {"snapshot_count": version.snapshot_count}
-    if kind == "created":
-        # `state` and `title` (v7 §7.1): a client branches on `extra.state` to
-        # refetch the board only for an active create.
-        extra["state"] = version_state(version).value
-        extra["title"] = version.title
+def _created_event(version):
+    # `state` and `title` (v7 §7.1): a client branches on `extra.state` to
+    # refetch the board only for an active create.
     return WorkspaceEvent(
-        event_name=_VERSION_EVENT_NAMES[kind],
+        event_name="stock_report_snapshot_version:created",
         client_id=version.client_id,
         workspace_id=version.workspace_id,
-        extra=extra,
+        extra={
+            "snapshot_count": version.snapshot_count,
+            "state": version_state(version).value,
+            "title": version.title,
+        },
     )
 
 
@@ -195,7 +172,7 @@ async def create_stock_report_snapshot_version(ctx: ServiceContext) -> dict:
                         for row in rows
                     ],
                 )
-            events.append(_version_event("created", version))
+            events.append(_created_event(version))
             payload = serialize_stock_report_snapshot_version(version)
         else:
             await ctx.session.execute(
@@ -208,30 +185,14 @@ async def create_stock_report_snapshot_version(ctx: ServiceContext) -> dict:
                 .with_for_update()
             )
 
-            previous = await ctx.session.scalar(
-                select(StockReportSnapshotVersion)
-                .where(
-                    StockReportSnapshotVersion.workspace_id == ctx.workspace_id,
-                    version_is_active(),
-                )
-                .with_for_update()
+            previous = await close_active_version(
+                ctx.session,
+                workspace_id=ctx.workspace_id,
+                now=ctx.now,
+                actor_user_id=ctx.user_id,
             )
             if previous is not None:
-                await ctx.session.execute(
-                    _FREEZE_STATEMENT,
-                    {
-                        "now": ctx.now,
-                        "actor": ctx.user_id or None,
-                        "ws": ctx.workspace_id,
-                    },
-                )
-                await ctx.session.execute(
-                    update(StockReportSnapshotVersion)
-                    .where(StockReportSnapshotVersion.client_id == previous.client_id)
-                    .values(closed_at=ctx.now, closed_by_id=ctx.user_id or None)
-                )
-                await ctx.session.refresh(previous)
-                events.append(_version_event("closed", previous))
+                events.append(closed_version_event(previous))
 
             version = StockReportSnapshotVersion(
                 workspace_id=ctx.workspace_id,
@@ -267,7 +228,7 @@ async def create_stock_report_snapshot_version(ctx: ServiceContext) -> dict:
                         for row in rows
                     ],
                 )
-            events.append(_version_event("created", version))
+            events.append(_created_event(version))
             payload = serialize_stock_report_snapshot_version(version)
 
     await dispatch(events)

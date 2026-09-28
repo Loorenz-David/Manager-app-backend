@@ -419,6 +419,9 @@ SNAPSHOT_READ_ROUTES = [
 SNAPSHOT_MANAGER_ROUTES = [
     ("/api/v1/stock-report/snapshots/versions", None),
     ("/api/v1/stock-report/snapshots/versions/srv_1/apply-priorities", "srv_1"),
+    # Draft versions step 3 (2026-09-28): a no-body call forwards the path id only.
+    ("/api/v1/stock-report/snapshots/versions/srv_1/activate", "srv_1"),
+    ("/api/v1/stock-report/snapshots/versions/srv_1/refresh-requested", "srv_1"),
 ]
 
 
@@ -698,6 +701,49 @@ def test_versions_list_route_passes_state_through_verbatim(monkeypatch):
     assert calls[0][1].query_params["state"] == "active,closed"
     assert http.get("/api/v1/stock-report/snapshots/versions").status_code == 200
     assert calls[-1][1].query_params["state"] is None
+
+
+ACTIVATE = "/api/v1/stock-report/snapshots/versions/srv_1/activate"
+REFRESH = "/api/v1/stock-report/snapshots/versions/srv_1/refresh-requested"
+
+
+def test_activate_route_body_rules(monkeypatch):
+    """Q-8, reproduced on the installed FastAPI: no body → 200, `{}` → 200, an
+    unknown key (v7's `refresh_quantity_requested`) → 422, non-JSON → 422. The
+    handler-only key is never accepted over HTTP."""
+    http, calls = client(monkeypatch, "manager")
+    assert http.post(ACTIVATE).status_code == 200
+    assert calls[-1][1].incoming_data == {"client_id": "srv_1"}
+    assert http.post(ACTIVATE, json={}).status_code == 200
+    assert calls[-1][1].incoming_data == {"keep_active_missing": False, "client_id": "srv_1"}
+    assert http.post(ACTIVATE, json={"keep_active_missing": True}).status_code == 200
+    assert calls[-1][1].incoming_data["keep_active_missing"] is True
+    served = len(calls)
+    assert http.post(ACTIVATE, json={"refresh_quantity_requested": False}).status_code == 422
+    assert http.post(ACTIVATE, json={"keep_active_missing": "yes"}).status_code == 422
+    assert (
+        http.post(
+            ACTIVATE, json={"expected_scheduled_activation_at": "2026-10-05T06:00:00+00:00"}
+        ).status_code
+        == 422
+    )
+    assert (
+        http.post(ACTIVATE, content=b"not json", headers={"content-type": "application/json"}).status_code
+        == 422
+    )
+    assert len(calls) == served
+
+
+def test_refresh_route_body_rules(monkeypatch):
+    http, calls = client(monkeypatch, "manager")
+    assert http.post(REFRESH).status_code == 200
+    assert calls[-1][1].incoming_data == {"client_id": "srv_1"}
+    assert http.post(REFRESH, json={"keep_manual_requested": False}).status_code == 200
+    assert calls[-1][1].incoming_data == {"keep_manual_requested": False, "client_id": "srv_1"}
+    served = len(calls)
+    assert http.post(REFRESH, json={"keep_manual_requested": 1}).status_code == 422
+    assert http.post(REFRESH, json={"unexpected": True}).status_code == 422
+    assert len(calls) == served
 
 
 def test_list_items_route_passes_version_id_through(monkeypatch):

@@ -11,10 +11,10 @@ The state machine and the cascade strategy live beside this file in `states.md`.
 
 ## 1. Routes
 
-Twenty-six routes in total, the three Scanner webhooks included (nineteen at the
+Twenty-eight routes in total, the three Scanner webhooks included (nineteen at the
 snapshot layer; draft versions, 2026-09-28, added the four versioned row edits, the
-single-version read, the draft count and the draft delete — the activate, refresh and
-PATCH-version routes follow). The `Roles` column is
+single-version read, the draft count, the draft delete, activation and the refresh of
+the active version — the PATCH-version route follows). The `Roles` column is
 the `require_roles([...])` list the router declares; `key` means the route is
 authenticated by the `x-api-key` header instead (Scanner-facing, no JWT, no role).
 
@@ -32,6 +32,8 @@ authenticated by the `x-api-key` header instead (Scanner-facing, no JWT, no role
 | `POST` | `/api/v1/stock-report/snapshots/versions` | `admin`, `manager` | `create_stock_report_snapshot_version` | snapshots |
 | `DELETE` | `/api/v1/stock-report/snapshots/versions/{client_id}` | `admin`, `manager` | `delete_stock_report_snapshot_version` | drafts |
 | `POST` | `/api/v1/stock-report/snapshots/versions/{client_id}/apply-priorities` | `admin`, `manager` | `apply_stock_report_snapshot_version_priorities` | snapshots |
+| `POST` | `/api/v1/stock-report/snapshots/versions/{client_id}/activate` | `admin`, `manager` | `activate_stock_report_snapshot_version` | drafts |
+| `POST` | `/api/v1/stock-report/snapshots/versions/{client_id}/refresh-requested` | `admin`, `manager` | `refresh_stock_report_snapshot_version_requested` | drafts |
 | `PATCH` | `/api/v1/stock-report/snapshots/versions/{version_id}/items/{client_id}/priority` | `admin`, `manager`, `seller` | `set_stock_report_item_priority` | drafts |
 | `PATCH` | `/api/v1/stock-report/snapshots/versions/{version_id}/items/{client_id}/priority-order` | `admin`, `manager`, `seller` | `set_stock_report_item_priority_order` | drafts |
 | `PATCH` | `/api/v1/stock-report/snapshots/versions/{version_id}/items/{client_id}/missing-quantity` | `admin`, `manager`, `worker` | `set_stock_report_item_snapshot_missing_quantity` | drafts |
@@ -67,6 +69,8 @@ under the project's `handoffs/to_frontend/`.
 | `POST …/snapshots/versions` | **optional**, `extra="forbid"`: `{"draft": false, "title": null, "scheduled_activation_at": null, "scheduled_activation_keeps_active_missing": false}`. No body → a new active version of every live row. `title` is trimmed then capped at 200 (longer → 422; blank → `null`). `draft: true` → a draft (live rows, nothing frozen). A schedule (a `scheduled_activation_at`, or the flag `true`) with `draft: false` → 422 `STOCK_REPORT_VERSION_NOT_DRAFT` (the documented default body is a plain active create); `scheduled_activation_at` must carry an offset (naive → 422) and lie after now (else 422 `STOCK_REPORT_SCHEDULE_IN_THE_PAST`); it is stored in UTC |
 | `DELETE …/snapshots/versions/{client_id}` | **none**; drafts only (422 `STOCK_REPORT_VERSION_NOT_DRAFT` otherwise) |
 | `POST …/snapshots/versions/{client_id}/apply-priorities` | **optional** `{"target_version_id": null}` — `null` or absent is the active version, a draft's id is that draft; the source version's id travels in the path |
+| `POST …/snapshots/versions/{client_id}/activate` | **optional**, `extra="forbid"`: `{"keep_active_missing": false}` — drafts only (422 `STOCK_REPORT_VERSION_NOT_DRAFT` otherwise). Closes the active version, freezes each row's live `quantity_requested` into the draft's snapshots (manual overrides kept) and settles `quantity_missing`: a typed value stays, the rest carry the closing board's value (`true`) or start at 0 (`false`), then clamped to the live ceiling. No body and `{}` are both the default; an unknown key → 422 |
+| `POST …/snapshots/versions/{client_id}/refresh-requested` | **optional**, `extra="forbid"`: `{"keep_manual_requested": true}` — the active version only (422 `STOCK_REPORT_VERSION_NOT_ACTIVE` for a draft or a closed version). Re-freezes the Scanner value from the live rows, adds rows created since, clamps missing; `false` clears the manual overrides with one `quantity_requested_override` record each |
 | `PATCH …/snapshots/versions/{version_id}/items/{client_id}/priority` and `…/priority-order` | the board twins' bodies, against the row's snapshot **in that version** (draft or active; closed → 422 `STOCK_REPORT_VERSION_IS_CLOSED`; absent/foreign version → 404; a row without a snapshot there → 404) |
 | `PATCH …/snapshots/versions/{version_id}/items/{client_id}/missing-quantity` | `{"quantity_missing": <strict int ≥ 0> \| null}` — a number types a draft's own value, `null` clears it so the row borrows the active version's again; `null` on the active version → 422 `STOCK_REPORT_VERSION_NOT_DRAFT` |
 | `PATCH …/snapshots/versions/{version_id}/items/{client_id}/requested-quantity` | `{"quantity_requested": <strict int ≥ 0> \| null}`, required — a number sets the snapshot's manual value (typing the value Scanner shows **pins** it), `null` reverts to Scanner's; on the active version the change clamps the snapshot's missing and writes a `quantity_requested_override` history record |
@@ -108,6 +112,8 @@ the router.
 | `POST …/snapshots/versions` | `{"stock_report_snapshot_version": <version>}` |
 | `DELETE …/snapshots/versions/{client_id}` | `{"client_id": ...}` |
 | `POST …/snapshots/versions/{client_id}/apply-priorities` | `{"changed": <int>, "stock_report_items": [<row>]}` — the rows whose snapshot moved, each with the **target** version's snapshot |
+| `POST …/snapshots/versions/{client_id}/activate` | `{"stock_report_snapshot_version": <version>}` — column-only, as create; `progress` stays on the reads |
+| `POST …/snapshots/versions/{client_id}/refresh-requested` | `{"stock_report_snapshot_version": <version>, "changed": <int>, "added": <int>}` — `changed` counts snapshots whose **effective** requested changed, `added` the rows that joined |
 | the four versioned item `PATCH` routes | `{"stock_report_item": <row>}`, the row's snapshot being **that version's** |
 | `GET …/snapshots/missing-summary` | `{"quantity_missing_total": <int>, "items_with_missing": <int>}` over the active snapshots |
 
@@ -191,7 +197,8 @@ Registered message identities (leading-token form, `05_errors_local`):
 | `STOCK_REPORT_SOURCE_IS_TARGET` | 422 | apply-priorities named the same version as source and target (every other case) |
 | `STOCK_REPORT_TARGET_VERSION_IS_CLOSED` | 422 | apply-priorities named a closed version as its target |
 | `STOCK_REPORT_VERSION_IS_CLOSED` | 422 | a versioned row edit named a closed version |
-| `STOCK_REPORT_VERSION_NOT_DRAFT` | 422 | a draft-only action on an activated version: delete, a schedule key with `draft: false`, `null` missing on the active version |
+| `STOCK_REPORT_VERSION_NOT_DRAFT` | 422 | a draft-only action on an activated version: activate, delete, a schedule key with `draft: false`, `null` missing on the active version |
+| `STOCK_REPORT_VERSION_NOT_ACTIVE` | 422 | refresh-requested named a draft or a closed version; only the active version is refreshed |
 | `STOCK_REPORT_SCHEDULE_IN_THE_PAST` | 422 | `scheduled_activation_at` at or before now |
 | `STOCK_REPORT_UNKNOWN_VERSION_STATE` | 422 | a `state` query token that is not `draft`, `active` or `closed` |
 
@@ -206,7 +213,9 @@ offending entry by its zero-based index; Scanner does not parse them.
 
 ## 5. Events
 
-The nine event names and their payloads are in `states.md` §4 and in the frontend
+The twelve event names (the ratified six, the snapshot layer's three, and the draft
+versions' `stock_report_snapshot_version:deleted`, `:activated` and `:refreshed`) and
+their payloads are in `states.md` §4 and in the frontend
 handoff; the guard asserts both directions against every `event_name=` site under
 `bm/services/commands/stock_report/` plus master plan §6.7 and the snapshot layer's
 three names.

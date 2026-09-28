@@ -167,6 +167,47 @@ class CreateStockReportSnapshotVersionRequest(BaseModel):
         )
 
 
+class ActivateStockReportSnapshotVersionRequest(BaseModel):
+    """`POST …/snapshots/versions/{client_id}/activate` (plan §4.2, O-9, Q-8):
+    the draft's id from the path and one optional flag, `keep_active_missing` —
+    for the rows the draft typed no missing for, carry the closing board's value
+    (`true`) or start at 0 (`false`, the default). `extra="forbid"`: v7's
+    `refresh_quantity_requested` is a 422, not a silently ignored key.
+
+    `expected_scheduled_activation_at` is set by the **scheduler handler only**
+    (§5.1); the HTTP route never forwards it. Its presence in the body is what makes
+    an activation "scheduled" (R-6): the stored missing flag is used instead of the
+    body's, and the supersede rules of §4.2 step 2 apply. Parsed as an aware
+    datetime and compared as one, never as a string (Q-5).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    client_id: str
+    keep_active_missing: StrictBool = False
+    expected_scheduled_activation_at: AwareDatetime | None = None
+
+    @field_validator("expected_scheduled_activation_at")
+    @classmethod
+    def _utc(cls, value: datetime | None):
+        return value.astimezone(timezone.utc) if value is not None else None
+
+    @property
+    def scheduled(self) -> bool:
+        return "expected_scheduled_activation_at" in self.model_fields_set
+
+
+class RefreshStockReportSnapshotVersionRequestedRequest(BaseModel):
+    """`POST …/snapshots/versions/{client_id}/refresh-requested` (plan §4.3, O-6):
+    `keep_manual_requested` decides whether the manual overrides survive the
+    re-freeze (`true`, the default) or are cleared with one history record each."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    client_id: str
+    keep_manual_requested: StrictBool = True
+
+
 class ApplyStockReportSnapshotVersionPrioritiesRequest(BaseModel):
     """`POST …/snapshots/versions/{client_id}/apply-priorities` (plan §4.4): the source
     in the path, the target in the optional body — `null` or absent is the active
@@ -241,3 +282,15 @@ def parse_apply_stock_report_snapshot_version_priorities_request(
     data: dict,
 ) -> ApplyStockReportSnapshotVersionPrioritiesRequest:
     return _parse(ApplyStockReportSnapshotVersionPrioritiesRequest, data)
+
+
+def parse_activate_stock_report_snapshot_version_request(
+    data: dict,
+) -> ActivateStockReportSnapshotVersionRequest:
+    return _parse(ActivateStockReportSnapshotVersionRequest, data)
+
+
+def parse_refresh_stock_report_snapshot_version_requested_request(
+    data: dict,
+) -> RefreshStockReportSnapshotVersionRequestedRequest:
+    return _parse(RefreshStockReportSnapshotVersionRequestedRequest, data)

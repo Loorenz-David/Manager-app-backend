@@ -15,8 +15,10 @@ from beyo_manager.domain.stock_report.snapshot_rules import (
 )
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.services.commands.stock_report.requests import (
+    parse_activate_stock_report_snapshot_version_request,
     parse_apply_stock_report_snapshot_version_priorities_request,
     parse_create_stock_report_snapshot_version_request,
+    parse_refresh_stock_report_snapshot_version_requested_request,
     parse_set_stock_report_item_snapshot_missing_quantity_request,
     parse_set_stock_report_item_snapshot_requested_quantity_request,
 )
@@ -128,6 +130,76 @@ def test_apply_body_defaults_the_target_to_the_active_version():
         ).target_version_id
         == "srv_2"
     )
+
+
+# ---------------------------------------------------------------------------
+# activate body (§4.2, Q-8, R-6) and refresh body (§4.3)
+# ---------------------------------------------------------------------------
+
+
+def test_activate_body_defaults_to_reset_and_is_manual_without_the_handler_key():
+    request = parse_activate_stock_report_snapshot_version_request(
+        {"client_id": "srv_1"}
+    )
+    assert request.keep_active_missing is False
+    assert request.scheduled is False
+    assert (
+        parse_activate_stock_report_snapshot_version_request(
+            {"client_id": "srv_1", "keep_active_missing": True}
+        ).keep_active_missing
+        is True
+    )
+
+
+def test_activate_body_is_scheduled_when_the_handler_sends_its_key_as_utc():
+    """R-6: presence of `expected_scheduled_activation_at` is what makes a fire
+    scheduled; it is parsed as an aware datetime in UTC (Q-5), never a string."""
+    request = parse_activate_stock_report_snapshot_version_request(
+        {
+            "client_id": "srv_1",
+            "expected_scheduled_activation_at": "2026-10-05T06:00:00+02:00",
+        }
+    )
+    assert request.scheduled is True
+    assert request.expected_scheduled_activation_at == datetime(
+        2026, 10, 5, 4, 0, tzinfo=timezone.utc
+    )
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"client_id": "srv_1", "refresh_quantity_requested": False},  # v7's body
+        {"client_id": "srv_1", "keep_active_missing": "yes"},
+        {
+            "client_id": "srv_1",
+            "expected_scheduled_activation_at": "2026-10-05T06:00:00",
+        },
+        {},
+    ],
+)
+def test_activate_body_is_strict(body):
+    with pytest.raises(ValidationError):
+        parse_activate_stock_report_snapshot_version_request(body)
+
+
+def test_refresh_body_keeps_overrides_by_default_and_is_strict():
+    request = parse_refresh_stock_report_snapshot_version_requested_request(
+        {"client_id": "srv_1"}
+    )
+    assert request.keep_manual_requested is True
+    assert (
+        parse_refresh_stock_report_snapshot_version_requested_request(
+            {"client_id": "srv_1", "keep_manual_requested": False}
+        ).keep_manual_requested
+        is False
+    )
+    for body in (
+        {"client_id": "srv_1", "keep_manual_requested": 1},
+        {"client_id": "srv_1", "unexpected": True},
+    ):
+        with pytest.raises(ValidationError):
+            parse_refresh_stock_report_snapshot_version_requested_request(body)
 
 
 # ---------------------------------------------------------------------------

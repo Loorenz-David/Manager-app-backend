@@ -103,6 +103,11 @@ _SNAPSHOT_EVENT_NAMES = frozenset(
         "stock_report_item_snapshot:updated",
         "stock_report_snapshot_version:created",
         "stock_report_snapshot_version:closed",
+        # Draft versions (2026-09-28): delete, activation by hand or on schedule,
+        # and the refresh of the active version.
+        "stock_report_snapshot_version:deleted",
+        "stock_report_snapshot_version:activated",
+        "stock_report_snapshot_version:refreshed",
     }
 )
 _MASTER_PLAN_EVENT_NAMES = _MASTER_PLAN_EVENT_NAMES | _SNAPSHOT_EVENT_NAMES
@@ -334,8 +339,9 @@ def test_c1a_api_md_carries_every_route_with_its_roles():
     api_md = _normalized(_API_MD)
     routes = _declared_routes()
     # 19 at the snapshot layer; +7 at draft versions step 2 (2026-09-28: the four
-    # versioned row edits, the single-version read, the draft count, delete draft).
-    assert len(routes) == 26, routes
+    # versioned row edits, the single-version read, the draft count, delete draft);
+    # +2 at step 3 (activate, refresh-requested).
+    assert len(routes) == 28, routes
     for method, path, roles in routes:
         row = f"| `{method}` | `{path}` | " + ", ".join(f"`{role}`" for role in roles)
         assert row in api_md, f"missing from api.md: {row}"
@@ -357,7 +363,7 @@ def test_c1b_every_event_name_the_code_builds_is_in_the_handoff():
     handoff = _normalized(_CURRENT_HANDOFF)
     built = _event_names_in_code()
     # A scan that returned nothing would make this loop pass over nothing, which is
-    # the vacuity C1(a)'s `len(routes) == 26` already forbids (review 1, N6). The
+    # the vacuity C1(a)'s `len(routes) == 28` already forbids (review 1, N6). The
     # contract is "the scan finds event names", not a pinned count (charter r13).
     assert built, "the `event_name=` scan found nothing"
     for name in sorted(_MASTER_PLAN_EVENT_NAMES | built):

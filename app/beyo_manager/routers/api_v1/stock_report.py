@@ -16,6 +16,9 @@ from beyo_manager.routers.utils.jwt_dep import require_roles
 from beyo_manager.routers.utils.roles import ADMIN, MANAGER, SELLER, WORKER
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.run_service import run_service
+from beyo_manager.services.commands.stock_report.activate_stock_report_snapshot_version import (
+    activate_stock_report_snapshot_version,
+)
 from beyo_manager.services.commands.stock_report.apply_stock_report_snapshot_version_priorities import (
     apply_stock_report_snapshot_version_priorities,
 )
@@ -36,6 +39,9 @@ from beyo_manager.services.commands.stock_report.delete_stock_report_item import
 )
 from beyo_manager.services.commands.stock_report.delete_stock_report_snapshot_version import (
     delete_stock_report_snapshot_version,
+)
+from beyo_manager.services.commands.stock_report.refresh_stock_report_snapshot_version_requested import (
+    refresh_stock_report_snapshot_version_requested,
 )
 from beyo_manager.services.commands.stock_report.set_stock_report_item_priority import (
     set_stock_report_item_priority,
@@ -161,6 +167,27 @@ class _ApplyStockReportSnapshotVersionPrioritiesBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     target_version_id: str | None = None
+
+
+class _ActivateStockReportSnapshotVersionBody(BaseModel):
+    """`POST …/activate` (plan §4.2, Q-8): one flag, `extra="forbid"` — without a
+    model FastAPI would silently accept v7's `{"refresh_quantity_requested": false}`.
+    No body → 200, `{}` → 200, an unknown key → 422. The scheduler's
+    `expected_scheduled_activation_at` is deliberately not a field here: only the
+    handler may mark an activation as scheduled."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    keep_active_missing: StrictBool = False
+
+
+class _RefreshStockReportSnapshotVersionRequestedBody(BaseModel):
+    """`POST …/refresh-requested` (plan §4.3): optional; `keep_manual_requested`
+    defaults to `true`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    keep_manual_requested: StrictBool = True
 
 
 class _PreviewStockTaskAssignmentBody(BaseModel):
@@ -366,6 +393,42 @@ async def route_apply_stock_report_snapshot_version_priorities(
 ):
     return await _run(
         apply_stock_report_snapshot_version_priorities,
+        claims,
+        session,
+        incoming_data={
+            **(body.model_dump() if body is not None else {}),
+            "client_id": client_id,
+        },
+    )
+
+
+@router.post("/snapshots/versions/{client_id}/activate")
+async def route_activate_stock_report_snapshot_version(
+    client_id: str,
+    body: _ActivateStockReportSnapshotVersionBody | None = None,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        activate_stock_report_snapshot_version,
+        claims,
+        session,
+        incoming_data={
+            **(body.model_dump() if body is not None else {}),
+            "client_id": client_id,
+        },
+    )
+
+
+@router.post("/snapshots/versions/{client_id}/refresh-requested")
+async def route_refresh_stock_report_snapshot_version_requested(
+    client_id: str,
+    body: _RefreshStockReportSnapshotVersionRequestedBody | None = None,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        refresh_stock_report_snapshot_version_requested,
         claims,
         session,
         incoming_data={
