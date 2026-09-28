@@ -1,8 +1,13 @@
 # Stock report versions — drafts, scheduled activation, live drafts, manual requested quantity
 
-> Status: **PLAN, revision 7 (2026-09-28) — owner's third intention round folded, *(O-9)*: a
-> draft's missing is borrowed from the active version unless typed, and activation carries a
-> flag to keep or reset the active version's missing.** Revision 6 folded projection r2
+> Status: **PLAN, revision 8 (2026-09-28) — the frontend's gaps document folded**
+> (`BACKEND_GAPS_draft_versions_20260927.md`, re-baselined on v9): the two additions the owner
+> accepted, marked *(G-2)* (`state=` takes a comma list) and *(G-3)* (a draft-count read), and
+> the answers to its sixteen questions, marked *(FQ-n)* — each a precision on an existing
+> section, none a shape change. Issued to the frontend as **v10** (a delta; v9 had already
+> left), so the ship-time consolidated file is **v11**. Revision 7 folded the owner's third
+> intention round *(O-9)*: a draft's missing is borrowed from the active version unless typed,
+> and activation carries a flag to keep or reset the active version's missing. Revision 6 folded projection r2
 > (Q-1..Q-18, marked *(Q-n)*) and owner cards 5–7. Revision 4 folded projections r0 (24 items, *(P-n)*) and r1 (15
 > items, *(R-n)*) and the owner's cards 1–4 *(card n)*. Revision 5 folded the owner's second
 > intention round of 2026-09-27, marked *(O-n)*. Revision 6 folds
@@ -153,7 +158,7 @@ Domain (`08_domain`), in `domain/stock_report/enums.py` and `snapshot_rules.py`:
 
 | Column | Type | Meaning |
 |---|---|---|
-| `title` | `String(200)`, nullable | the user's note; editable in any state. Stripped; empty or whitespace-only → `null` *(P-24)*. |
+| `title` | `String(200)`, nullable | the user's note; editable in any state. Stripped; empty or whitespace-only → `null` *(P-24)*. Request field `Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)] \| None`: **trimmed first, then capped** — a trimmed length above 200 → 422 request validation, never truncated; padding spaces do not count *(FQ-6)*. |
 | `scheduled_activation_at` | `DateTime(tz)`, nullable | when a **draft** activates itself. Null = no schedule. Cleared by activation and by the user; the row is gone on delete. Check `ck_…_schedule_only_on_draft` (`scheduled_activation_at IS NULL OR active_at IS NULL`). |
 | `scheduled_activation_keeps_active_missing` | `Boolean`, not null, server default `false` | what a **scheduled** activation does with the rows the draft typed no missing for: keep the active version's value (`true`) or reset to 0 (`false`, the owner's default: "a new active one should reset its missing"). Read from **this column at fire time**, never from the scheduler payload *(P-5)*. May be stored on a draft with no schedule *(P-14)*. A manual activation ignores it and uses its body *(R-6)*. *(O-9)* |
 
@@ -244,9 +249,20 @@ Three states of one draft row, the active version's missing for the article bein
 | nothing typed, no active version | NULL | 0 | 0 | 0 |
 
 Every draft reader of `quantity_missing` reads the effective value: the serializer, the
-progress engine's `target`, the items list's `missing_only`, the ceiling check on the missing
-route (which compares the **typed** value being written, not the effective one). The active
-version's readers are unchanged: for an activated snapshot the expression is its own column.
+progress engine's `target`, the items list's `missing_only` (a borrowing row whose active twin
+has missing > 0 is listed; a row the draft typed 0 for is not *(FQ-13)*), the ceiling check on
+the missing route (which compares the **typed** value being written, not the effective one).
+The active version's readers are unchanged: for an activated snapshot the expression is its
+own column.
+
+**Every write to an active snapshot's `quantity_missing` emits `stock_report_item_snapshot:updated`**
+*(FQ-15)* — the frontend patches borrowing draft rows from that event: the missing route; the
+clamp on assignment creation (`_move_assignment.py:279`, its events dispatched by
+`create_stock_task_assignments`); the clamp after a requested change on the active version
+(§4.11 step 5); the refresh clamp (§4.3d); repair (`repair_stock_report.py:402`). The one
+silent path is activation's settle-and-clamp (§4.2 steps 5–6, P-16), on the **new** version,
+covered by `:activated` — after which every draft borrows from the new active version, so the
+reference file tells the frontend to refetch open draft pages on `:activated` too.
 
 ### 3.5 History records *(O-7)*
 
@@ -328,9 +344,12 @@ missing-quantity command deliberately takes none today (rows → snapshot) and k
 
 - `draft=false`: today, plus `title`. The freeze writes `quantity_requested_scanner` from the
   live rows (the renamed column); `quantity_requested_manual` NULL; `quantity_missing` 0 as
-  today. Either schedule key **sent** (`model_fields_set`, whatever its value) with
+  today — **the closing board's missing is not carried on a direct create**; the keep choice
+  exists only on activation, and the flag is refused here *(FQ-14)*. Either schedule key
+  **sent** (`model_fields_set`, whatever its value) with
   `draft=false` → 422 `STOCK_REPORT_VERSION_NOT_DRAFT`; the documented default body with
-  `draft=false` is accepted *(R-9)*.
+  `draft=false` is accepted *(R-9)*. The `:created` event's `extra.state` is `"active"` on
+  this path (and on a no-body call) *(FQ-1)*.
 - `draft=true`: same row lock and copy of the **membership** (one snapshot per live row:
   priority null, **missing NULL** *(O-9)*, resolved 0, counters copied), **no** requested value —
   `quantity_requested_scanner` NULL, `quantity_requested_manual` NULL *(O-1)* — **no** close
@@ -340,7 +359,10 @@ missing-quantity command deliberately takes none today (rows → snapshot) and k
   (else 422 `STOCK_REPORT_SCHEDULE_IN_THE_PAST`) *(P-13)*. **Normalised to UTC at write**
   (`.astimezone(timezone.utc)`) before it reaches the column and the scheduler payload *(Q-5)*:
   v8's own example carries `+02:00`, and a string comparison at fire time would judge every
-  such schedule "moved" and skip it silently.
+  such schedule "moved" and skip it silently. **Echoed as UTC with `+00:00`** (`isoformat()` of
+  the aware datetime asyncpg returns), never `Z`, never the offset sent *(FQ-8)*.
+  `scheduled_activation_keeps_active_missing` may be sent `true` with **no**
+  `scheduled_activation_at`: stored on the draft, no scheduler row, no refusal *(FQ-16, P-14)*.
 - The close-freeze, the snapshot lock and the `previous` lookup all take the **active**
   predicate: a direct create must never close or lock a draft.
 - `stock_report_snapshot_version:created` `extra` gains `state` and `title`. (v6 refetches
@@ -545,7 +567,11 @@ priority and order because they edit the board's; no role logic inside any comma
   "no active version" and "row not in the active version" to today's
   **422 `STOCK_REPORT_NO_ACTIVE_SNAPSHOT`**; the versioned routes keep the 404s *(P-7)*. The
   requested-quantity route has **no** shortcut: it is new, and the frontend is always inside a
-  version.
+  version. **A versioned call with the active version's id and its shortcut twin are the same
+  command** *(FQ-3)*: same write, response and events; they differ only in that refusal
+  mapping and in the race with an activation — the shortcut follows to the newly active
+  version, the versioned route with the now-closed id answers 422
+  `STOCK_REPORT_VERSION_IS_CLOSED`.
 - `_load_row_with_snapshot` gains `load_version_snapshot(session, ws, row_id, version_id)` and
   `serialize_row_with_version_snapshot(...)`, which also fetch the row's **active** snapshot's
   `quantity_missing` (one correlated scalar subquery, the `apply_stock_demand._active_snapshot_column`
@@ -600,8 +626,11 @@ between the delete's snapshot statement and its version statement would otherwis
 version `DELETE` fail on the FK. Hard delete of the snapshots, then the version; the scheduler
 row `CANCELED`. Nothing references a draft (history records point at rows; resolved is 0; no
 assignment points at a snapshot; a repair record's target id is a string with no FK). Event
-`stock_report_snapshot_version:deleted`. Response `{"client_id": …}` (the `DELETE /items`
-precedent) *(R-7)*. `states.md` §2 records the exception to "closing is the lifecycle".
+`stock_report_snapshot_version:deleted`, pushed **before the HTTP response returns** — every
+command awaits `dispatch(events)` after its transaction block and the socket push is awaited
+inside it (`event_bus.dispatch`, `realtime_push`) *(FQ-7)*. Response `{"client_id": …}` (the
+`DELETE /items` precedent) *(R-7)*. `states.md` §2 records the exception to "closing is the
+lifecycle".
 
 ### 4.9 `apply_stock_demand` — a new row joins every draft *(O-3)*
 
@@ -627,7 +656,10 @@ webhook **created** in this call (`created_client_ids`, filtered to those it the
 - The **active** version is untouched: a row created after activation joins it only at
   refresh (§4.3c), unchanged from v6.
 - No snapshot event: the row's `stock_report_item:created` is the signal; v8 tells the
-  frontend that a draft page refetches on it.
+  frontend that a draft page refetches on it. **The webhook is the only creator of
+  `stock_report_items`** (one `pg_insert(StockReportItem)` in the package; repair, reset and
+  seeding create none) and every row it creates emits `:created` — the coalescer never drops
+  one — so no draft's `snapshot_count` rises without that event *(FQ-11)*.
 - Lock order stays MC-1: rows (held) → version rows → snapshot inserts. The webhook's
   `lock_timeout` covers the version-row wait, so a webhook queued behind a long activation
   still answers 503 `StockDemandDeadlineExceeded` and Scanner retries, as today.
@@ -660,6 +692,10 @@ builder, `snapshot_values` and **every** RETURNING that feeds the builder gain
 plus `.columns`), `_snapshot_resolved._RETURNING`, the apply-priorities `text()` RETURNING plus
 `.columns`, the refresh statements; repair goes through `snapshot_values`.
 
+**All eight `extra` keys are present on every emission** *(FQ-4)*: the builder indexes
+`values[...]` for each key, so a RETURNING that lacked one would raise, never emit a shorter
+`extra`; a value is `null` where there is none (`quantity_missing` on a borrowing draft row,
+`quantity_requested_scanner` on a draft, `quantity_requested_manual` without an override).
 The event carries the **stored** columns, not the effective value: `snapshot_values` is built
 from the ORM instance without the row, and several RETURNING statements have no row join. v8
 states the one rule for the frontend (§3.4): effective = `manual ?? scanner ?? the row's live
@@ -789,15 +825,30 @@ and the new schedule is still pending.
 
 ## 6. Queries
 
-- **`GET /snapshots/versions`**: gains `state` (`draft|active|closed`, optional single value;
-  unknown → 422 `STOCK_REPORT_UNKNOWN_VERSION_STATE`). **Omitted → all states** *(P-12; the
-  folder model shows every card)*, so v6 consumers will see drafts first with
-  `active_at: null` — declared in v7 §0.0 as a nullability change. Order:
+- **`GET /snapshots/versions`**: gains `state`, a **comma list** of `draft|active|closed`
+  *(G-2, owner-accepted 2026-09-28: the history page sends `state=active,closed`)*, parsed as
+  `priority` is, in a new `services/queries/stock_report/_version_state_filter.py`
+  (`parse_version_state_filter`: tokens stripped, empties ignored, repeats folded; omitted or
+  empty → every state; any unknown token, `all` included, → 422
+  `STOCK_REPORT_UNKNOWN_VERSION_STATE`). The predicate is the `OR` of the §3.1 pairs through
+  `_predicates.py` (`active_at IS NULL` / active pair / `closed_at IS NOT NULL`); with
+  `state=active,closed` the unchanged order puts the active version first. **Omitted → all
+  states** *(P-12; the folder model shows every card)*, so v6 consumers will see drafts first
+  with `active_at: null` — declared in v7 §0.0 as a nullability change. Order:
   `active_at DESC NULLS FIRST, created_at DESC, client_id DESC`. Each row gains `state`,
   `title`, `scheduled_activation_at`, `scheduled_activation_keeps_active_missing`. A draft's
   `progress` comes from the same engine: live counters against the **live** requested (or the
   override) and the draft's **effective** missing (typed, else the active version's, §3.4b).
   Roles unchanged: workers and sellers see drafts *(card 2)*.
+- **`GET /snapshots/versions/draft-count`** (new) *(G-3, owner-requested 2026-09-28: the hub's
+  Drafts badge)*: `count_stock_report_draft_versions` — one `SELECT count(*) FROM
+  stock_report_snapshot_versions WHERE workspace_id = :ws AND active_at IS NULL` (a draft is
+  exactly `active_at IS NULL` under `closed_implies_activated`, through `_predicates.py`);
+  response `{"draft_count": n}`; no params, no body, no event of its own (the frontend refetches
+  on version `:created` / `:activated` / `:deleted`). Roles admin, manager, worker, seller, as
+  the list. Declared **after** `/snapshots/versions/active` and before
+  `/snapshots/versions/{client_id}` (the P-23 rule: a literal segment before the parameter).
+  Route count 28 → **29**.
 - **`GET /snapshots/versions/active`**: unchanged.
 - **`GET /snapshots/versions/{client_id}`** (new): one version with `progress` and
   `filtered_snapshot_count`, same `priority` parameter; any state; 404 absent/foreign. Roles:
@@ -807,8 +858,11 @@ and the new schedule is still pending.
 - **`GET /items`**: gains `version_id` (optional). Omitted → the active version (workers'
   default, unchanged). Given → that version's snapshots in **any state**; 404 absent/foreign
   version; 422 `STOCK_REPORT_LIVE_STOCK_FILTER_CONFLICT` with `live_stock=true`. Ordering,
-  `priority`, `missing_only`, pagination unchanged, scoped by the join's `version_id`.
-  `include_zero_requested` and the outstanding rule use the **effective** requested (§3.4).
+  `priority`, `missing_only`, pagination unchanged, scoped by the join's `version_id`:
+  `priority` omitted → that version's null-priority snapshots, `all` → every snapshot of it,
+  same parser *(FQ-2)*; `missing_only` on a draft reads the **effective** missing *(FQ-13,
+  §3.4b)*. `include_zero_requested` and the outstanding rule use the **effective** requested
+  (§3.4) and, on a draft, the effective missing.
   Open ⇒ live counters, so a draft's rows show live queue / progress / awaiting beside the
   live requested. **One more `LEFT JOIN`** on every non-`live_stock` read *(O-5)*: the row's
   **active** snapshot (`stock_report_item_snapshots a ON a.stock_report_item_id = r.client_id
@@ -819,7 +873,9 @@ and the new schedule is still pending.
   and the `quantity_requested` and `quantity_missing` sums are the effective values; the row is
   already joined, and the engine gains the same `LEFT JOIN` to the row's active snapshot as
   the items read (§3.4b). A draft's target therefore follows Scanner live, the manager's
-  overrides, and the board's missing until the draft types its own.
+  overrides, and the board's missing until the draft types its own. The `priority` filter
+  selects a draft's snapshots exactly as the active version's (same `priority_predicate`), so a
+  draft card's per-priority bars and the hub card's are computed alike *(FQ-5)*.
 - **`get_stock_report_missing_summary`**: reads only `quantity_missing` and joins no row
   (`get_stock_report_missing_summary.py:16-31`); **only its predicate changes** (Appendix A),
   no join is added *(Q-15)*. `consistency.missing_over_ceiling`: the effective value (it has
@@ -833,7 +889,8 @@ and the new schedule is still pending.
   - `quantity_requested` → `effective_quantity_requested(snapshot, row=row)` (a call);
   - **new** `quantity_requested_scanner` → `scanner_quantity_requested(snapshot, row=row)`: the
     live row's value on a draft, the frozen column otherwise (a call) — "what Scanner says or
-    said", never null on the wire;
+    said", never null on the wire; after Scanner posts for a row with a manual draft value the
+    read shows the new live value here and the manual one in `quantity_requested` *(FQ-10)*;
   - **new** `quantity_requested_source` → `quantity_requested_source(snapshot).value`;
   - **new** `active_quantity_missing` → the keyword (a bare name; the guard skips it): the
     active version's missing for this row, `null` when the workspace has no active version or
@@ -929,12 +986,17 @@ The repair record's `target_id` is the `client_id` column above.
   stored flag on create / PATCH / the version shape, `quantity_missing` as the draft's
   effective value with `quantity_missing_source`, `null` on the versioned missing route, the
   drawer pre-filled from the stored flag), card 6's pin rule replacing v8 §5.22's no-op
-  sentence, card 5's tie-break, and Q-8/Q-9's request validation. So **at ship, step 5 writes
-  a consolidated reference file as a new file, never an edit** —
-  `HANDOFF_TO_FRONTEND_stock_report_snapshots_v10_<date>.md`, v7 + v8 + v9 merged, full
+  sentence, card 5's tie-break, and Q-8/Q-9's request validation. **v10**
+  (`HANDOFF_TO_FRONTEND_stock_report_snapshots_v10_20260928.md`, issued 2026-09-28) is the
+  fourth delta, answering the frontend's gaps document: G-2 (`state=` list), G-3 (the
+  draft-count read) and the sixteen FQ precisions, with a question → section map. So **at
+  ship, step 5 writes a consolidated reference file as a new file, never an edit** —
+  `HANDOFF_TO_FRONTEND_stock_report_snapshots_v11_<date>.md`, v7 + v8 + v9 + v10 merged, full
   tables, computed keys outside them, adding nothing — points `_CURRENT_HANDOFF` at it, and
-  moves v6, v7, v8 and v9 to `archived/` unedited. The guard's logic stays untouched; teaching it an ordered document
-  list would be test-code redesign for a one-off. v8's content: drafts are live
+  moves v6, v7, v8, v9 and v10 to `archived/` unedited. The guard's logic stays untouched; teaching it an ordered document
+  list would be test-code redesign for a one-off. **The guard checks no query parameter**
+  (routes with roles, event names, identities, states, serializer nullability), so G-2 asks
+  nothing of it; G-3 is one more route row and the count. v8's content: drafts are live
   (requested and rows); the four requested fields on the snapshot; `active_quantity_missing`;
   the requested-quantity route; the activate body removed; the refresh body, its active-only
   target and its identity; the create and PATCH-version bodies without the refresh flag; the
@@ -947,7 +1009,7 @@ The repair record's `target_id` is the `client_id` column above.
   `:refreshed` refetch the board". Verified in the frontend repo: today's `applySnapshotUpdate`
   ignores `version_id`, so draft edits would paint the live board, and v6 has no `:activated`
   handler. **Drafts and scheduling are not used in production until the frontend ships both.**
-- `api.md`: route rows (19 → 28), the new identities **including `STOCK_REPORT_SCHEDULE_SUPERSEDED`**
+- `api.md`: route rows (19 → 29, the draft-count read included *(G-3)*), the new identities **including `STOCK_REPORT_SCHEDULE_SUPERSEDED`**
   (a log token, never a response; the guard's identity regex reads api.md) *(Q-2)*; the
   divergence-kind list at api.md:135 (drop `snapshot_version_closed_mismatch`, add the three
   kinds of §7's table) *(Q-13)*.
@@ -955,7 +1017,7 @@ The repair record's `target_id` is the `client_id` column above.
   requested-quantity derivation (§3.4) and the two columns; §2 both tables; §3.1 the cascade's
   draft branch and the webhook's draft insert; §4 the new event names and the widened snapshot `extra`.
 - Docs guard: `_SNAPSHOT_EVENT_NAMES` gains `:activated`, `:refreshed`, `:updated`, `:deleted`;
-  route count 19 → 28; the serializer table for the item snapshot loses `quantity_requested`
+  route count 19 → 29; the serializer table for the item snapshot loses `quantity_requested`
   as a column-backed field (§3.4) — the guard's own "computed keys are documented outside the
   table" rule, verified at implementation for a bare-name value.
 - `CLAUDE.md`: the snapshot paragraph (drafts are live; the two predicates; the effective
@@ -1105,8 +1167,22 @@ Integration, one seeded matrix per test workspace:
 - **reads**: `GET /items?version_id=` on a draft (live counters, live requested), on a closed
   version (frozen, and a closed snapshot's requested never reads the row), with `live_stock=true`
   → 422; `include_zero_requested` and the outstanding rule on a draft follow the effective value;
-  `GET /snapshots/versions?state=draft` lists only drafts; `/versions/active` still returns the
-  active version and `/versions/<draft id>` the draft (P-23).
+  `missing_only` on a draft lists a borrowing row whose active twin has missing and hides a
+  row the draft typed 0 for (FQ-13); `priority` omitted on a draft read → its null-priority
+  rows, `all` → every row (FQ-2); `GET /snapshots/versions?state=draft` lists only drafts;
+  **`state=active,closed` lists the active version first, then closed ones, no draft; `state=
+  draft, ,closed` (spaces, an empty token) is accepted; `state=all` and `state=active,x` → 422
+  `STOCK_REPORT_UNKNOWN_VERSION_STATE`; the version rows are not filtered by `priority`** (G-2);
+  `/versions/active` still returns the active version and `/versions/<draft id>` the draft
+  (P-23).
+- **draft count** (G-3): `0` with no draft; `2` with two drafts beside an active and a closed
+  version; another workspace's draft not counted; a deleted draft no longer counted; an
+  activated draft no longer counted; one statement (`record_statements`); all four roles
+  reach it, and `/snapshots/versions/draft-count` is never read as a version id (P-23).
+- **title** (FQ-6): 200 characters padded with spaces → stored trimmed; 201 non-space
+  characters → 422 request validation at create and at PATCH.
+- **flag without schedule** (FQ-16): `draft: true`, no schedule, flag `true` at create → stored,
+  no scheduler row, shown on the payload.
 - **migration**: upgrade on a database with an active and a closed version keeps every
   requested value under the new column name; downgrade refuses with a draft present and with a
   manual value present, succeeds once both are gone.
@@ -1153,6 +1229,9 @@ Integration, one seeded matrix per test workspace:
 - No history for draft edits; activation writes one `priority_change` per prioritised row.
 - Row edits go through `PATCH /snapshots/versions/{version_id}/items/{client_id}/…`.
 - v7 is with the frontend; v8 lists the differences (O-8).
+- (2026-09-28, from the frontend's gaps document) `state=` on the versions list takes a comma
+  list (G-2, accepted); a dedicated `GET /snapshots/versions/draft-count` read for the hub
+  badge (G-3, requested); G-1 (demote active → draft) withdrawn by the owner.
 
 ## 12. Implementation order — one implementation, one checkpoint (owner ruling on R-13)
 
@@ -1182,15 +1261,16 @@ a manual value:
 2. Create draft (§4.1); the webhook's draft insert and the C6 bound (§4.9); the versioned routes
    incl. requested-quantity and the shortcuts (§4.6, §4.11); the history helper on every
    snapshot-driven writer (§3.5, Q-10); apply-priorities target (§4.4); delete draft (§4.8);
-   `GET /snapshots/versions/{id}`, `state`, `version_id` (§6); the membership consistency kind
-   (§4.12); the purge helper's scheduler deletion (§9, Q-11a).
+   `GET /snapshots/versions/{id}`, `state` as a list (G-2), the draft-count read (G-3),
+   `version_id` (§6); the membership consistency kind (§4.12); the purge helper's scheduler
+   deletion (§9, Q-11a).
 3. Activate by hand (§4.2 without the supersede rules' scheduled branch); refresh (§4.3);
    history at activation; events.
 4. Scheduling (§5): PATCH version (§4.5), payload, handler, the four registries, the supersede
    rules (card 4 is ruled, so nothing gates this), reset phase, the scheduler consistency kind,
    `CLAUDE.md` "Running".
-5. The consolidated reference file (§8, Q-3: v7 + v8 + v9 merged as a new dated file, v10, with cards 5
-   and 6 stated), `_CURRENT_HANDOFF` repointed, v6/v7/v8/v9 to `archived/`; `api.md` (routes,
+5. The consolidated reference file (§8, Q-3: v7 + v8 + v9 + v10 merged as a new dated file, v11, with cards 5
+   and 6 stated), `_CURRENT_HANDOFF` repointed, v6/v7/v8/v9/v10 to `archived/`; `api.md` (routes,
    identities incl. the log token, the kind list), `states.md`, the docs guard (route count
    moves as each route lands; the guard is updated with it), `CLAUDE.md`; full suite — the
    two step-1 IDs now green, the diff against the baseline empty both ways; ruff on touched
