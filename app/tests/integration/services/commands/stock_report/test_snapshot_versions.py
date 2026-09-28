@@ -242,8 +242,13 @@ async def test_first_version_snapshots_every_live_row_including_zero_requested(
             for s in snapshots.values()
         ) == [(0, 0, None, None), (3, 0, None, None), (10, 0, None, None)]
         assert all(s.closed_at is None and s.active_at == NOW for s in snapshots.values())
+        # `:created` carries `state` and `title` since drafts (2026-09-28, v7 §7.1).
         assert [(e.event_name, e.client_id, e.extra) for e in captured] == [
-            ("stock_report_snapshot_version:created", version["client_id"], {"snapshot_count": 3})
+            (
+                "stock_report_snapshot_version:created",
+                version["client_id"],
+                {"snapshot_count": 3, "state": "active", "title": None},
+            )
         ]
         await assert_stock_report_clean(db_session, workspace_id)
     finally:

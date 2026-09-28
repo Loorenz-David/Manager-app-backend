@@ -1,14 +1,26 @@
 """`set_stock_report_item_priority` — MC-7's priority change (master plan §6.5,
 phase 12; intention §7A before/after rows 6–9, §6A MC-6, §14B B2, MC-17, MC-19),
-retargeted on 2026-09-26: the position belongs to the row's **active item snapshot**.
+retargeted on 2026-09-26 to the row's **active item snapshot** and, with draft
+versions (2026-09-28, plan §4.6), to the row's snapshot **in a named version**.
 
-The route and body are unchanged (`PATCH /items/{client_id}/priority`, the row's id
-in the path). The row is still the 404 boundary; a row with no active snapshot is a
-422 `STOCK_REPORT_NO_ACTIVE_SNAPSHOT` — there is no version to order it in.
+Two routes, one command. `PATCH /items/{client_id}/priority` (no `version_id`) is
+the active-version shortcut: the row is the 404 boundary, and "no active version"
+or "no snapshot in it" is v6's 422 `STOCK_REPORT_NO_ACTIVE_SNAPSHOT`.
+`PATCH /snapshots/versions/{version_id}/items/{client_id}/priority` edits that
+version's snapshot: absent/foreign version → 404, a row without a snapshot there →
+404, a closed version → 422 `STOCK_REPORT_VERSION_IS_CLOSED`. A versioned call with
+the active version's id and the shortcut are the same write, response and events.
 
-Locks: advisory -> the target snapshot plus every active snapshot of the source and
-destination groups (one statement). No row lock: the row is not written, and every
-row-deleting path takes the advisory lock first, so it cannot vanish under us.
+History: one `priority_change` record only when the target version is **active**,
+decided on the post-lock read (a draft edit queued behind that draft's activation
+lands on an active version and records — P-20); the record's requested quantity is
+the effective value with its source (`snapshot_history_quantities`, Q-10). Draft
+edits write no history.
+
+Locks: advisory -> the target snapshot plus every open snapshot of the source and
+destination groups **in that version** (one statement). No row lock: the row is not
+written, and every row-deleting path takes the advisory lock first, so it cannot
+vanish under us.
 """
 
 from __future__ import annotations
@@ -16,9 +28,11 @@ from __future__ import annotations
 from sqlalchemy import or_, select, update
 
 from beyo_manager.domain.stock_report.enums import StockReportHistoryRecordTypeEnum
-from beyo_manager.domain.stock_report.snapshot_rules import is_snapshot_active
+from beyo_manager.domain.stock_report.snapshot_rules import (
+    is_version_active,
+    snapshot_history_quantities,
+)
 from beyo_manager.errors.not_found import NotFound
-from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.stock_report.stock_report_history_record import (
     StockReportHistoryRecord,
 )
@@ -31,19 +45,23 @@ from beyo_manager.services.commands.stock_report._events import (
     coalesce_stock_report_events,
 )
 from beyo_manager.services.commands.stock_report._load_row_with_snapshot import (
-    load_active_snapshot,
-    serialize_row_with_active_snapshot,
+    serialize_row_with_version_snapshot,
 )
 from beyo_manager.services.commands.stock_report._locks import (
     acquire_stock_report_order_lock,
 )
-from beyo_manager.services.commands.stock_report._predicates import snapshot_is_open
 from beyo_manager.services.commands.stock_report._ordering import (
     append_to_priority_group,
     close_priority_gap,
 )
+from beyo_manager.services.commands.stock_report._predicates import snapshot_is_open
 from beyo_manager.services.commands.stock_report._snapshot_values import (
     snapshot_values,
+)
+from beyo_manager.services.commands.stock_report._target_snapshot import (
+    NO_ACTIVE_SNAPSHOT_MESSAGE,
+    check_locked_target,
+    discover_target_snapshot,
 )
 from beyo_manager.services.commands.stock_report.requests import (
     parse_set_stock_report_item_priority_request,
@@ -51,6 +69,13 @@ from beyo_manager.services.commands.stock_report.requests import (
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import dispatch
+
+__all__ = [
+    "NO_ACTIVE_SNAPSHOT_MESSAGE",
+    "find_row",
+    "lock_snapshot_and_groups",
+    "set_stock_report_item_priority",
+]
 
 _MOVER_RETURNING = (
     StockReportItemSnapshot.client_id,
@@ -62,11 +87,6 @@ _MOVER_RETURNING = (
     StockReportItemSnapshot.quantity_resolved,
     StockReportItemSnapshot.quantity_requested_scanner,
     StockReportItemSnapshot.quantity_requested_manual,
-)
-
-NO_ACTIVE_SNAPSHOT_MESSAGE = (
-    "STOCK_REPORT_NO_ACTIVE_SNAPSHOT: this stock report item has no active snapshot; "
-    "create a new stock report version first."
 )
 
 
@@ -128,22 +148,22 @@ async def set_stock_report_item_priority(ctx: ServiceContext) -> dict:
 
         row = await find_row(ctx.session, ctx.workspace_id, request.client_id)
         # Unlocked discovery — it only decides which ids to lock (§9 rule 4).
-        discovered = await load_active_snapshot(
-            ctx.session, ctx.workspace_id, row.client_id
+        target = await discover_target_snapshot(
+            ctx.session, ctx.workspace_id, row.client_id, request.version_id
         )
-        if discovered is None:
-            raise ValidationError(NO_ACTIVE_SNAPSHOT_MESSAGE)
+        discovered = target.snapshot
         locked = await lock_snapshot_and_groups(
             ctx.session,
             ctx.workspace_id,
-            discovered.version_id,
+            target.version_id,
             discovered.client_id,
             (discovered.priority, target_priority),
         )
         # Re-read after the lock and decide on that (§9 rule 4).
         snapshot = locked.get(discovered.client_id)
-        if snapshot is None or not is_snapshot_active(snapshot):
-            raise ValidationError(NO_ACTIVE_SNAPSHOT_MESSAGE)
+        version = await check_locked_target(
+            ctx.session, ctx.workspace_id, target, snapshot
+        )
 
         source_priority = snapshot.priority
         source_order = snapshot.priority_order
@@ -155,8 +175,8 @@ async def set_stock_report_item_priority(ctx: ServiceContext) -> dict:
         if source_priority == target_priority:
             # §14B B2: no write, no record, no stamp, no event.
             return {
-                "stock_report_item": await serialize_row_with_active_snapshot(
-                    ctx.session, ctx.workspace_id, row.client_id
+                "stock_report_item": await serialize_row_with_version_snapshot(
+                    ctx.session, ctx.workspace_id, row.client_id, version.client_id
                 )
             }
 
@@ -196,21 +216,23 @@ async def set_stock_report_item_priority(ctx: ServiceContext) -> dict:
             .one()
         )
 
-        # MC-6: exactly one record, per **row**, inserted after all mutations, so its
-        # position is the post-move one and its quantities the row's live ones.
-        ctx.session.add(
-            StockReportHistoryRecord(
-                workspace_id=ctx.workspace_id,
-                stock_report_item_id=row.client_id,
-                type=StockReportHistoryRecordTypeEnum.PRIORITY_CHANGE,
-                quantity_requested=row.quantity_requested,
-                quantity_awaiting=row.quantity_awaiting,
-                priority=mover["priority"],
-                priority_order=mover["priority_order"],
-                created_by_id=ctx.user_id or None,
-                created_at=ctx.now,
+        if is_version_active(version):
+            # MC-6: exactly one record, per **row**, inserted after all mutations,
+            # so its position is the post-move one; the requested quantity is the
+            # snapshot's effective value (Q-10). A draft edit writes none.
+            ctx.session.add(
+                StockReportHistoryRecord(
+                    workspace_id=ctx.workspace_id,
+                    stock_report_item_id=row.client_id,
+                    type=StockReportHistoryRecordTypeEnum.PRIORITY_CHANGE,
+                    **snapshot_history_quantities(snapshot, row=row),
+                    quantity_awaiting=row.quantity_awaiting,
+                    priority=mover["priority"],
+                    priority_order=mover["priority_order"],
+                    created_by_id=ctx.user_id or None,
+                    created_at=ctx.now,
+                )
             )
-        )
         await ctx.session.flush()
 
         events = [
@@ -230,8 +252,8 @@ async def set_stock_report_item_priority(ctx: ServiceContext) -> dict:
             # guaranteed, so neighbours follow their new position.
             for neighbour in sorted(shifted, key=lambda r: r["priority_order"])
         )
-        payload = await serialize_row_with_active_snapshot(
-            ctx.session, ctx.workspace_id, row.client_id
+        payload = await serialize_row_with_version_snapshot(
+            ctx.session, ctx.workspace_id, row.client_id, version.client_id
         )
 
     await dispatch(

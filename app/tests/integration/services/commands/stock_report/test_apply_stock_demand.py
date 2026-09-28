@@ -14,7 +14,7 @@ import time
 from datetime import datetime, timezone
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 
 from beyo_manager.config import Settings
 from beyo_manager.domain.stock_report.criteria_normalization import (
@@ -33,6 +33,9 @@ from beyo_manager.models.tables.stock_report.stock_report_history_record import 
     StockReportHistoryRecord,
 )
 from beyo_manager.models.tables.stock_report.stock_report_item import StockReportItem
+from beyo_manager.models.tables.stock_report.stock_report_item_snapshot import (
+    StockReportItemSnapshot,
+)
 from beyo_manager.models.tables.stock_report.stock_task_assignment import (
     StockTaskAssignment,
 )
@@ -920,8 +923,64 @@ async def test_c6a_statement_count_equal_across_batch_sizes_all_new(db_session):
             await _AD(db_session, ws_large, large_entries)
 
         assert len(small_statements) == len(large_statements)
-        assert len(small_statements) <= 8
+        assert len(small_statements) <= 11
 
+        await assert_stock_report_clean(db_session, ws_small)
+        await assert_stock_report_clean(db_session, ws_large)
+    finally:
+        await purge_stock_report_workspace(db_session, ws_small)
+        await purge_stock_report_workspace(db_session, ws_large)
+        await db_session.commit()
+
+
+async def _open_drafts(session, workspace_id, count):
+    """`count` drafts through the shipped command (draft versions, 2026-09-28)."""
+    from beyo_manager.services.commands.stock_report.create_stock_report_snapshot_version import (
+        create_stock_report_snapshot_version,
+    )
+    from beyo_manager.services.context import ServiceContext
+
+    for _ in range(count):
+        await create_stock_report_snapshot_version(
+            ServiceContext(
+                identity={"workspace_id": workspace_id, "user_id": None, "role_name": "manager"},
+                incoming_data={"draft": True},
+                session=session,
+                now=NOW,
+            )
+        )
+    await session.commit()
+
+
+async def test_c6a_bound_holds_with_two_drafts_present_all_new(db_session):
+    """Card 7 (plan §4.9): the created rows join every draft in three statements
+    whatever the batch size and however many drafts there are — the D6 promise
+    'does not grow with the batch' kept at the new bound of 11."""
+    seeded_small = await seed_stock_report_workspace(db_session, suffix="c6dsmall2")
+    seeded_large = await seed_stock_report_workspace(db_session, suffix="c6dlarge2")
+    await db_session.commit()
+    ws_small, ws_large = seeded_small.workspace.client_id, seeded_large.workspace.client_id
+    try:
+        await _open_drafts(db_session, ws_small, 2)
+        await _open_drafts(db_session, ws_large, 2)
+        small_entries = [_entry(i, "Dining Chairs", {"wood_group": [f"v{i}"]}, 1) for i in range(3)]
+        large_entries = [_entry(i, "Dining Chairs", {"wood_group": [f"v{i}"]}, 1) for i in range(300)]
+
+        async with record_statements(db_session) as small_statements:
+            await _AD(db_session, ws_small, small_entries)
+        async with record_statements(db_session) as large_statements:
+            await _AD(db_session, ws_large, large_entries)
+
+        assert len(small_statements) == len(large_statements)
+        assert len(small_statements) <= 11
+        # And the drafts really hold the rows: 2 drafts × 300 rows.
+        assert (
+            await db_session.scalar(
+                select(func.count()).select_from(StockReportItemSnapshot).where(
+                    StockReportItemSnapshot.workspace_id == ws_large
+                )
+            )
+        ) == 600
         await assert_stock_report_clean(db_session, ws_small)
         await assert_stock_report_clean(db_session, ws_large)
     finally:
@@ -950,7 +1009,7 @@ async def test_c6b_statement_count_equal_across_batch_sizes_all_changed(db_sessi
             await _AD(db_session, ws_large, large_v2)
 
         assert len(small_statements) == len(large_statements)
-        assert len(small_statements) <= 8
+        assert len(small_statements) <= 11
 
         await assert_stock_report_clean(db_session, ws_small)
         await assert_stock_report_clean(db_session, ws_large)
@@ -978,7 +1037,7 @@ async def test_c6c_statement_count_equal_across_batch_sizes_all_unchanged(db_ses
 
         assert len(small_statements) == len(large_statements)
         assert len(small_statements) == 5
-        assert len(small_statements) <= 8
+        assert len(small_statements) <= 11
 
         await assert_stock_report_clean(db_session, ws_small)
         await assert_stock_report_clean(db_session, ws_large)
@@ -1006,7 +1065,7 @@ async def test_c6d_statement_count_equal_across_batch_sizes_one_unknown_category
             await _AD(db_session, ws_large, build(300))
 
         assert len(small_statements) == len(large_statements)
-        assert len(small_statements) <= 8
+        assert len(small_statements) <= 11
 
         await assert_stock_report_clean(db_session, ws_small)
         await assert_stock_report_clean(db_session, ws_large)

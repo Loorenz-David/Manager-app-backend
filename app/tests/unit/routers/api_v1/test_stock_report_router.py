@@ -273,6 +273,7 @@ def test_list_items_route_reaches_service_for_every_role(monkeypatch, role):
         "item_category_ids": ["itc_1", "itc_2"],
         "live_stock": False,
         "missing_only": False,
+        "version_id": None,
         "limit": 20,
         "offset": 0,
     }
@@ -296,6 +297,7 @@ def test_list_items_route_passes_no_priority_when_the_param_is_absent(monkeypatc
         "item_category_ids": None,
         "live_stock": False,
         "missing_only": False,
+        "version_id": None,
         "limit": 20,
         "offset": 0,
     }
@@ -434,11 +436,11 @@ def test_versions_list_route_passes_limit_and_offset(monkeypatch):
         http.get("/api/v1/stock-report/snapshots/versions?limit=5&offset=10").status_code
         == 200
     )
-    assert calls[0][1].query_params == {"limit": 5, "offset": 10, "priority": None}
+    assert calls[0][1].query_params == {"limit": 5, "offset": 10, "priority": None, "state": None}
     assert http.get("/api/v1/stock-report/snapshots/versions?limit=201").status_code == 422
     # Default page size 20 (owner ruling 2026-09-26), not the contract's 50.
     assert http.get("/api/v1/stock-report/snapshots/versions").status_code == 200
-    assert calls[-1][1].query_params == {"limit": 20, "offset": 0, "priority": None}
+    assert calls[-1][1].query_params == {"limit": 20, "offset": 0, "priority": None, "state": None}
 
 
 @pytest.mark.parametrize(
@@ -506,3 +508,201 @@ def test_missing_quantity_route_refuses_malformed_bodies(monkeypatch, body):
     http, calls = client(monkeypatch, "manager")
     assert http.patch(MISSING_ROUTE, json=body).status_code == 422
     assert calls == []
+
+
+# ---------------------------------------------------------------------------
+# Draft versions (2026-09-28, plan §4.1, §4.4, §4.6, §4.8, §4.11, §6): the seven
+# new routes, the two new optional bodies, `state=` and `version_id=`.
+# ---------------------------------------------------------------------------
+
+from beyo_manager.services.queries.stock_report.count_stock_report_draft_versions import (  # noqa: E402
+    count_stock_report_draft_versions,
+)
+from beyo_manager.services.queries.stock_report.get_stock_report_active_snapshot_version import (  # noqa: E402
+    get_stock_report_active_snapshot_version,
+)
+from beyo_manager.services.queries.stock_report.get_stock_report_snapshot_version import (  # noqa: E402
+    get_stock_report_snapshot_version,
+)
+
+VERSIONED = "/api/v1/stock-report/snapshots/versions/srv_1/items/sri_1"
+VERSIONED_SELLER_ROUTES = [
+    (f"{VERSIONED}/priority", {"priority": "high"}),
+    (f"{VERSIONED}/priority-order", {"priority_order": 2}),
+    (f"{VERSIONED}/requested-quantity", {"quantity_requested": 7}),
+]
+VERSIONED_MISSING = f"{VERSIONED}/missing-quantity"
+
+
+def test_create_version_without_a_body_forwards_nothing(monkeypatch):
+    http, calls = client(monkeypatch, "manager")
+    assert http.post("/api/v1/stock-report/snapshots/versions").status_code == 200
+    assert calls[0][1].incoming_data == {}
+
+
+def test_create_version_forwards_only_the_keys_sent(monkeypatch):
+    """R-9: the command tells a sent schedule key from an absent one."""
+    http, calls = client(monkeypatch, "manager")
+    response = http.post(
+        "/api/v1/stock-report/snapshots/versions",
+        json={"draft": True, "title": "Upholstery push"},
+    )
+    assert response.status_code == 200
+    assert calls[0][1].incoming_data == {"draft": True, "title": "Upholstery push"}
+    response = http.post(
+        "/api/v1/stock-report/snapshots/versions",
+        json={"draft": False, "scheduled_activation_at": None},
+    )
+    assert response.status_code == 200
+    assert calls[-1][1].incoming_data == {"draft": False, "scheduled_activation_at": None}
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"draft": "yes"},
+        {"unexpected": True},
+        {"scheduled_activation_at": "2026-10-05T06:00:00"},  # naive
+        {"scheduled_activation_keeps_active_missing": "true"},
+    ],
+)
+def test_create_version_refuses_malformed_bodies(monkeypatch, body):
+    http, calls = client(monkeypatch, "manager")
+    assert http.post("/api/v1/stock-report/snapshots/versions", json=body).status_code == 422
+    assert calls == []
+
+
+def test_apply_priorities_forwards_the_optional_target(monkeypatch):
+    http, calls = client(monkeypatch, "manager")
+    path = "/api/v1/stock-report/snapshots/versions/srv_1/apply-priorities"
+    assert http.post(path).status_code == 200
+    assert calls[0][1].incoming_data == {"client_id": "srv_1"}
+    assert http.post(path, json={"target_version_id": "srv_2"}).status_code == 200
+    assert calls[-1][1].incoming_data == {"client_id": "srv_1", "target_version_id": "srv_2"}
+    assert http.post(path, json={"target_version_id": None}).status_code == 200
+    assert calls[-1][1].incoming_data == {"client_id": "srv_1", "target_version_id": None}
+    assert http.post(path, json={"unexpected": 1}).status_code == 422
+
+
+@pytest.mark.parametrize("role", ["admin", "manager", "seller"])
+@pytest.mark.parametrize(("path", "body"), VERSIONED_SELLER_ROUTES)
+def test_versioned_seller_routes_reach_service_with_both_path_ids(
+    monkeypatch, role, path, body
+):
+    http, calls = client(monkeypatch, role)
+    assert http.patch(path, json=body).status_code == 200
+    data = calls[0][1].incoming_data
+    assert (data["client_id"], data["version_id"]) == ("sri_1", "srv_1")
+    # The body model already parsed the value (an enum member for `priority`).
+    assert set(data) == {*body, "client_id", "version_id"}
+
+
+@pytest.mark.parametrize(("path", "body"), VERSIONED_SELLER_ROUTES)
+def test_versioned_seller_routes_reject_worker(monkeypatch, path, body):
+    http, calls = client(monkeypatch, "worker")
+    assert http.patch(path, json=body).status_code == 403
+    assert calls == []
+
+
+@pytest.mark.parametrize("role", ["admin", "manager", "worker"])
+def test_versioned_missing_route_reaches_service_and_accepts_null(monkeypatch, role):
+    http, calls = client(monkeypatch, role)
+    assert http.patch(VERSIONED_MISSING, json={"quantity_missing": 2}).status_code == 200
+    assert calls[0][1].incoming_data == {
+        "quantity_missing": 2,
+        "client_id": "sri_1",
+        "version_id": "srv_1",
+    }
+    assert http.patch(VERSIONED_MISSING, json={"quantity_missing": None}).status_code == 200
+    assert calls[-1][1].incoming_data["quantity_missing"] is None
+
+
+def test_versioned_missing_route_rejects_seller(monkeypatch):
+    http, calls = client(monkeypatch, "seller")
+    assert http.patch(VERSIONED_MISSING, json={"quantity_missing": 2}).status_code == 403
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "body", [{}, {"quantity_missing": "2"}, {"quantity_missing": -1}, {"quantity_missing": 1, "x": 1}]
+)
+def test_versioned_missing_route_refuses_malformed_bodies(monkeypatch, body):
+    http, calls = client(monkeypatch, "manager")
+    assert http.patch(VERSIONED_MISSING, json=body).status_code == 422
+    assert calls == []
+
+
+REQUESTED = f"{VERSIONED}/requested-quantity"
+
+
+def test_requested_quantity_route_accepts_null_and_zero(monkeypatch):
+    http, calls = client(monkeypatch, "seller")
+    assert http.patch(REQUESTED, json={"quantity_requested": None}).status_code == 200
+    assert calls[0][1].incoming_data["quantity_requested"] is None
+    assert http.patch(REQUESTED, json={"quantity_requested": 0}).status_code == 200
+    assert calls[-1][1].incoming_data["quantity_requested"] == 0
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{}, {"quantity_requested": -1}, {"quantity_requested": "3"}, {"quantity_requested": 3, "x": 1}],
+)
+def test_requested_quantity_route_refuses_malformed_bodies(monkeypatch, body):
+    """Q-9: `{}` → 422, `-1` → 422, `"3"` → 422 — before any service runs."""
+    http, calls = client(monkeypatch, "manager")
+    assert http.patch(REQUESTED, json=body).status_code == 422
+    assert calls == []
+
+
+@pytest.mark.parametrize("role", ["admin", "manager", "worker", "seller"])
+def test_draft_count_and_single_version_reads_reach_service_for_every_role(monkeypatch, role):
+    http, calls = client(monkeypatch, role)
+    assert http.get("/api/v1/stock-report/snapshots/versions/draft-count").status_code == 200
+    assert calls[-1][0] is count_stock_report_draft_versions
+    assert http.get("/api/v1/stock-report/snapshots/versions/srv_1?priority=high").status_code == 200
+    assert calls[-1][0] is get_stock_report_snapshot_version
+    assert calls[-1][1].incoming_data == {"client_id": "srv_1"}
+    assert calls[-1][1].query_params == {"priority": "high"}
+
+
+def test_the_literal_segments_are_never_read_as_a_version_id(monkeypatch):
+    """P-23: `active` and `draft-count` are declared before `{client_id}`."""
+    http, calls = client(monkeypatch, "worker")
+    assert http.get("/api/v1/stock-report/snapshots/versions/active").status_code == 200
+    assert calls[-1][0] is get_stock_report_active_snapshot_version
+    assert http.get("/api/v1/stock-report/snapshots/versions/draft-count").status_code == 200
+    assert calls[-1][0] is count_stock_report_draft_versions
+    assert all(call[0] is not get_stock_report_snapshot_version for call in calls)
+
+
+@pytest.mark.parametrize("role", ["admin", "manager"])
+def test_delete_version_route_reaches_service_for_admin_and_manager(monkeypatch, role):
+    http, calls = client(monkeypatch, role)
+    assert http.delete("/api/v1/stock-report/snapshots/versions/srv_1").status_code == 200
+    assert calls[0][1].incoming_data == {"client_id": "srv_1"}
+
+
+@pytest.mark.parametrize("role", ["worker", "seller"])
+def test_delete_version_route_rejects_worker_and_seller(monkeypatch, role):
+    http, calls = client(monkeypatch, role)
+    assert http.delete("/api/v1/stock-report/snapshots/versions/srv_1").status_code == 403
+    assert calls == []
+
+
+def test_versions_list_route_passes_state_through_verbatim(monkeypatch):
+    http, calls = client(monkeypatch, "manager")
+    assert (
+        http.get("/api/v1/stock-report/snapshots/versions?state=active,closed").status_code
+        == 200
+    )
+    assert calls[0][1].query_params["state"] == "active,closed"
+    assert http.get("/api/v1/stock-report/snapshots/versions").status_code == 200
+    assert calls[-1][1].query_params["state"] is None
+
+
+def test_list_items_route_passes_version_id_through(monkeypatch):
+    http, calls = client(monkeypatch, "worker")
+    assert http.get("/api/v1/stock-report/items?version_id=srv_1").status_code == 200
+    assert calls[0][1].query_params["version_id"] == "srv_1"
+    assert http.get("/api/v1/stock-report/items").status_code == 200
+    assert calls[-1][1].query_params["version_id"] is None

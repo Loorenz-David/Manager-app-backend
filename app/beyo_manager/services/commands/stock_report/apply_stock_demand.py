@@ -4,8 +4,10 @@ One owner-mode transaction: `set_config` (MC-9), the workspace check (MC-8 step 
 category resolution, unlocked identity discovery, an absent-identities-only insert
 (MC-4, C42), a sorted lock **by identity** (H17 — never by the client_ids step 4/5
 happened to see, because a concurrent insert can win the identity between them),
-a bulk update of changed rows, a bulk goal-record insert for increases, and the
-MC-9 part-1 deadline check as the last action before the block exits.
+the created rows' insert into every **draft** version (three statements, draft
+versions 2026-09-28 — the bound is 11, constant in batch size and draft count), a
+bulk update of changed rows, a bulk goal-record insert for increases, and the MC-9
+part-1 deadline check as the last action before the block exits.
 
 `time` is imported as the module and referenced as `time.monotonic()` so a test can
 replace the name `apply_stock_demand.time` with a `SimpleNamespace` (H19/B6) without
@@ -33,6 +35,9 @@ from beyo_manager.models.tables.stock_report.stock_report_item import StockRepor
 from beyo_manager.models.tables.stock_report.stock_report_item_snapshot import (
     StockReportItemSnapshot,
 )
+from beyo_manager.models.tables.stock_report.stock_report_snapshot_version import (
+    StockReportSnapshotVersion,
+)
 from beyo_manager.services.commands.stock_report._demand_lookup import (
     discover_live_rows_by_identity,
     resolve_categories_for_entries,
@@ -40,7 +45,13 @@ from beyo_manager.services.commands.stock_report._demand_lookup import (
 from beyo_manager.services.commands.stock_report._events import (
     build_stock_report_item_updated_event,
 )
-from beyo_manager.services.commands.stock_report._predicates import snapshot_is_active
+from beyo_manager.services.commands.stock_report._predicates import (
+    snapshot_is_active,
+    version_is_draft,
+)
+from beyo_manager.services.commands.stock_report.create_stock_report_snapshot_version import (
+    draft_snapshot_values,
+)
 from beyo_manager.services.commands.stock_report.stock_demand_entries import (
     DemandOutcome,
     StockDemandResult,
@@ -50,6 +61,64 @@ from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
 from beyo_manager.services.infra.location_tracker.webhook_verifier import (
     refuse_webhook_auth,
 )
+
+async def add_rows_to_every_draft(session, *, workspace_id, rows, now) -> dict:
+    """Insert one draft snapshot per `(draft, row)` for the workspace's drafts,
+    which are locked here and read again from that lock. Returns
+    `{version_id: inserted}`; nothing runs when there is no draft. The caller
+    holds the rows' locks. Shared by the demand webhook and the membership repair
+    (plan §4.12)."""
+    draft_ids = (
+        await session.scalars(
+            select(StockReportSnapshotVersion.client_id)
+            .where(
+                StockReportSnapshotVersion.workspace_id == workspace_id,
+                version_is_draft(),
+            )
+            .order_by(StockReportSnapshotVersion.client_id)
+            .with_for_update()
+        )
+    ).all()
+    if not draft_ids or not rows:
+        return {}
+    inserted = (
+        await session.execute(
+            pg_insert(StockReportItemSnapshot)
+            .on_conflict_do_nothing(
+                constraint="uq_stock_report_item_snapshots_version_row"
+            )
+            .returning(StockReportItemSnapshot.version_id),
+            [
+                draft_snapshot_values(
+                    workspace_id=workspace_id, version_id=draft_id, row=row, now=now
+                )
+                for draft_id in draft_ids
+                for row in rows
+            ],
+        )
+    ).scalars().all()
+    counts: dict[str, int] = {}
+    for version_id in inserted:
+        counts[version_id] = counts.get(version_id, 0) + 1
+    if counts:
+        values_sql = ", ".join(
+            f"(CAST(:v_{i} AS varchar), CAST(:n_{i} AS integer))"
+            for i in range(len(counts))
+        )
+        params: dict[str, object] = {}
+        for i, (version_id, count) in enumerate(sorted(counts.items())):
+            params[f"v_{i}"] = version_id
+            params[f"n_{i}"] = count
+        await session.execute(
+            text(
+                "UPDATE stock_report_snapshot_versions AS d "
+                "SET snapshot_count = d.snapshot_count + v.n "
+                f"FROM (VALUES {values_sql}) AS v(id, n) WHERE d.client_id = v.id"
+            ),
+            params,
+        )
+    return counts
+
 
 def _active_snapshot_column(column, workspace_id, row_id):
     """`column` of `row_id`'s active item snapshot as a scalar subquery — NULL when
@@ -212,6 +281,26 @@ async def apply_stock_demand(
 
         if len(locked_by_identity) != len(identity_list):
             raise RuntimeError("stock demand identity vanished under lock")
+
+        # 6b. A new row joins every **draft** (O-3, plan §4.9): the drafts are
+        #     locked (`FOR UPDATE`, ordered) and the insert uses exactly that result
+        #     — a draft deleted meanwhile is gone by the time the lock is granted
+        #     (§4.8 locks the version before its snapshots). One executemany insert
+        #     over drafts × created rows, `ON CONFLICT DO NOTHING`, then one count
+        #     update: three statements, constant in batch size and draft count
+        #     (card 7: the D6 bound is 11). Lock order stays MC-1: rows (held) ->
+        #     version rows -> snapshot inserts. The active version is untouched.
+        locked_ids = {row.client_id for row in locked_by_identity.values()}
+        created_locked = [
+            locked_by_identity[identity]
+            for identity in identity_list
+            if locked_by_identity[identity].client_id in created_client_ids
+            and locked_by_identity[identity].client_id in locked_ids
+        ]
+        if created_locked:
+            await add_rows_to_every_draft(
+                session, workspace_id=workspace_id, rows=created_locked, now=now
+            )
 
         # 7-8. Bulk update of changed rows; bulk goal-record insert for increases.
         to_update: list[tuple[str, int]] = []

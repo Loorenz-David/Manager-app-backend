@@ -11,6 +11,8 @@
   quantity: the user's manual override when set, else Scanner's value, which is the
   **live row's** while the version is a draft and the frozen
   `quantity_requested_scanner` once activated (a closed snapshot never reads the row).
+* `snapshot_history_quantities` — what every history record written against a
+  snapshot stores as its requested quantity: the effective value and its source.
 * `effective_quantity_missing` / `quantity_missing_source` — the missing twin: an
   activated snapshot's own number; on a draft the typed value, else the active
   version's value for the same row (borrowed), else 0.
@@ -155,6 +157,18 @@ def quantity_requested_source(snapshot) -> StockReportQuantityRequestedSourceEnu
     if snapshot.quantity_requested_manual is not None:
         return StockReportQuantityRequestedSourceEnum.MANUAL
     return StockReportQuantityRequestedSourceEnum.SCANNER
+
+
+def snapshot_history_quantities(snapshot, *, row) -> dict:
+    """The two requested columns of a history record written **against a
+    snapshot** (the priority and priority-order commands, apply-priorities onto the
+    active version, activation, the override route): the **effective** value and
+    where it came from (plan §3.5, Q-10). Scanner's own `quantity_requested_change`
+    records keep the row's value with `scanner` and never call this."""
+    return {
+        "quantity_requested": effective_quantity_requested(snapshot, row=row),
+        "quantity_requested_source": quantity_requested_source(snapshot),
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, bindparam, select, text, update
+from sqlalchemy import DateTime, bindparam, delete, func, select, text, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from beyo_manager.domain.stock_report.enums import StockReportRepairTargetKindEnum
 from beyo_manager.models.tables.stock_report.stock_report_history_record import (
     StockReportHistoryRecord,
@@ -9,12 +10,16 @@ from beyo_manager.models.tables.stock_report.stock_report_item import StockRepor
 from beyo_manager.models.tables.stock_report.stock_report_item_snapshot import (
     StockReportItemSnapshot,
 )
+from beyo_manager.models.tables.stock_report.stock_report_snapshot_version import (
+    StockReportSnapshotVersion,
+)
 from beyo_manager.models.tables.stock_report.stock_task_assignment import (
     StockTaskAssignment,
 )
 from beyo_manager.services.commands.stock_report._events import (
     build_stock_report_item_snapshot_updated_event,
 )
+from beyo_manager.services.commands.stock_report._ordering import close_priority_gap
 from beyo_manager.services.commands.stock_report._snapshot_values import (
     snapshot_values,
 )
@@ -22,7 +27,13 @@ from beyo_manager.services.commands.stock_report._repair_records import (
     write_repair_record,
 )
 from beyo_manager.services.commands.stock_report._task_flag import set_task_stock_flag
-from beyo_manager.services.commands.stock_report._predicates import snapshot_is_open
+from beyo_manager.services.commands.stock_report._predicates import (
+    snapshot_is_open,
+    version_is_open,
+)
+from beyo_manager.services.commands.stock_report.create_stock_report_snapshot_version import (
+    draft_snapshot_values,
+)
 from beyo_manager.services.commands.stock_report._locks import (
     acquire_stock_report_order_lock,
     lock_stock_report_item_snapshots,
@@ -50,6 +61,8 @@ _TARGETS = {
     "order_density": StockReportRepairTargetKindEnum.GROUP,
     "missing_over_ceiling": StockReportRepairTargetKindEnum.ITEM_SNAPSHOT,
     "snapshot_version_state_mismatch": StockReportRepairTargetKindEnum.ITEM_SNAPSHOT,
+    # Draft membership (plan §4.12) targets the **version** (2026-09-28).
+    "draft_membership_mismatch": StockReportRepairTargetKindEnum.SNAPSHOT_VERSION,
 }
 
 # State repair (ii): stamp the version's `active_at` onto a snapshot that lacks
@@ -70,6 +83,73 @@ _STAMP_ACTIVE_AT = text(
     bindparam("active_at", type_=DateTime(timezone=True)),
     bindparam("now", type_=DateTime(timezone=True)),
 )
+
+
+async def _repair_draft_membership(ctx, divergence, changed_snapshot_ids):
+    """A missing snapshot is inserted as the webhook inserts it (§4.9's shape, one
+    row into one draft); a stray one — it may hold a priority — closes its gap in
+    the draft's group and is deleted; the draft's `snapshot_count` is recomputed."""
+    version_id = divergence["client_id"]
+    if divergence["stored"] is None:
+        row = await ctx.session.scalar(
+            select(StockReportItem).where(
+                StockReportItem.workspace_id == ctx.workspace_id,
+                StockReportItem.client_id == divergence["expected"],
+            )
+        )
+        await ctx.session.execute(
+            pg_insert(StockReportItemSnapshot).values(
+                draft_snapshot_values(
+                    workspace_id=ctx.workspace_id,
+                    version_id=version_id,
+                    row=row,
+                    now=ctx.now,
+                )
+            )
+        )
+    else:
+        stray = await ctx.session.scalar(
+            select(StockReportItemSnapshot).where(
+                StockReportItemSnapshot.workspace_id == ctx.workspace_id,
+                StockReportItemSnapshot.version_id == version_id,
+                StockReportItemSnapshot.stock_report_item_id == divergence["stored"],
+            )
+        )
+        if stray.priority is not None:
+            shifted = await close_priority_gap(
+                ctx.session,
+                version_id=version_id,
+                priority=stray.priority,
+                removed_order=stray.priority_order,
+            )
+            changed_snapshot_ids.update(neighbour["client_id"] for neighbour in shifted)
+        await ctx.session.execute(
+            delete(StockReportItemSnapshot).where(
+                StockReportItemSnapshot.workspace_id == ctx.workspace_id,
+                StockReportItemSnapshot.client_id == stray.client_id,
+            )
+        )
+    # The draft's `snapshot_count` is its live membership: recomputed, not
+    # nudged, so a count left behind by whatever caused the divergence is fixed
+    # with it.
+    held = (
+        select(func.count())
+        .select_from(StockReportItemSnapshot)
+        .where(StockReportItemSnapshot.version_id == version_id)
+        .scalar_subquery()
+    )
+    result = await ctx.session.execute(
+        update(StockReportSnapshotVersion)
+        .where(
+            StockReportSnapshotVersion.workspace_id == ctx.workspace_id,
+            StockReportSnapshotVersion.client_id == version_id,
+        )
+        .values(snapshot_count=held)
+    )
+    if result.rowcount != 1:
+        raise RuntimeError(
+            "draft-membership repair affected an unexpected number of rows"
+        )
 
 
 async def _repair_priority_orders(ctx, repaired, changed_snapshot_ids):
@@ -202,6 +282,18 @@ async def repair_stock_report(ctx) -> dict:
                 )
             ).all(),
         )
+        # The version rows (drafts', for the membership kind) come after the
+        # snapshots — the order plan §7 fixes (Q-18); the scheduler rows will
+        # follow them.
+        await ctx.session.execute(
+            select(StockReportSnapshotVersion.client_id)
+            .where(
+                StockReportSnapshotVersion.workspace_id == ctx.workspace_id,
+                version_is_open(),
+            )
+            .order_by(StockReportSnapshotVersion.client_id)
+            .with_for_update()
+        )
         await lock_stock_task_assignments(
             ctx.session,
             ctx.workspace_id,
@@ -252,6 +344,8 @@ async def repair_stock_report(ctx) -> dict:
                     divergence["expected"] == "true",
                     require_update=True,
                 )
+            elif kind == "draft_membership_mismatch":
+                await _repair_draft_membership(ctx, divergence, changed_snapshot_ids)
             elif kind == "missing_over_ceiling":
                 result = await ctx.session.execute(
                     update(StockReportItemSnapshot)

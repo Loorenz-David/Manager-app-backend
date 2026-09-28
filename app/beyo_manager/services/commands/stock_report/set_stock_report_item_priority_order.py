@@ -1,7 +1,9 @@
 """`set_stock_report_item_priority_order` — MC-7's in-group move (master plan §6.5,
 phase 12; intention §7A before/after rows 1–5, §6A MC-6, §14B B2, MC-17, MC-19),
-retargeted on 2026-09-26 to the row's **active item snapshot** — see the sibling
-`set_stock_report_item_priority.py` for the shared boundary and lock shape.
+retargeted on 2026-09-26 to the row's **active item snapshot** and on 2026-09-28
+to the row's snapshot in a named version — see the sibling
+`set_stock_report_item_priority.py` for the shared boundary, the shortcut /
+versioned mapping and the lock shape.
 """
 
 from __future__ import annotations
@@ -9,7 +11,10 @@ from __future__ import annotations
 from sqlalchemy import update
 
 from beyo_manager.domain.stock_report.enums import StockReportHistoryRecordTypeEnum
-from beyo_manager.domain.stock_report.snapshot_rules import is_snapshot_active
+from beyo_manager.domain.stock_report.snapshot_rules import (
+    is_version_active,
+    snapshot_history_quantities,
+)
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.stock_report.stock_report_history_record import (
     StockReportHistoryRecord,
@@ -22,8 +27,7 @@ from beyo_manager.services.commands.stock_report._events import (
     coalesce_stock_report_events,
 )
 from beyo_manager.services.commands.stock_report._load_row_with_snapshot import (
-    load_active_snapshot,
-    serialize_row_with_active_snapshot,
+    serialize_row_with_version_snapshot,
 )
 from beyo_manager.services.commands.stock_report._locks import (
     acquire_stock_report_order_lock,
@@ -32,11 +36,14 @@ from beyo_manager.services.commands.stock_report._ordering import shift_within_g
 from beyo_manager.services.commands.stock_report._snapshot_values import (
     snapshot_values,
 )
+from beyo_manager.services.commands.stock_report._target_snapshot import (
+    check_locked_target,
+    discover_target_snapshot,
+)
 from beyo_manager.services.commands.stock_report.requests import (
     parse_set_stock_report_item_priority_order_request,
 )
 from beyo_manager.services.commands.stock_report.set_stock_report_item_priority import (
-    NO_ACTIVE_SNAPSHOT_MESSAGE,
     find_row,
     lock_snapshot_and_groups,
 )
@@ -65,21 +72,21 @@ async def set_stock_report_item_priority_order(ctx: ServiceContext) -> dict:
         await acquire_stock_report_order_lock(ctx.session, ctx.workspace_id)
 
         row = await find_row(ctx.session, ctx.workspace_id, request.client_id)
-        discovered = await load_active_snapshot(
-            ctx.session, ctx.workspace_id, row.client_id
+        target_snapshot = await discover_target_snapshot(
+            ctx.session, ctx.workspace_id, row.client_id, request.version_id
         )
-        if discovered is None:
-            raise ValidationError(NO_ACTIVE_SNAPSHOT_MESSAGE)
+        discovered = target_snapshot.snapshot
         locked = await lock_snapshot_and_groups(
             ctx.session,
             ctx.workspace_id,
-            discovered.version_id,
+            target_snapshot.version_id,
             discovered.client_id,
             (discovered.priority,),
         )
         snapshot = locked.get(discovered.client_id)
-        if snapshot is None or not is_snapshot_active(snapshot):
-            raise ValidationError(NO_ACTIVE_SNAPSHOT_MESSAGE)
+        version = await check_locked_target(
+            ctx.session, ctx.workspace_id, target_snapshot, snapshot
+        )
 
         priority = snapshot.priority
         if priority is None:
@@ -107,8 +114,8 @@ async def set_stock_report_item_priority_order(ctx: ServiceContext) -> dict:
         if target == position:
             # §14B B2: no write, no record, no stamp, no event.
             return {
-                "stock_report_item": await serialize_row_with_active_snapshot(
-                    ctx.session, ctx.workspace_id, row.client_id
+                "stock_report_item": await serialize_row_with_version_snapshot(
+                    ctx.session, ctx.workspace_id, row.client_id, version.client_id
                 )
             }
 
@@ -140,21 +147,22 @@ async def set_stock_report_item_priority_order(ctx: ServiceContext) -> dict:
             .one()
         )
 
-        # MC-6: one record for the moved row only — shifted neighbours get none —
-        # inserted after all mutations.
-        ctx.session.add(
-            StockReportHistoryRecord(
-                workspace_id=ctx.workspace_id,
-                stock_report_item_id=row.client_id,
-                type=StockReportHistoryRecordTypeEnum.PRIORITY_ORDER_CHANGE,
-                quantity_requested=row.quantity_requested,
-                quantity_awaiting=row.quantity_awaiting,
-                priority=mover["priority"],
-                priority_order=mover["priority_order"],
-                created_by_id=ctx.user_id or None,
-                created_at=ctx.now,
+        if is_version_active(version):
+            # MC-6: one record for the moved row only — shifted neighbours get
+            # none — inserted after all mutations. A draft edit writes none.
+            ctx.session.add(
+                StockReportHistoryRecord(
+                    workspace_id=ctx.workspace_id,
+                    stock_report_item_id=row.client_id,
+                    type=StockReportHistoryRecordTypeEnum.PRIORITY_ORDER_CHANGE,
+                    **snapshot_history_quantities(snapshot, row=row),
+                    quantity_awaiting=row.quantity_awaiting,
+                    priority=mover["priority"],
+                    priority_order=mover["priority_order"],
+                    created_by_id=ctx.user_id or None,
+                    created_at=ctx.now,
+                )
             )
-        )
         await ctx.session.flush()
 
         events = [
@@ -172,8 +180,8 @@ async def set_stock_report_item_priority_order(ctx: ServiceContext) -> dict:
             )
             for neighbour in sorted(shifted, key=lambda r: r["priority_order"])
         )
-        payload = await serialize_row_with_active_snapshot(
-            ctx.session, ctx.workspace_id, row.client_id
+        payload = await serialize_row_with_version_snapshot(
+            ctx.session, ctx.workspace_id, row.client_id, version.client_id
         )
 
     await dispatch(

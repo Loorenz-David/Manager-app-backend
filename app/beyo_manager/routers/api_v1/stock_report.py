@@ -1,6 +1,8 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, StrictInt
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StrictBool, StrictInt
 from sqlalchemy.ext.asyncio import AsyncSession
 from beyo_manager.domain.items.enums import ItemMajorCategoryEnum
 from beyo_manager.domain.stock_report.enums import StockReportPriorityEnum
@@ -32,6 +34,9 @@ from beyo_manager.services.commands.stock_report.repair_stock_report import (
 from beyo_manager.services.commands.stock_report.delete_stock_report_item import (
     delete_stock_report_item,
 )
+from beyo_manager.services.commands.stock_report.delete_stock_report_snapshot_version import (
+    delete_stock_report_snapshot_version,
+)
 from beyo_manager.services.commands.stock_report.set_stock_report_item_priority import (
     set_stock_report_item_priority,
 )
@@ -41,6 +46,12 @@ from beyo_manager.services.commands.stock_report.set_stock_report_item_priority_
 from beyo_manager.services.commands.stock_report.set_stock_report_item_snapshot_missing_quantity import (
     set_stock_report_item_snapshot_missing_quantity,
 )
+from beyo_manager.services.commands.stock_report.set_stock_report_item_snapshot_requested_quantity import (
+    set_stock_report_item_snapshot_requested_quantity,
+)
+from beyo_manager.services.queries.stock_report.count_stock_report_draft_versions import (
+    count_stock_report_draft_versions,
+)
 from beyo_manager.services.queries.stock_report.get_stock_report_active_snapshot_version import (
     get_stock_report_active_snapshot_version,
 )
@@ -49,6 +60,9 @@ from beyo_manager.services.queries.stock_report.get_stock_report_consistency imp
 )
 from beyo_manager.services.queries.stock_report.get_stock_report_missing_summary import (
     get_stock_report_missing_summary,
+)
+from beyo_manager.services.queries.stock_report.get_stock_report_snapshot_version import (
+    get_stock_report_snapshot_version,
 )
 from beyo_manager.services.queries.stock_report.list_stock_report_items import (
     list_stock_report_items,
@@ -107,6 +121,46 @@ class _SetStockReportItemSnapshotMissingQuantityBody(BaseModel):
 
     # Strict for the same reason as `priority_order`: "3" must not become 3.
     quantity_missing: StrictInt
+
+
+class _SetVersionedMissingQuantityBody(BaseModel):
+    """The versioned missing route (drafts, 2026-09-28; plan §4.6, O-9): a number
+    types a draft's own value, `null` clears it. Required, no default."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    quantity_missing: Annotated[StrictInt, Field(ge=0)] | None
+
+
+class _SetRequestedQuantityBody(BaseModel):
+    """`PATCH …/requested-quantity` (plan §4.11, Q-9): strict, non-negative,
+    required; `null` reverts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    quantity_requested: Annotated[StrictInt, Field(ge=0)] | None
+
+
+class _CreateStockReportSnapshotVersionBody(BaseModel):
+    """`POST /snapshots/versions` (plan §4.1). Optional on the wire; the router
+    forwards only the keys sent (`exclude_unset`) so the command can tell a sent
+    schedule key from an absent one (R-9). The title rule (trim, then cap at 200)
+    and the schedule rules live in the command's request model."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    draft: StrictBool = False
+    title: str | None = None
+    scheduled_activation_at: AwareDatetime | None = None
+    scheduled_activation_keeps_active_missing: StrictBool = False
+
+
+class _ApplyStockReportSnapshotVersionPrioritiesBody(BaseModel):
+    """Optional body (plan §4.4): `null` or absent → the active version."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    target_version_id: str | None = None
 
 
 class _PreviewStockTaskAssignmentBody(BaseModel):
@@ -218,12 +272,19 @@ async def route_list_stock_report_snapshot_versions(
     offset: int = Query(0, ge=0),
     # Same values and meaning as on `GET /items`; selects what `progress` sums.
     priority: str | None = None,
+    # A comma list of `draft|active|closed`, parsed by the query (G-2).
+    state: str | None = None,
 ):
     return await _run(
         list_stock_report_snapshot_versions,
         claims,
         session,
-        query_params={"limit": limit, "offset": offset, "priority": priority},
+        query_params={
+            "limit": limit,
+            "offset": offset,
+            "priority": priority,
+            "state": state,
+        },
     )
 
 
@@ -233,7 +294,7 @@ async def route_get_stock_report_active_snapshot_version(
     session: AsyncSession = Depends(get_db),
     priority: str | None = None,
 ):
-    # Static segment, declared before any `/snapshots/versions/{client_id}/…` route.
+    # Static segment, declared before any `/snapshots/versions/{client_id}…` route.
     return await _run(
         get_stock_report_active_snapshot_version,
         claims,
@@ -242,18 +303,64 @@ async def route_get_stock_report_active_snapshot_version(
     )
 
 
+@router.get("/snapshots/versions/draft-count")
+async def route_count_stock_report_draft_versions(
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+):
+    # Static segment too (G-3), declared before `/snapshots/versions/{client_id}`.
+    return await _run(count_stock_report_draft_versions, claims, session)
+
+
+@router.get("/snapshots/versions/{client_id}")
+async def route_get_stock_report_snapshot_version(
+    client_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+    priority: str | None = None,
+):
+    return await _run(
+        get_stock_report_snapshot_version,
+        claims,
+        session,
+        incoming_data={"client_id": client_id},
+        query_params={"priority": priority},
+    )
+
+
 @router.post("/snapshots/versions")
 async def route_create_stock_report_snapshot_version(
+    body: _CreateStockReportSnapshotVersionBody | None = None,
     claims: dict = Depends(require_roles([ADMIN, MANAGER])),
     session: AsyncSession = Depends(get_db),
 ):
-    # No body: a version is taken of every live row, there is nothing to choose.
-    return await _run(create_stock_report_snapshot_version, claims, session)
+    # No body → exactly the v6 create; only the keys sent are forwarded.
+    return await _run(
+        create_stock_report_snapshot_version,
+        claims,
+        session,
+        incoming_data=body.model_dump(exclude_unset=True) if body is not None else {},
+    )
+
+
+@router.delete("/snapshots/versions/{client_id}")
+async def route_delete_stock_report_snapshot_version(
+    client_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        delete_stock_report_snapshot_version,
+        claims,
+        session,
+        incoming_data={"client_id": client_id},
+    )
 
 
 @router.post("/snapshots/versions/{client_id}/apply-priorities")
 async def route_apply_stock_report_snapshot_version_priorities(
     client_id: str,
+    body: _ApplyStockReportSnapshotVersionPrioritiesBody | None = None,
     claims: dict = Depends(require_roles([ADMIN, MANAGER])),
     session: AsyncSession = Depends(get_db),
 ):
@@ -261,7 +368,95 @@ async def route_apply_stock_report_snapshot_version_priorities(
         apply_stock_report_snapshot_version_priorities,
         claims,
         session,
-        incoming_data={"client_id": client_id},
+        incoming_data={
+            **(body.model_dump() if body is not None else {}),
+            "client_id": client_id,
+        },
+    )
+
+
+# The versioned row edits (plan §4.6): the version in the path, the row's id as
+# `{client_id}`, the same bodies and roles as their board twins below except the
+# missing body, which admits `null` on a draft, and the new requested route.
+
+
+@router.patch("/snapshots/versions/{version_id}/items/{client_id}/priority")
+async def route_set_stock_report_item_priority_in_version(
+    version_id: str,
+    client_id: str,
+    body: _SetStockReportItemPriorityBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        set_stock_report_item_priority,
+        claims,
+        session,
+        incoming_data={
+            **body.model_dump(),
+            "client_id": client_id,
+            "version_id": version_id,
+        },
+    )
+
+
+@router.patch("/snapshots/versions/{version_id}/items/{client_id}/priority-order")
+async def route_set_stock_report_item_priority_order_in_version(
+    version_id: str,
+    client_id: str,
+    body: _SetStockReportItemPriorityOrderBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        set_stock_report_item_priority_order,
+        claims,
+        session,
+        incoming_data={
+            **body.model_dump(),
+            "client_id": client_id,
+            "version_id": version_id,
+        },
+    )
+
+
+@router.patch("/snapshots/versions/{version_id}/items/{client_id}/missing-quantity")
+async def route_set_stock_report_item_snapshot_missing_quantity_in_version(
+    version_id: str,
+    client_id: str,
+    body: _SetVersionedMissingQuantityBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        set_stock_report_item_snapshot_missing_quantity,
+        claims,
+        session,
+        incoming_data={
+            **body.model_dump(),
+            "client_id": client_id,
+            "version_id": version_id,
+        },
+    )
+
+
+@router.patch("/snapshots/versions/{version_id}/items/{client_id}/requested-quantity")
+async def route_set_stock_report_item_snapshot_requested_quantity(
+    version_id: str,
+    client_id: str,
+    body: _SetRequestedQuantityBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        set_stock_report_item_snapshot_requested_quantity,
+        claims,
+        session,
+        incoming_data={
+            **body.model_dump(),
+            "client_id": client_id,
+            "version_id": version_id,
+        },
     )
 
 
@@ -281,6 +476,8 @@ async def route_list_stock_report_items(
     item_category_ids: list[str] | None = Query(None),
     live_stock: bool = False,
     missing_only: bool = False,
+    # A version's rows in any state (drafts, 2026-09-28); omitted → the active one.
+    version_id: str | None = None,
     # Paginated since 2026-09-26; default 20 by owner ruling. `ge=1`: a zero or
     # negative limit has no meaning, and a negative one reaches Postgres as an error.
     limit: int = Query(20, ge=1, le=200),
@@ -299,6 +496,7 @@ async def route_list_stock_report_items(
             "item_category_ids": item_category_ids,
             "live_stock": live_stock,
             "missing_only": missing_only,
+            "version_id": version_id,
             "limit": limit,
             "offset": offset,
         },

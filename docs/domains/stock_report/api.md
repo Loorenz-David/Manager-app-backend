@@ -11,7 +11,10 @@ The state machine and the cascade strategy live beside this file in `states.md`.
 
 ## 1. Routes
 
-Nineteen routes in total, the three Scanner webhooks included. The `Roles` column is
+Twenty-six routes in total, the three Scanner webhooks included (nineteen at the
+snapshot layer; draft versions, 2026-09-28, added the four versioned row edits, the
+single-version read, the draft count and the draft delete — the activate, refresh and
+PATCH-version routes follow). The `Roles` column is
 the `require_roles([...])` list the router declares; `key` means the route is
 authenticated by the `x-api-key` header instead (Scanner-facing, no JWT, no role).
 
@@ -24,8 +27,15 @@ authenticated by the `x-api-key` header instead (Scanner-facing, no JWT, no role
 | `POST` | `/api/v1/stock-report/items/{client_id}/match-preview` | `admin`, `manager`, `worker` | `preview_stock_task_assignment_match` | 8A |
 | `GET` | `/api/v1/stock-report/snapshots/versions` | `admin`, `manager`, `worker`, `seller` | `list_stock_report_snapshot_versions` | snapshots |
 | `GET` | `/api/v1/stock-report/snapshots/versions/active` | `admin`, `manager`, `worker`, `seller` | `get_stock_report_active_snapshot_version` | snapshots (progress) |
+| `GET` | `/api/v1/stock-report/snapshots/versions/draft-count` | `admin`, `manager`, `worker`, `seller` | `count_stock_report_draft_versions` | drafts (G-3) |
+| `GET` | `/api/v1/stock-report/snapshots/versions/{client_id}` | `admin`, `manager`, `worker`, `seller` | `get_stock_report_snapshot_version` | drafts |
 | `POST` | `/api/v1/stock-report/snapshots/versions` | `admin`, `manager` | `create_stock_report_snapshot_version` | snapshots |
+| `DELETE` | `/api/v1/stock-report/snapshots/versions/{client_id}` | `admin`, `manager` | `delete_stock_report_snapshot_version` | drafts |
 | `POST` | `/api/v1/stock-report/snapshots/versions/{client_id}/apply-priorities` | `admin`, `manager` | `apply_stock_report_snapshot_version_priorities` | snapshots |
+| `PATCH` | `/api/v1/stock-report/snapshots/versions/{version_id}/items/{client_id}/priority` | `admin`, `manager`, `seller` | `set_stock_report_item_priority` | drafts |
+| `PATCH` | `/api/v1/stock-report/snapshots/versions/{version_id}/items/{client_id}/priority-order` | `admin`, `manager`, `seller` | `set_stock_report_item_priority_order` | drafts |
+| `PATCH` | `/api/v1/stock-report/snapshots/versions/{version_id}/items/{client_id}/missing-quantity` | `admin`, `manager`, `worker` | `set_stock_report_item_snapshot_missing_quantity` | drafts |
+| `PATCH` | `/api/v1/stock-report/snapshots/versions/{version_id}/items/{client_id}/requested-quantity` | `admin`, `manager`, `seller` | `set_stock_report_item_snapshot_requested_quantity` | drafts |
 | `GET` | `/api/v1/stock-report/snapshots/missing-summary` | `admin`, `manager`, `worker`, `seller` | `get_stock_report_missing_summary` | snapshots |
 | `GET` | `/api/v1/stock-report/items` | `admin`, `manager`, `worker`, `seller` | `list_stock_report_items` | 12 |
 | `PATCH` | `/api/v1/stock-report/items/{client_id}/missing-quantity` | `admin`, `manager`, `worker` | `set_stock_report_item_snapshot_missing_quantity` | snapshots |
@@ -50,10 +60,16 @@ under the project's `handoffs/to_frontend/`.
 | `POST …/assignments` | `{"entries": [{"stock_report_item_id", "task_id", "item_id", "override_property_mismatch"?}]}`, `extra="forbid"` |
 | `POST …/assignments/delete` | `{"client_ids": [...]}`, `extra="forbid"` |
 | `POST …/match-preview` | `{"task_id"?, "article_number"?, "sku"?, "item_category_id", "properties", "quantity"}` — `item_category_id` is **required** (owner ruling, round 3: an Item cannot validly exist without a category, so the preview is never more permissive than creation) |
-| `GET …/snapshots/versions` | no body; `?limit=` (default **20** — owner ruling, the one departure from `07_queries_local`'s 50; max 200), `?offset=`, and `?priority=` (as on `GET /items`; selects what `progress` sums) |
+| `GET …/snapshots/versions` | no body; `?limit=` (default **20** — owner ruling, the one departure from `07_queries_local`'s 50; max 200), `?offset=`, `?priority=` (as on `GET /items`; selects what `progress` sums) and `?state=` — a comma list of `draft`, `active`, `closed` (tokens trimmed, empties ignored, repeats folded; omitted → every state; any other token, `all` included → 422 `STOCK_REPORT_UNKNOWN_VERSION_STATE`) |
 | `GET …/snapshots/versions/active` | `?priority=` only, as on `GET /items` |
-| `POST …/snapshots/versions` | **none** — every live row is snapshotted, there is nothing to choose |
-| `POST …/snapshots/versions/{client_id}/apply-priorities` | **none**; the source version's id travels in the path |
+| `GET …/snapshots/versions/draft-count` | none |
+| `GET …/snapshots/versions/{client_id}` | no body; `?priority=` as on the list |
+| `POST …/snapshots/versions` | **optional**, `extra="forbid"`: `{"draft": false, "title": null, "scheduled_activation_at": null, "scheduled_activation_keeps_active_missing": false}`. No body → a new active version of every live row. `title` is trimmed then capped at 200 (longer → 422; blank → `null`). `draft: true` → a draft (live rows, nothing frozen). A schedule (a `scheduled_activation_at`, or the flag `true`) with `draft: false` → 422 `STOCK_REPORT_VERSION_NOT_DRAFT` (the documented default body is a plain active create); `scheduled_activation_at` must carry an offset (naive → 422) and lie after now (else 422 `STOCK_REPORT_SCHEDULE_IN_THE_PAST`); it is stored in UTC |
+| `DELETE …/snapshots/versions/{client_id}` | **none**; drafts only (422 `STOCK_REPORT_VERSION_NOT_DRAFT` otherwise) |
+| `POST …/snapshots/versions/{client_id}/apply-priorities` | **optional** `{"target_version_id": null}` — `null` or absent is the active version, a draft's id is that draft; the source version's id travels in the path |
+| `PATCH …/snapshots/versions/{version_id}/items/{client_id}/priority` and `…/priority-order` | the board twins' bodies, against the row's snapshot **in that version** (draft or active; closed → 422 `STOCK_REPORT_VERSION_IS_CLOSED`; absent/foreign version → 404; a row without a snapshot there → 404) |
+| `PATCH …/snapshots/versions/{version_id}/items/{client_id}/missing-quantity` | `{"quantity_missing": <strict int ≥ 0> \| null}` — a number types a draft's own value, `null` clears it so the row borrows the active version's again; `null` on the active version → 422 `STOCK_REPORT_VERSION_NOT_DRAFT` |
+| `PATCH …/snapshots/versions/{version_id}/items/{client_id}/requested-quantity` | `{"quantity_requested": <strict int ≥ 0> \| null}`, required — a number sets the snapshot's manual value (typing the value Scanner shows **pins** it), `null` reverts to Scanner's; on the active version the change clamps the snapshot's missing and writes a `quantity_requested_override` history record |
 | `GET …/snapshots/missing-summary` | none |
 | `GET …/items` | no body; `?limit=` (default **20** by owner ruling, min 1, max 200) and `?offset=` (`07_queries_local`, paginated since 2026-09-26); optional `?priority=high,medium,low`, `?include_zero_requested=true`, repeated `?item_major_categories=seat` / `?item_major_categories=wood`, repeated `?item_category_ids=<id>`, `?live_stock=true`, `?missing_only=true`. All supplied filters combine. By default the read is of the **active snapshots**: a row without one is absent, "zero requested" means `snapshot.quantity_requested − snapshot.quantity_missing <= 0` (hidden unless `include_zero_requested=true`, and never applied under `missing_only=true`, which returns every snapshot with `quantity_missing > 0`, fully missing ones included), and `priority` filters the snapshot's: omitted means unprioritised snapshots only, a list means only those priorities, and `priority=all` (alone, never combined) means every active snapshot, prioritised first in board order then unprioritised by `created_at, client_id`. `live_stock=true` reads every live row with its snapshot attached or `null`; `priority` and `missing_only` are refused on it |
 | `PATCH …/missing-quantity` | `{"quantity_missing": <strict int>}` — the string `"2"` is refused, never coerced; an absolute value, not a delta |
@@ -64,7 +80,12 @@ under the project's `handoffs/to_frontend/`.
 | the three webhooks | raw bytes, read with `await request.body()`; the body is a JSON array and is parsed by the command, not by FastAPI |
 
 The three item-scoped `PATCH` routes take the **row's** `client_id` in the path and act
-on the row's **active snapshot** (2026-09-26).
+on the row's **active snapshot** (2026-09-26); since 2026-09-28 they are the shortcut
+form of the versioned routes above — the same command, the active version resolved
+under the command's first lock, "no active version" and "no snapshot in it" both
+answered with 422 `STOCK_REPORT_NO_ACTIVE_SNAPSHOT`. `GET …/items` also takes
+`?version_id=` (that version's rows in any state; absent/foreign → 404; with
+`live_stock=true` → 422 `STOCK_REPORT_LIVE_STOCK_FILTER_CONFLICT`).
 
 ## 3. Response bodies
 
@@ -82,8 +103,12 @@ the router.
 | `POST …/match-preview` | `{"can_proceed", "override_required", "refusal_reason", "property_failures", "matched_item_client_id", "values_source", "checks"}` |
 | `GET …/snapshots/versions` | `{"stock_report_snapshot_versions": [<version + "filtered_snapshot_count" + "progress">], "stock_report_snapshot_versions_pagination": {"has_more", "limit", "offset"}}` |
 | `GET …/snapshots/versions/active` | `{"stock_report_snapshot_version": <version + "filtered_snapshot_count" + "progress">}`, or `{"stock_report_snapshot_version": null}` (200) when no version has been created yet |
+| `GET …/snapshots/versions/draft-count` | `{"draft_count": <int>}` |
+| `GET …/snapshots/versions/{client_id}` | `{"stock_report_snapshot_version": <version + "filtered_snapshot_count" + "progress">}`, any state; 404 absent/foreign |
 | `POST …/snapshots/versions` | `{"stock_report_snapshot_version": <version>}` |
-| `POST …/snapshots/versions/{client_id}/apply-priorities` | `{"changed": <int>, "stock_report_items": [<row>]}` — the rows whose snapshot moved |
+| `DELETE …/snapshots/versions/{client_id}` | `{"client_id": ...}` |
+| `POST …/snapshots/versions/{client_id}/apply-priorities` | `{"changed": <int>, "stock_report_items": [<row>]}` — the rows whose snapshot moved, each with the **target** version's snapshot |
+| the four versioned item `PATCH` routes | `{"stock_report_item": <row>}`, the row's snapshot being **that version's** |
 | `GET …/snapshots/missing-summary` | `{"quantity_missing_total": <int>, "items_with_missing": <int>}` over the active snapshots |
 
 **The `progress` object** (2026-09-26 addendum; `services/queries/stock_report/_version_progress.py`,
@@ -134,10 +159,14 @@ serializers.
 
 Divergence `kind` is one of `counter_in_queue`, `counter_in_progress`,
 `counter_awaiting`, `signature`, `order_density`, `missing_over_ceiling`,
-`snapshot_version_closed_mismatch`, `goal_total`, `task_flag`. The ordering and
-snapshot kinds name a **snapshot** id in `client_id`. (`priority_order_nullness` was
-retired with the move: the snapshot table's pairing check makes a half-null position
-unstorable.)
+`snapshot_version_state_mismatch`, `draft_membership_mismatch`, `goal_total`,
+`task_flag`. The ordering and snapshot kinds name a **snapshot** id in `client_id`;
+`draft_membership_mismatch` names the **version** (a draft lacking a snapshot for a
+live row, `stored: null` / `expected: <row id>`, or holding one for a deleted row,
+`stored: <row id>` / `expected: null`, field `stock_report_item_id`).
+(`priority_order_nullness` was retired with the move: the snapshot table's pairing
+check makes a half-null position unstorable; `snapshot_version_closed_mismatch`
+became the one-directional `snapshot_version_state_mismatch` with drafts.)
 
 ## 4. Errors
 
@@ -158,11 +187,19 @@ Registered message identities (leading-token form, `05_errors_local`):
 | `STOCK_REPORT_NO_ACTIVE_SNAPSHOT` | 422 | the row exists but has no active snapshot (created since the last version), so it has no position and no missing quantity to set |
 | `STOCK_REPORT_MISSING_EXCEEDS_CEILING` | 422 | `quantity_missing` is negative or above what the snapshot's frozen `quantity_requested` still leaves uncovered by the row's live counters |
 | `STOCK_REPORT_LIVE_STOCK_FILTER_CONFLICT` | 422 | `priority` or `missing_only` combined with `live_stock=true` |
-| `STOCK_REPORT_SOURCE_VERSION_IS_ACTIVE` | 422 | apply-priorities named the active version as its source |
+| `STOCK_REPORT_SOURCE_VERSION_IS_ACTIVE` | 422 | apply-priorities named the active version as its source with the target omitted (the v6 case) |
+| `STOCK_REPORT_SOURCE_IS_TARGET` | 422 | apply-priorities named the same version as source and target (every other case) |
+| `STOCK_REPORT_TARGET_VERSION_IS_CLOSED` | 422 | apply-priorities named a closed version as its target |
+| `STOCK_REPORT_VERSION_IS_CLOSED` | 422 | a versioned row edit named a closed version |
+| `STOCK_REPORT_VERSION_NOT_DRAFT` | 422 | a draft-only action on an activated version: delete, a schedule key with `draft: false`, `null` missing on the active version |
+| `STOCK_REPORT_SCHEDULE_IN_THE_PAST` | 422 | `scheduled_activation_at` at or before now |
+| `STOCK_REPORT_UNKNOWN_VERSION_STATE` | 422 | a `state` query token that is not `draft`, `active` or `closed` |
 
 A row absent, soft-deleted or in another workspace is one answer on every item-scoped
-route: **404 `Stock report item not found.`** — never an empty list. An absent or
-foreign version on apply-priorities is **404 `Stock report snapshot version not found.`**
+route: **404 `Stock report item not found.`** — never an empty list (on a versioned
+route a live row with no snapshot in that version is the same 404). An absent or
+foreign version on any route that names one is **404 `Stock report snapshot version
+not found.`**
 
 The webhooks' malformed-body messages start `Malformed request: ` and name every
 offending entry by its zero-based index; Scanner does not parse them.

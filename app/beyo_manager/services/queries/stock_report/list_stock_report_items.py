@@ -10,12 +10,18 @@ quantity_missing <= 0` (the workers' outstanding count, not Scanner's live deman
 snapshot attached when there is one and `null` otherwise; the snapshot filters
 (`priority`, `missing_only`) are refused on it because they have nothing to filter.
 
+`version_id=<srv_…>` (draft versions, 2026-09-28; plan §6) reads **that** version's
+snapshots in any state — a draft to prepare, a closed version to browse — with the
+same ordering, `priority`, `missing_only` and pagination, scoped by the join;
+absent/foreign → 404, and with `live_stock=true` → 422. A draft's rows show live
+counters beside the live (or overridden) requested, and its outstanding and
+`missing_only` rules read the **effective** missing (typed, else the board's).
+
 Every non-live read carries **one more `LEFT JOIN`**: the row's active snapshot, whose
 `quantity_missing` becomes the payload's `active_quantity_missing` and the borrowed
 value a draft row reads (`_predicates.effective_quantity_missing`). On the default
 read that join lands on the very snapshot already joined; it is kept so the
-`version_id` read (a draft's or a closed version's rows) is the same statement with
-one predicate swapped.
+`version_id` read is the same statement with one predicate swapped.
 
 **Paginated since 2026-09-26** (owner decision; it was unpaginated by the earlier
 ratified answer in master plan §5). Offset pagination per `07_queries_local`:
@@ -43,6 +49,7 @@ from beyo_manager.services.commands.stock_report._predicates import (
     effective_quantity_requested,
     snapshot_is_active,
 )
+from beyo_manager.services.commands.stock_report._versions import find_version
 from beyo_manager.services.queries.stock_report._priority_filter import (
     parse_priority_filter,
 )
@@ -79,11 +86,15 @@ async def list_stock_report_items(ctx) -> dict:
     item_category_ids = ctx.query_params.get("item_category_ids")
     live_stock = bool(ctx.query_params.get("live_stock", False))
     missing_only = bool(ctx.query_params.get("missing_only", False))
+    version_id = ctx.query_params.get("version_id")
 
-    if live_stock and (raw_priority is not None or missing_only):
+    if live_stock and (
+        raw_priority is not None or missing_only or version_id is not None
+    ):
         raise ValidationError(
-            "STOCK_REPORT_LIVE_STOCK_FILTER_CONFLICT: `priority` and `missing_only` "
-            "filter the active snapshot and cannot be combined with `live_stock`."
+            "STOCK_REPORT_LIVE_STOCK_FILTER_CONFLICT: `priority`, `missing_only` and "
+            "`version_id` filter a version's snapshots and cannot be combined with "
+            "`live_stock`."
         )
 
     s = StockReportItemSnapshot
@@ -91,6 +102,16 @@ async def list_stock_report_items(ctx) -> dict:
     # The row's active snapshot, for `active_quantity_missing` and the borrowed
     # missing; a second copy of the table, so an alias.
     a = aliased(StockReportItemSnapshot, name="active_snapshot")
+
+    if version_id is not None:
+        # That version's snapshots in **any state** (a draft to prepare, a closed
+        # version to browse); absent/foreign → 404 before any row is read.
+        await find_version(ctx.session, ctx.workspace_id, version_id)
+        snapshot_join = and_(
+            s.stock_report_item_id == r.client_id, s.version_id == version_id
+        )
+    else:
+        snapshot_join = _ACTIVE_SNAPSHOT_JOIN
 
     if live_stock:
         # The outer-joined snapshot *is* the active one: its own column is the
@@ -107,7 +128,7 @@ async def list_stock_report_items(ctx) -> dict:
         statement = (
             select(r, s, a.quantity_missing.label("active_quantity_missing"))
             .where(r.workspace_id == ctx.workspace_id, r.is_deleted.is_(False))
-            .join(s, _ACTIVE_SNAPSHOT_JOIN)
+            .join(s, snapshot_join)
             .outerjoin(a, active_snapshot_of_row(a, r.client_id))
         )
         requested = effective_quantity_requested(s, r)

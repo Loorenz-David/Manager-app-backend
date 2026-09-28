@@ -7,8 +7,11 @@ from beyo_manager.domain.tasks.enums import (
     TaskTypeEnum,
     TaskItemRoleEnum,
 )
+from beyo_manager.models.tables.execution.execution_payload import ExecutionPayload
+from beyo_manager.models.tables.execution.execution_task import ExecutionTask
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.items.item_category import ItemCategory
+from beyo_manager.models.tables.schedulers.delayed_scheduler import DelayedScheduler
 from beyo_manager.models.tables.stock_report.stock_report_repair_record import (
     StockReportRepairRecord,
 )
@@ -294,7 +297,52 @@ async def assert_stock_report_clean(session, workspace_id):
 
 
 async def purge_stock_report_workspace(session, workspace_id):
-    """Remove the stock-report seed graph in FK-safe order for committing tests."""
+    """Remove the stock-report seed graph in FK-safe order for committing tests.
+
+    Guarantee (plan §9, Q-11a): the workspace's version rows and everything hanging
+    off them go, **including** the `delayed_schedulers` rows whose
+    `event_client_id` is one of its versions and the execution tasks and payloads
+    those schedulers produced — neither table has a workspace column, so this is
+    the only place they are cleaned. Every test that creates a scheduler row
+    purges in `finally`.
+    """
+    version_ids = (
+        await session.scalars(
+            select(StockReportSnapshotVersion.client_id).where(
+                StockReportSnapshotVersion.workspace_id == workspace_id
+            )
+        )
+    ).all()
+    if version_ids:
+        scheduler_ids = (
+            await session.scalars(
+                select(DelayedScheduler.client_id).where(
+                    DelayedScheduler.event_client_id.in_(version_ids)
+                )
+            )
+        ).all()
+        if scheduler_ids:
+            task_ids = (
+                await session.scalars(
+                    select(ExecutionPayload.execution_task_id).where(
+                        ExecutionPayload.origin_id.in_(scheduler_ids)
+                    )
+                )
+            ).all()
+            await session.execute(
+                delete(ExecutionPayload).where(
+                    ExecutionPayload.origin_id.in_(scheduler_ids)
+                )
+            )
+            if task_ids:
+                await session.execute(
+                    delete(ExecutionTask).where(ExecutionTask.client_id.in_(task_ids))
+                )
+            await session.execute(
+                delete(DelayedScheduler).where(
+                    DelayedScheduler.client_id.in_(scheduler_ids)
+                )
+            )
     for model in (
         StockReportRepairRecord,
         StockTaskAssignment,

@@ -278,6 +278,41 @@ async def compute_stock_report_divergences(
                     "expected": None,
                 }
             )
+    # Draft membership (O-3, plan §4.12): a draft is live, so it must hold exactly
+    # one snapshot per live row — a missing one (the create/webhook window, or a
+    # repair-recreated row) and a stray one (a cascade that did not run) are both
+    # reported against the **version**, with the row's id in the other column.
+    # The active and closed versions are not checked: their membership is fixed.
+    live_row_ids = set(rows_by_id)
+    draft_rows: dict[str, set] = {
+        version_id: set()
+        for version_id, (active_at, _closed_at) in version_dates.items()
+        if active_at is None
+    }
+    for snapshot in snapshots:
+        if snapshot.version_id in draft_rows:
+            draft_rows[snapshot.version_id].add(snapshot.stock_report_item_id)
+    for version_id, held in sorted(draft_rows.items()):
+        for row_id in sorted(live_row_ids - held):
+            found.append(
+                {
+                    "kind": "draft_membership_mismatch",
+                    "client_id": version_id,
+                    "field": "stock_report_item_id",
+                    "stored": None,
+                    "expected": row_id,
+                }
+            )
+        for row_id in sorted(held - live_row_ids):
+            found.append(
+                {
+                    "kind": "draft_membership_mismatch",
+                    "client_id": version_id,
+                    "field": "stock_report_item_id",
+                    "stored": row_id,
+                    "expected": None,
+                }
+            )
     for group in priority_groups.values():
         valid = sorted(
             group, key=lambda snapshot: (snapshot.priority_order, snapshot.client_id)
@@ -343,4 +378,14 @@ async def compute_stock_report_divergences(
                     "expected": str(expected).lower(),
                 }
             )
-    return sorted(found, key=lambda d: (d["kind"], d["client_id"], d["field"]))
+    return sorted(
+        found,
+        key=lambda d: (
+            d["kind"],
+            d["client_id"],
+            d["field"],
+            # Two membership rows of one draft differ only in the row id.
+            str(d["stored"]),
+            str(d["expected"]),
+        ),
+    )
