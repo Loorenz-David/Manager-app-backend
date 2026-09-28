@@ -91,6 +91,18 @@ def test_known_source_without_derived_group_reports_no_group():
 
 
 @pytest.mark.unit
+def test_plain_rosewood_derives_the_dark_group():
+    assert matches_stock_criteria(
+        item({"wood_type": "Rosewood"}), {"wood_group": ["dark"]}
+    )
+    failure = evaluate_stock_criteria(
+        item({"wood_type": "Rosewood"}), {"wood_group": ["light"]}
+    )[0]
+    assert failure.reason is StockCriteriaMismatchReasonEnum.VALUE_NOT_ACCEPTED
+    assert failure.item_values == ("dark",)
+
+
+@pytest.mark.unit
 def test_matcher_failure_values_use_normalized_tokens_for_derived_and_raw_criteria():
     failures = evaluate_stock_criteria(
         item(

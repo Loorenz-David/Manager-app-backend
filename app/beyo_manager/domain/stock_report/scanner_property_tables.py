@@ -11,7 +11,14 @@ EXCLUDED_ITEM_PROPERTY_KEYS = frozenset(
 SCANNER_SOURCE_COMMIT = "0d80bf2"
 SCANNER_SOURCE_READ_ON = "2026-09-18"
 WOOD_GROUPS = {
-    "Dark": ["Mahogany", "Santos Rosewood", "Dark Oak", "Dark Teak", "Walnut"],
+    "Dark": [
+        "Mahogany",
+        "Santos Rosewood",
+        "Rosewood",
+        "Dark Oak",
+        "Dark Teak",
+        "Walnut",
+    ],
     "Teak": ["Teak", "Cherry"],
     "Light": ["Oak", "Beech", "Pine", "Birch", "Elm"],
 }

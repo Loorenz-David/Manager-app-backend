@@ -11,7 +11,14 @@ from beyo_manager.domain.stock_report.scanner_property_tables import (
 @pytest.mark.unit
 def test_scanner_tables_and_drawer_ascii_rules():
     assert WOOD_GROUPS == {
-        "Dark": ["Mahogany", "Santos Rosewood", "Dark Oak", "Dark Teak", "Walnut"],
+        "Dark": [
+            "Mahogany",
+            "Santos Rosewood",
+            "Rosewood",
+            "Dark Oak",
+            "Dark Teak",
+            "Walnut",
+        ],
         "Teak": ["Teak", "Cherry"],
         "Light": ["Oak", "Beech", "Pine", "Birch", "Elm"],
     }
