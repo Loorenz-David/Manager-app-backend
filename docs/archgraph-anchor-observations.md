@@ -1237,3 +1237,32 @@ with `reviewState: pending`** and every one I opened has `sourceLinks: []` — e
 which means staleness detection cannot see it at all. That is node governance, not anchoring, and
 it is the owner's to adjudicate. I reported it to them as part of answering their question; I did
 not change anything.
+
+## 2026-09-27 — projection of `update_stock_report/draft_versions_plan.md` (round 0), no graph call
+
+**No `archgraph_*` call this session**, so no new evidence entry and no anchoring datapoint of my
+own. Span rate on new entries is unchanged by this session.
+
+**Re-anchor activity:** none. **Review findings about location:** none. **Closing-work language:** none.
+
+**Prose observation, same habit in a different container:** the draft plan under projection
+anchors almost entirely by **symbol** (`_CLAMP_STATEMENT`, `lock_snapshot_and_groups`,
+`_group_where`, …) and carries very few `file:line` citations, even though its prompt said nothing
+about anchoring. That is the span-free style, arrived at in prose. My own projection handoff, by
+contrast, cites `file:line` densely (the projection doctrine asks for "exact artifact and line").
+So in this session the old habit came from the reviewing role's doctrine, not from the author.
+
+## 2026-09-27 — projection round 1 of `draft_versions_plan.md` rev 3, no graph call
+
+No `archgraph_*` call; no new evidence, no re-anchor, no location findings, no closing-work
+language. Revision 3 of the plan (owner-folded) added a handful of `file:line` citations copied
+from my round-0 handoff (e.g. `transition_step_state.py:211-251`) — the prose line-number habit
+propagating from the reviewer's doctrine into the plan, as noted in the previous entry.
+
+## 2026-09-28 — projection r2 of `draft_versions_plan.md` rev 5, no graph call
+
+No `archgraph_*` call; no new evidence, no re-anchor, no location findings, no closing-work
+language. Revision 5 still anchors mostly by symbol; the few `file:line` citations it carries
+(`create_…version.py:129-130, 153-154`, `transition_step_state.py:211-251`) all resolved on this
+tree. My own r2 handoff again cites `file:line` densely, per the projection doctrine's "exact
+artifact and line" — the same source of the prose habit noted on 2026-09-27.
