@@ -9,6 +9,7 @@ from beyo_manager.domain.stock_report.scanner_property_tables import (
     EXCLUDED_ITEM_PROPERTY_KEYS,
     WOOD_GROUP_KEY,
     WOOD_TYPE_KEY,
+    canonical_item_token,
     drawer_range_of,
     wood_group_of_token,
 )
@@ -24,6 +25,12 @@ class CriterionFailure:
 
 def tokenize_property_value(value: str) -> list[str]:
     return [part.strip().lower() for part in re.split(r"[,/]", value) if part.strip()]
+
+
+def _item_tokens(key: str, value: str) -> list[str]:
+    return [
+        canonical_item_token(key, token) for token in tokenize_property_value(value)
+    ]
 
 
 def serialize_criterion_failure(failure: CriterionFailure) -> dict:
@@ -78,7 +85,7 @@ def evaluate_stock_criteria(item, criteria: dict) -> list[CriterionFailure]:
     for key, accepted in criteria.items():
         value = bag.get(key)
         accepted_values = tuple(accepted) if isinstance(accepted, list) else ()
-        item_values = tuple(tokenize_property_value(value)) if value is not None else ()
+        item_values = tuple(_item_tokens(key, value)) if value is not None else ()
         if isinstance(accepted, list) and not accepted:
             failures.append(
                 CriterionFailure(
@@ -117,7 +124,7 @@ def evaluate_stock_criteria(item, criteria: dict) -> list[CriterionFailure]:
             continue
         if accepted is None:
             continue
-        tokens = tokenize_property_value(value)
+        tokens = _item_tokens(key, value)
         if not tokens:
             failures.append(
                 CriterionFailure(

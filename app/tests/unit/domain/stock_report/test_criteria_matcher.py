@@ -91,6 +91,21 @@ def test_known_source_without_derived_group_reports_no_group():
 
 
 @pytest.mark.unit
+def test_item_shape_alias_matches_the_scanner_value():
+    assert matches_stock_criteria(item({"shape": "Squared"}), {"shape": ["square"]})
+    # Aliases are per key: the same spelling under another key is left alone.
+    failure = evaluate_stock_criteria(
+        item({"finish": "Squared"}), {"finish": ["square"]}
+    )[0]
+    assert failure.reason is StockCriteriaMismatchReasonEnum.VALUE_NOT_ACCEPTED
+    assert failure.item_values == ("squared",)
+    failure = evaluate_stock_criteria(item({"shape": "Squared"}), {"shape": ["round"]})[
+        0
+    ]
+    assert failure.item_values == ("square",)
+
+
+@pytest.mark.unit
 def test_plain_rosewood_derives_the_dark_group():
     assert matches_stock_criteria(
         item({"wood_type": "Rosewood"}), {"wood_group": ["dark"]}

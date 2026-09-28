@@ -23,6 +23,11 @@ WOOD_GROUPS = {
     "Light": ["Oak", "Beech", "Pine", "Birch", "Elm"],
 }
 DRAWER_RANGES = [("1-2", 1, 2), ("3-5", 3, 5), ("6+", 6, None)]
+# Manager-side, not read from Scanner: item spellings that mean a Scanner criterion
+# value, per property key. Lower-case tokens on both sides.
+ITEM_VALUE_ALIASES = {
+    "shape": {"squared": "square"},
+}
 
 
 def validate_wood_groups(groups) -> None:
@@ -53,6 +58,10 @@ def wood_group_of_token(token: str) -> str | None:
         if normalized in {value.lower() for value in values}:
             return group
     return None
+
+
+def canonical_item_token(key: str, token: str) -> str:
+    return ITEM_VALUE_ALIASES.get(key, {}).get(token, token)
 
 
 def drawer_range_of(stored: str) -> str | None:
