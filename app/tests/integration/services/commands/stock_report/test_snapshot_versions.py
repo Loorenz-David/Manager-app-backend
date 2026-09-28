@@ -280,7 +280,7 @@ async def test_second_version_closes_the_first_and_freezes_its_counters(
             {"id": row_id},
         )
         await db_session.commit()
-        # The seeded item (quantity 4) on the seeded task: in_queue 4.
+        # The seeded item on the seeded task: in_queue 1 (one item, one unit).
         await create_stock_task_assignments(
             _ctx(
                 db_session,
@@ -313,7 +313,7 @@ async def test_second_version_closes_the_first_and_freezes_its_counters(
         new = (await _snapshots_of(db_session, second["client_id"]))[row_id]
         assert old.closed_at == LATER
         assert (old.quantity_requested_scanner, old.quantity_missing, old.priority_order) == (10, 2, 1)
-        assert (old.quantity_in_queue, old.quantity_in_progress, old.quantity_awaiting) == (4, 0, 0)
+        assert (old.quantity_in_queue, old.quantity_in_progress, old.quantity_awaiting) == (1, 0, 0)
         assert new.closed_at is None
         assert (new.quantity_requested_scanner, new.quantity_missing, new.priority, new.priority_order) == (25, 0, None, None)
         assert (await active_snapshot(db_session, row_id)).client_id == new.client_id
@@ -937,10 +937,10 @@ async def test_active_version_progress_follows_the_boards_priority_filter(db_ses
 
 
 async def test_progress_never_drops_when_scanner_resolves(db_session, monkeypatch):
-    """One prioritised row of 10 and the seeded item (4), walked through the real
-    commands: in_queue -> awaiting -> back to in_queue (falls, MC-5 parity) ->
+    """One prioritised row of 10 and the seeded item (1 unit), walked through the
+    real commands: in_queue -> awaiting -> back to in_queue (falls, MC-5 parity) ->
     awaiting -> resolved by Scanner (holds: the row's awaiting is 0, the snapshot
-    remembers 4)."""
+    remembers 1)."""
     seeded = _pin(db_session, await seed_stock_report_workspace(db_session))
     await db_session.commit()
     workspace_id = seeded.workspace.client_id
@@ -954,25 +954,25 @@ async def test_progress_never_drops_when_scanner_resolves(db_session, monkeypatc
 
         assignment_id = await _assign_seeded_item(db_session, seeded, row_id)
         progress = (await _progress(db_session, seeded))["progress"]
-        assert (progress["quantity_in_queue"], progress["quantity_awaiting"]) == (4, 0)
+        assert (progress["quantity_in_queue"], progress["quantity_awaiting"]) == (1, 0)
         assert progress["quantity_completed"] == 0
 
         await _move(db_session, seeded, assignment_id, StockTaskAssignmentStateEnum.AWAITING)
         progress = (await _progress(db_session, seeded))["progress"]
-        assert (progress["quantity_in_queue"], progress["quantity_awaiting"]) == (0, 4)
-        assert progress["quantity_completed"] == 4
+        assert (progress["quantity_in_queue"], progress["quantity_awaiting"]) == (0, 1)
+        assert progress["quantity_completed"] == 1
 
         await _move(db_session, seeded, assignment_id, StockTaskAssignmentStateEnum.IN_QUEUE)
         progress = (await _progress(db_session, seeded))["progress"]
-        assert (progress["quantity_in_queue"], progress["quantity_awaiting"]) == (4, 0)
+        assert (progress["quantity_in_queue"], progress["quantity_awaiting"]) == (1, 0)
 
         await _move(db_session, seeded, assignment_id, StockTaskAssignmentStateEnum.AWAITING)
         await _resolve_seeded_item(db_session, seeded, monkeypatch)
         progress = (await _progress(db_session, seeded))["progress"]
         assert progress["quantity_in_queue"] == 0
-        assert progress["quantity_awaiting"] == 4
-        assert progress["quantity_resolved"] == 4
-        assert progress["quantity_completed"] == 4
+        assert progress["quantity_awaiting"] == 1
+        assert progress["quantity_resolved"] == 1
+        assert progress["quantity_completed"] == 1
         assert progress["quantity_target"] == 10
         assert progress["items_completed"] == 0
         row = await db_session.scalar(
@@ -1017,11 +1017,11 @@ async def test_closed_version_progress_is_frozen_and_the_list_costs_two_statemen
         assert list(by_id) == [v2["client_id"], v1["client_id"]]
 
         frozen = by_id[v1["client_id"]]["progress"]
-        assert (frozen["quantity_awaiting"], frozen["quantity_resolved"]) == (4, 0)
-        assert frozen["quantity_completed"] == 4
+        assert (frozen["quantity_awaiting"], frozen["quantity_resolved"]) == (1, 0)
+        assert frozen["quantity_completed"] == 1
         live = by_id[v2["client_id"]]["progress"]
-        assert (live["quantity_awaiting"], live["quantity_resolved"]) == (4, 4)
-        assert live["quantity_completed"] == 4
+        assert (live["quantity_awaiting"], live["quantity_resolved"]) == (1, 1)
+        assert live["quantity_completed"] == 1
         assert (await _progress(db_session, seeded))["progress"] == live
 
         empty = await list_stock_report_snapshot_versions(

@@ -52,7 +52,8 @@ authenticated by the `x-api-key` header instead (Scanner-facing, no JWT, no role
 
 The wire contract Scanner builds against is
 `docs/handoff/to_scanner/STOCK_REPORT_WEBHOOKS_v2_20260919.md` (read-only; §4A covers
-the delete webhook). The contract the frontend builds against is the current file
+the delete webhook) with the delta `STOCK_REPORT_WEBHOOKS_v3_20260928.md` beside it:
+`quantityRequested` counts **items**, so a set of 6 chairs is 1. The contract the frontend builds against is the current file
 under the project's `handoffs/to_frontend/`.
 
 ## 2. Request bodies

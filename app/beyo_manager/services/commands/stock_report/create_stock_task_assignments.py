@@ -193,7 +193,11 @@ async def create_stock_task_assignments(ctx: ServiceContext) -> dict:
                     stock_report_item_id=row.client_id,
                     task_id=task.client_id,
                     item_id=item.client_id,
-                    quantity=max(item.quantity, 1),
+                    # One item is one unit of the board, a set of 6 included:
+                    # Scanner's demand counts items (webhooks v3), and
+                    # `item.quantity` (the set size) only matches the `quantity`
+                    # criterion.
+                    quantity=1,
                     property_mismatch_overridden=bool(
                         failures_by_index[index] and entry.override_property_mismatch
                     ),

@@ -222,81 +222,85 @@ async def _row(session, client_id):
 _scalar_ids = itertools.count(2)
 
 
-async def _awaiting_assignment(session, seeded, row_client_id, quantity):
-    """Give a row a real `awaiting` assignment of `quantity`, so its live
-    `quantity_awaiting` counter is non-zero **without planting drift** (plan 12
+async def _awaiting_assignments(session, seeded, row_client_id, count):
+    """Give a row `count` real `awaiting` assignments, so its live
+    `quantity_awaiting` counter is `count` **without planting drift** (plan 12
     C3(d): the record's `quantity_awaiting` clause cannot discriminate at 0).
 
-    `CR` sets `quantity = max(item.quantity, 1)`, so the item is seeded at the
-    intended quantity rather than edited afterwards.
+    `CR` writes `quantity = 1` for every item (one item is one unit of the board,
+    whatever its set size), so the counter is reached with `count` items — each on
+    its own task — rather than one item of a larger set.
     """
-    suffix = uuid4().hex[:10]
-    item = Item(
-        client_id=f"itm_sr_{suffix}",
-        workspace_id=seeded.workspace.client_id,
-        article_number=f"SR-{suffix}",
-        state=ItemStateEnum.PENDING,
-        quantity=quantity,
-        item_category_id=seeded.categories[0].client_id,
-        properties={"wood_type": "Teak", "upholstery": "Down"},
-    )
-    task = Task(
-        client_id=f"tsk_sr_{suffix}",
-        workspace_id=seeded.workspace.client_id,
-        task_scalar_id=next(_scalar_ids),
-        task_type=TaskTypeEnum.INTERNAL,
-        state=TaskStateEnum.PENDING,
-        created_by_id=seeded.manager.client_id,
-    )
-    session.add_all([item, task])
-    await session.flush()
-    session.add(
-        TaskItem(
-            client_id=f"tim_sr_{suffix}",
+    assignment_ids = []
+    for _ in range(count):
+        suffix = uuid4().hex[:10]
+        item = Item(
+            client_id=f"itm_sr_{suffix}",
             workspace_id=seeded.workspace.client_id,
-            task_id=task.client_id,
-            item_id=item.client_id,
-            role=TaskItemRoleEnum.PRIMARY,
+            article_number=f"SR-{suffix}",
+            state=ItemStateEnum.PENDING,
+            quantity=1,
+            item_category_id=seeded.categories[0].client_id,
+            properties={"wood_type": "Teak", "upholstery": "Down"},
+        )
+        task = Task(
+            client_id=f"tsk_sr_{suffix}",
+            workspace_id=seeded.workspace.client_id,
+            task_scalar_id=next(_scalar_ids),
+            task_type=TaskTypeEnum.INTERNAL,
+            state=TaskStateEnum.PENDING,
             created_by_id=seeded.manager.client_id,
         )
-    )
-    await session.flush()
-    created = await create_stock_task_assignments(
-        make_ctx(
+        session.add_all([item, task])
+        await session.flush()
+        session.add(
+            TaskItem(
+                client_id=f"tim_sr_{suffix}",
+                workspace_id=seeded.workspace.client_id,
+                task_id=task.client_id,
+                item_id=item.client_id,
+                role=TaskItemRoleEnum.PRIMARY,
+                created_by_id=seeded.manager.client_id,
+            )
+        )
+        await session.flush()
+        created = await create_stock_task_assignments(
+            make_ctx(
+                session,
+                seeded,
+                role_name="worker",
+                incoming_data={
+                    "entries": [
+                        {
+                            "stock_report_item_id": row_client_id,
+                            "task_id": task.client_id,
+                            "item_id": item.client_id,
+                            "override_property_mismatch": True,
+                        }
+                    ]
+                },
+            )
+        )
+        assignment_id = created["stock_task_assignments"][0]["client_id"]
+        assignment = (
+            await session.execute(
+                select(StockTaskAssignment)
+                .where(StockTaskAssignment.client_id == assignment_id)
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one()
+        await move_assignment(
             session,
-            seeded,
-            role_name="worker",
-            incoming_data={
-                "entries": [
-                    {
-                        "stock_report_item_id": row_client_id,
-                        "task_id": task.client_id,
-                        "item_id": item.client_id,
-                        "override_property_mismatch": True,
-                    }
-                ]
-            },
+            assignment,
+            StockTaskAssignmentStateEnum.AWAITING,
+            workspace_id=seeded.workspace.client_id,
+            actor_user_id=seeded.manager.client_id,
+            now=NOW,
+            trigger="test",
         )
-    )
-    assignment_id = created["stock_task_assignments"][0]["client_id"]
-    assignment = (
-        await session.execute(
-            select(StockTaskAssignment)
-            .where(StockTaskAssignment.client_id == assignment_id)
-            .execution_options(populate_existing=True)
-        )
-    ).scalar_one()
-    await move_assignment(
-        session,
-        assignment,
-        StockTaskAssignmentStateEnum.AWAITING,
-        workspace_id=seeded.workspace.client_id,
-        actor_user_id=seeded.manager.client_id,
-        now=NOW,
-        trigger="test",
-    )
-    await session.commit()
-    return assignment_id
+        await session.commit()
+        assignment_ids.append(assignment_id)
+    return assignment_ids
 
 
 def _seller(session, seeded):
@@ -698,6 +702,10 @@ async def test_the_priority_record_snapshots_the_live_awaiting_counter(db_sessio
     `consistency.py` now admits `QUANTITY_REQUESTED_CHANGE` records only. This test
     went green **without being edited**, which is what proves the fix rather than a
     rewritten assertion. Revert that one predicate and this test reddens alone.
+
+    (The record above predates 2026-09-28, when an assignment became one unit
+    whatever the item's set size: the fixture's one assignment of q = 4 is now
+    four `awaiting` assignments of q = 1, the same counter of 4.)
     """
     seeded = await seed_stock_report_workspace(db_session)
     await db_session.commit()
@@ -705,7 +713,7 @@ async def test_the_priority_record_snapshots_the_live_awaiting_counter(db_sessio
     S = _seller(db_session, seeded)
     try:
         g = await _seed_groups(db_session, workspace_id)
-        await _awaiting_assignment(db_session, seeded, g.B, 4)
+        await _awaiting_assignments(db_session, seeded, g.B, 4)
         assert (await _row(db_session, g.B)).quantity_awaiting == 4
 
         _result, _ctx, _captured = await _SP(db_session, S, g.B, "low")
@@ -733,7 +741,7 @@ async def test_the_order_record_snapshots_awaiting_without_tripping_the_check(
     watches `priority_change` only: re-admitting `priority_order_change` to the
     predicate left every stock-report test green.
 
-    `SO(B, 1)` on a row carrying one `awaiting` assignment of q = 4 — a scenario
+    `SO(B, 1)` on a row carrying four `awaiting` assignments of q = 1 — a scenario
     that plants **no** drift. The record legitimately snapshots a live counter
     that nothing credits, so a `goal_total` check applied to it can never be
     satisfied, and `compute_stock_report_divergences` must still answer `[]`.
@@ -744,7 +752,7 @@ async def test_the_order_record_snapshots_awaiting_without_tripping_the_check(
     S = _seller(db_session, seeded)
     try:
         g = await _seed_groups(db_session, workspace_id)
-        await _awaiting_assignment(db_session, seeded, g.B, 4)
+        await _awaiting_assignments(db_session, seeded, g.B, 4)
         assert (await _row(db_session, g.B)).quantity_awaiting == 4
 
         await _SO(db_session, S, g.B, 1)

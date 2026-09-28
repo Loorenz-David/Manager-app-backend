@@ -244,7 +244,7 @@ async def test_c5a_scanner_first_task_sync_second_skips_the_resolved_assignment(
                     StockReportHistoryRecord.client_id == goal.client_id
                 )
             )
-        ).scalar_one() == 4  # kept: resolved work stays counted (MC-5)
+        ).scalar_one() == 1  # kept: resolved work stays counted (MC-5)
         assert assignment.credited_history_record_id == goal.client_id  # mem == G
 
         # Session 1 (Scanner, first) emits the transition and the row update.
@@ -548,7 +548,7 @@ async def test_c5b_task_reopen_first_then_scanner_resolves_early(db_session, mon
                     StockReportHistoryRecord.client_id == goal_id
                 )
             )
-        ).scalar_one() == 4
+        ).scalar_one() == 1
         assert assignment.credited_history_record_id == goal_id
 
         reopen_stock = [
@@ -559,7 +559,7 @@ async def test_c5b_task_reopen_first_then_scanner_resolves_early(db_session, mon
             "stock_report_item:updated",
         ]
         assert reopen_stock[0].extra["state"] == "in_progress"
-        assert reopen_stock[1].extra["quantity_in_progress"] == 4
+        assert reopen_stock[1].extra["quantity_in_progress"] == 1
         assert [event.event_name for event in scanner_events] == [
             "stock_task_assignment:state-changed",
             "stock_report_item:updated",
@@ -709,7 +709,7 @@ async def test_c5c_scanner_first_while_in_progress_then_the_task_goes_ready(
                     StockReportHistoryRecord.client_id == goal_id
                 )
             )
-        ).scalar_one() == 4
+        ).scalar_one() == 1
         assert assignment.credited_history_record_id == goal_id
 
         assert [event.event_name for event in scanner_events] == [

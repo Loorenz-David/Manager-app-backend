@@ -155,6 +155,28 @@ async def _CR(session, seeded, row, item, task):
     return result["stock_task_assignments"][0]["client_id"]
 
 
+async def _set_quantity(session, row, assignment_id, quantity):
+    """Raw-SQL seed of a fresh `in_queue` assignment's quantity, the row's
+    `quantity_in_queue` moved with it so no drift is left to repair. `CR` writes
+    `quantity=1` whatever the item's set size (one item is one unit of the board);
+    distinct quantities are what let a cell tell *which* assignment's credit moved."""
+    await session.execute(
+        text(
+            "UPDATE stock_task_assignments SET quantity = :quantity "
+            "WHERE client_id = :client_id"
+        ),
+        {"quantity": quantity, "client_id": assignment_id},
+    )
+    await session.execute(
+        text(
+            "UPDATE stock_report_items "
+            "SET quantity_in_queue = quantity_in_queue + :delta "
+            "WHERE client_id = :client_id"
+        ),
+        {"delta": quantity - 1, "client_id": row.client_id},
+    )
+
+
 async def _fresh_assignment(session, client_id):
     return (
         await session.execute(
@@ -271,12 +293,17 @@ async def test_cascade_removes_every_assignment_and_soft_deletes_the_row(
 
     # A1 awaiting q=2 (credited), A2 resolved q=3 (credited via awaiting, kept),
     # A3 in_queue q=1 (never credited), A4 resolved_early q=5 (credited, kept).
+    # `CR` writes q=1 for every item, so the distinct quantities are seeded by raw
+    # SQL: with four 1s, subtracting A2's or A4's credit instead of A1's would
+    # land on the same goal and this row could not tell which credit moved.
     item1, task1 = await _make_pair(db_session, seeded, quantity=2)
     a1 = await _CR(db_session, seeded, row, item1, task1)
+    await _set_quantity(db_session, row, a1, 2)
     await _move(db_session, seeded, a1, S.AWAITING)
 
     item2, task2 = await _make_pair(db_session, seeded, quantity=3)
     a2 = await _CR(db_session, seeded, row, item2, task2)
+    await _set_quantity(db_session, row, a2, 3)
     await _move(db_session, seeded, a2, S.AWAITING)
     await _move(db_session, seeded, a2, S.RESOLVED)
 
@@ -285,6 +312,7 @@ async def test_cascade_removes_every_assignment_and_soft_deletes_the_row(
 
     item4, task4 = await _make_pair(db_session, seeded, quantity=5)
     a4 = await _CR(db_session, seeded, row, item4, task4)
+    await _set_quantity(db_session, row, a4, 5)
     await _move(db_session, seeded, a4, S.RESOLVED_EARLY)
 
     assert await _goal_awaiting(db_session, goal.client_id) == 10

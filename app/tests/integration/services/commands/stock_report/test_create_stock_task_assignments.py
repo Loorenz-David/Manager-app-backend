@@ -246,7 +246,7 @@ async def test_creates_assignment_moves_counters_and_returns_full_read_shape(
     assert payload["stock_report_item_id"] == row.client_id
     assert payload["task_id"] == seeded.task.client_id
     assert payload["item_id"] == seeded.item.client_id
-    assert payload["quantity"] == 4
+    assert payload["quantity"] == 1
     assert payload["property_mismatch_overridden"] is False
     assert payload["created_by_id"] == seeded.manager.client_id
     assert payload["updated_by_id"] is None
@@ -270,7 +270,7 @@ async def test_creates_assignment_moves_counters_and_returns_full_read_shape(
     assert payload["item"]["client_id"] == seeded.item.client_id
     assert payload["task"]["client_id"] == seeded.task.client_id
 
-    assert await _counters(db_session, row.client_id) == (4, 0, 0)
+    assert await _counters(db_session, row.client_id) == (1, 0, 0)
 
     refreshed_task = await db_session.get(Task, seeded.task.client_id)
     assert refreshed_task.is_stock_assignment is True
@@ -301,9 +301,9 @@ async def test_quantity_floors_at_one(db_session):
 @pytest.mark.parametrize(
     ("task_state", "expected_state", "expected_counters"),
     [
-        (TaskStateEnum.ASSIGNED, "in_queue", (4, 0, 0)),
-        (TaskStateEnum.WORKING, "in_progress", (0, 4, 0)),
-        (TaskStateEnum.STALLED, "in_progress", (0, 4, 0)),
+        (TaskStateEnum.ASSIGNED, "in_queue", (1, 0, 0)),
+        (TaskStateEnum.WORKING, "in_progress", (0, 1, 0)),
+        (TaskStateEnum.STALLED, "in_progress", (0, 1, 0)),
     ],
 )
 async def test_assignment_state_follows_the_task_state(
@@ -324,8 +324,8 @@ async def test_assignment_state_follows_the_task_state(
 
 
 async def test_c4e_ready_task_creates_awaiting_and_credits_the_goal(db_session):
-    """C4(e): `ready` -> `awaiting`, counters `(0, 0, 4)`, the row's goal record G
-    credited 4, and the assignment's credit memory pointing at G (MC-5)."""
+    """C4(e): `ready` -> `awaiting`, counters `(0, 0, 1)`, the row's goal record G
+    credited 1, and the assignment's credit memory pointing at G (MC-5)."""
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
     goal = await _make_goal(db_session, seeded, row)
@@ -335,8 +335,8 @@ async def test_c4e_ready_task_creates_awaiting_and_credits_the_goal(db_session):
 
     payload = result["stock_task_assignments"][0]
     assert payload["state"] == "awaiting"
-    assert (await _counters(db_session, row.client_id)) == (0, 0, 4)
-    assert await _goal_awaiting(db_session, goal.client_id) == 4
+    assert (await _counters(db_session, row.client_id)) == (0, 0, 1)
+    assert await _goal_awaiting(db_session, goal.client_id) == 1
     assignment = await _fresh_assignment(db_session, payload["client_id"])
     assert assignment.credited_history_record_id == goal.client_id
     await assert_stock_report_clean(db_session, seeded.workspace.client_id)
@@ -353,14 +353,15 @@ async def test_resolved_task_may_still_be_assigned(db_session):
     result = await _CR(db_session, seeded, [_entry(row, seeded.task, seeded.item)])
 
     assert result["stock_task_assignments"][0]["state"] == "awaiting"
-    assert (await _counters(db_session, row.client_id)) == (0, 0, 4)
-    assert await _goal_awaiting(db_session, goal.client_id) == 4
+    assert (await _counters(db_session, row.client_id)) == (0, 0, 1)
+    assert await _goal_awaiting(db_session, goal.client_id) == 1
     await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
-async def test_c4g_quantity_is_copied_from_the_item(db_session):
-    """C4(g): the assignment's quantity is the item's, not a constant. Distinct
-    from C4(h), which exercises the `max(..., 1)` floor."""
+async def test_c4g_a_set_counts_as_one_item(db_session):
+    """C4(g), webhooks v3: a set of 8 is one item on the board — the assignment's
+    quantity is 1, not the item's set size, because Scanner's demand counts items.
+    Distinct from `test_quantity_floors_at_one`, which starts from a quantity of 0."""
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
     await db_session.execute(
@@ -371,8 +372,8 @@ async def test_c4g_quantity_is_copied_from_the_item(db_session):
 
     result = await _CR(db_session, seeded, [_entry(row, seeded.task, seeded.item)])
 
-    assert result["stock_task_assignments"][0]["quantity"] == 8
-    assert (await _counters(db_session, row.client_id)) == (8, 0, 0)
+    assert result["stock_task_assignments"][0]["quantity"] == 1
+    assert (await _counters(db_session, row.client_id)) == (1, 0, 0)
     await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
@@ -396,7 +397,7 @@ async def test_two_entries_ascending_item_id_response_order_and_summed_counters(
 
     returned_item_ids = [a["item_id"] for a in result["stock_task_assignments"]]
     assert returned_item_ids == ordered_pair
-    assert (await _counters(db_session, row.client_id)) == (8, 0, 0)
+    assert (await _counters(db_session, row.client_id)) == (2, 0, 0)
     await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
@@ -1046,7 +1047,7 @@ async def test_two_entries_on_one_row_dispatch_two_created_and_one_coalesced_upd
     updated = [e for e in captured if e.event_name == "stock_report_item:updated"]
     assert len(created) == 2
     assert len(updated) == 1
-    assert updated[0].extra["quantity_in_queue"] == 8
+    assert updated[0].extra["quantity_in_queue"] == 2
     await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 

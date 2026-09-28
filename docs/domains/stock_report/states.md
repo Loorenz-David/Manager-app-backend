@@ -10,6 +10,13 @@ assignment states drift from `StockTaskAssignmentStateEnum`.
 An assignment binds one stock-report row to one (task, item) pair. Its state is a
 projection of the task's state, except for the two exits Scanner owns.
 
+**The unit is the item.** Creation writes `quantity = 1` whatever the item's
+`quantity` (its set size), because Scanner's demand counts items (webhooks v3): a set
+of 6 chairs is one unit of `quantity_requested` and one unit of every counter. The
+item's `quantity` still decides whether it matches a row's `quantity` criterion. Every
+counter, goal credit, `quantity_resolved` and ceiling sums `assignment.quantity`, so an
+assignment created before 2026-09-28 keeps the quantity it was created with.
+
 | State | Active or terminal | Counter it feeds | Who writes it |
 |---|---|---|---|
 | `in_queue` | active | `quantity_in_queue` | creation (`POST /assignments`), and the task-state sync |

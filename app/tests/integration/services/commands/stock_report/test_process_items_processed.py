@@ -5,7 +5,8 @@ F0 (master plan §6.8): workspace W, manager U, category K, item I (`quantity 4`
 `properties {"wood_type": "Teak", "upholstery": "Down"}`), task T (`pending`,
 PRIMARY = I), row R (identity K + `{"wood_group": ["teak"]}`). `CR(entries)` creates
 assignments through the real command (plan 8 §6: assignments in fixtures come from
-the command); `PR(numbers, headers=...)` = `process_items_processed` called
+the command), each one unit (`quantity 1`) whatever I's set size;
+`PR(numbers, headers=...)` = `process_items_processed` called
 directly with a raw JSON body, exactly as the router builds `ctx`.
 
 This file builds the behaviour and exercises one representative row per distinct
@@ -188,6 +189,34 @@ async def _create_walk(db_session, seeded, assignment_id, target_states):
             now=NOW,
             trigger="test",
         )
+
+
+async def _with_legacy_quantity(db_session, row, assignment_id, quantity):
+    """Give a just-created (`in_queue`, uncredited) assignment `quantity` units.
+
+    `CR` writes `quantity = 1` (one item is one board unit, a set included), but an
+    assignment created before that rule carries its item's set size and nothing
+    migrated it — the resolve path still sums `quantity`. With every assignment at
+    1 a group that *counted* assignments would pass for one that sums them, so the
+    grouped rows below use distinct quantities through this. The row's
+    `quantity_in_queue` moves with it, so the workspace stays consistent and every
+    later move (walks, resolve, credit) runs on the stored quantity."""
+    moved = await db_session.execute(
+        StockTaskAssignment.__table__.update()
+        .where(
+            StockTaskAssignment.client_id == assignment_id,
+            StockTaskAssignment.state == S.IN_QUEUE,
+            StockTaskAssignment.quantity == 1,
+            StockTaskAssignment.credited_history_record_id.is_(None),
+        )
+        .values(quantity=quantity)
+    )
+    assert moved.rowcount == 1
+    await db_session.execute(
+        StockReportItem.__table__.update()
+        .where(StockReportItem.client_id == row.client_id)
+        .values(quantity_in_queue=StockReportItem.quantity_in_queue + quantity - 1)
+    )
 
 
 async def _task_fingerprint(db_session, task_id):
@@ -757,12 +786,14 @@ async def test_c4_awaiting_resolves_credit_kept_task_untouched(db_session, monke
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
     goal = await _make_goal(db_session, seeded, row, quantity_requested=8)
-    seeded.item.quantity = 8  # plan 9 §6 preamble: a row stating `q = 8` sets I's quantity
+    # I is a set of 8; creation still writes one unit (`q = 1`), so the credit
+    # below is 1 whatever the set size.
+    seeded.item.quantity = 8
     await db_session.flush()
     assignment_id = await _create_at(
         db_session, seeded, row, seeded.task, seeded.item, [S.AWAITING]
     )
-    # Credit memory: awaiting entry credited G in _create_at's own move_assignment.
+    # Credit memory: awaiting entry credited G (+1) in _create_at's own move_assignment.
     await db_session.commit()
     workspace_id = seeded.workspace.client_id
     try:
@@ -784,8 +815,8 @@ async def test_c4_awaiting_resolves_credit_kept_task_untouched(db_session, monke
         assert assignment.updated_at == NOW
         assert await _counters(db_session, row.client_id) == (0, 0, 0)
         # MC-5 row 3: a resolve **from awaiting** keeps the credit — `G` is the `q`
-        # the awaiting entry credited (8), and the memory still points at G.
-        assert await _goal_awaiting(db_session, goal.client_id) == 8
+        # the awaiting entry credited (1), and the memory still points at G.
+        assert await _goal_awaiting(db_session, goal.client_id) == 1
         assert assignment.credited_history_record_id == goal.client_id
 
         # `populate_existing`: a raw Core UPDATE of `tasks` is invisible to the
@@ -829,14 +860,15 @@ async def test_c4_awaiting_resolves_credit_kept_task_untouched(db_session, monke
 async def test_c4de_active_non_awaiting_resolves_early_credits_goal_task_untouched(
     db_session, monkeypatch, walk, expected_counter_key, row_letter
 ):
-    """C4(d) (`in_queue`) and C4(e) (`in_progress`), `q = 8`: the assignment lands
-    `resolved_early`, the goal is credited `+q` (§14F F4), and the **task is never
+    """C4(d) (`in_queue`) and C4(e) (`in_progress`), I a set of 8 but `q = 1` (one
+    item, one unit): the assignment lands `resolved_early`, the goal is credited
+    `+q` (§14F F4), and the **task is never
     written** (F3) — its state, `updated_at`, `updated_by_id` and step count are all
     byte-identical across the request. C4(g) adds the dispatched event list."""
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
     goal = await _make_goal(db_session, seeded, row)
-    seeded.item.quantity = 8  # plan 9 §6 preamble: `q = 8`
+    seeded.item.quantity = 8  # a set of 8 — creation still writes `q = 1`
     await db_session.flush()
     assignment_id = await _CR(db_session, seeded, row, seeded.task, seeded.item)
     if walk:
@@ -872,7 +904,7 @@ async def test_c4de_active_non_awaiting_resolves_early_credits_goal_task_untouch
         assert assignment.updated_by_id is None
         assert assignment.updated_at == NOW
         assert await _counters(db_session, row_id) == (0, 0, 0)
-        assert await _goal_awaiting(db_session, goal_id) == 8
+        assert await _goal_awaiting(db_session, goal_id) == 1
         assert assignment.credited_history_record_id == goal_id
 
         # F3 — the task is never touched by this command.
@@ -1071,10 +1103,13 @@ async def test_c7a_three_awaiting_assignments_on_one_row_sum_and_one_updated_eve
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
     tasks_items = []
+    # Legacy quantities 1, 2, 3 (sum 6 over 3 assignments): a count would leave 3.
     for i, quantity in enumerate((1, 2, 3)):
-        task, item = await _second_pair(db_session, seeded, f"c7a{i}", quantity=quantity)
+        task, item = await _second_pair(db_session, seeded, f"c7a{i}")
         tasks_items.append((task, item))
-        await _create_at(db_session, seeded, row, task, item, [S.AWAITING])
+        assignment_id = await _CR(db_session, seeded, row, task, item)
+        await _with_legacy_quantity(db_session, row, assignment_id, quantity)
+        await _create_walk(db_session, seeded, assignment_id, [S.AWAITING])
     await db_session.commit()
     workspace_id = seeded.workspace.client_id
     try:
@@ -1154,10 +1189,12 @@ async def test_c7c_grouped_repair_carries_the_summed_delta(db_session, monkeypat
     row = await _make_row(db_session, seeded)
     tasks_items = []
     for i, quantity in enumerate((1, 2, 3)):
-        task, item = await _second_pair(db_session, seeded, f"c7c{i}", quantity=quantity)
+        task, item = await _second_pair(db_session, seeded, f"c7c{i}")
         tasks_items.append((task, item))
-        await _create_at(db_session, seeded, row, task, item, [S.AWAITING])
-    # Plant drift: raw quantity_awaiting = 2 (truth 6).
+        assignment_id = await _CR(db_session, seeded, row, task, item)
+        await _with_legacy_quantity(db_session, row, assignment_id, quantity)
+        await _create_walk(db_session, seeded, assignment_id, [S.AWAITING])
+    # Plant drift: raw quantity_awaiting = 2 (truth 6, the legacy 1 + 2 + 3).
     await db_session.execute(
         StockReportItem.__table__.update()
         .where(StockReportItem.client_id == row.client_id)
@@ -1214,10 +1251,10 @@ async def test_c7b_entries_across_two_rows_each_get_exactly_one_updated(
     for row, label in ((row_a, "a"), (row_b, "b")):
         numbers = []
         for index, quantity in enumerate((1, 2)):
-            task, item = await _second_pair(
-                db_session, seeded, f"c7b{label}{index}", quantity=quantity
-            )
-            await _create_at(db_session, seeded, row, task, item, [S.AWAITING])
+            task, item = await _second_pair(db_session, seeded, f"c7b{label}{index}")
+            assignment_id = await _CR(db_session, seeded, row, task, item)
+            await _with_legacy_quantity(db_session, row, assignment_id, quantity)
+            await _create_walk(db_session, seeded, assignment_id, [S.AWAITING])
             numbers.append(item.article_number)
         numbers_by_row[row.client_id] = numbers
     await db_session.commit()
@@ -1258,17 +1295,19 @@ async def test_c7b_entries_across_two_rows_each_get_exactly_one_updated(
 
 async def _mixed_state_row(db_session, seeded, label):
     """C7(d)'s fixture: one row R carrying A1 `awaiting` q=1 (credited), A2
-    `in_queue` q=2 and A3 `in_progress` q=3 — counters `(2, 3, 1)`."""
+    `in_queue` q=2 and A3 `in_progress` q=3 — counters `(2, 3, 1)`. The quantities
+    are legacy ones (`_with_legacy_quantity`): at `q = 1` each the three columns
+    would carry the same delta and a column mix-up could not show."""
     row = await _make_row(db_session, seeded)
     goal = await _make_goal(db_session, seeded, row)
     await db_session.flush()
     numbers = []
     walks = ([S.AWAITING], [], [S.IN_PROGRESS])
     for index, (quantity, walk) in enumerate(zip((1, 2, 3), walks)):
-        task, item = await _second_pair(
-            db_session, seeded, f"{label}{index}", quantity=quantity
-        )
-        await _create_at(db_session, seeded, row, task, item, walk)
+        task, item = await _second_pair(db_session, seeded, f"{label}{index}")
+        assignment_id = await _CR(db_session, seeded, row, task, item)
+        await _with_legacy_quantity(db_session, row, assignment_id, quantity)
+        await _create_walk(db_session, seeded, assignment_id, walk)
         numbers.append(item.article_number)
     return row, goal, numbers
 
@@ -1370,16 +1409,16 @@ async def test_c7e_one_repair_record_per_wrong_column_not_per_assignment(
 async def test_c8c_resolve_processed_group_contract(db_session, monkeypatch):
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
-    task2, item2 = await _second_pair(db_session, seeded, "c8c", quantity=2)
+    task2, item2 = await _second_pair(db_session, seeded, "c8c")
     a1_id = await _CR(db_session, seeded, row, seeded.task, seeded.item)
     a2_id = await _CR(db_session, seeded, row, task2, item2)
-    # Plant drift: raw quantity_in_queue = 2, truth 6 (4 + 2) — the combined -6
+    # Plant drift: raw quantity_in_queue = 1, truth 2 (1 + 1) — the combined -2
     # delta would go negative, so the group call must self-heal (MC-1) rather
     # than raise.
     await db_session.execute(
         StockReportItem.__table__.update()
         .where(StockReportItem.client_id == row.client_id)
-        .values(quantity_in_queue=2)
+        .values(quantity_in_queue=1)
     )
     await db_session.commit()
     workspace_id = seeded.workspace.client_id
@@ -1541,14 +1580,19 @@ async def test_resolve_credits_the_active_snapshot_only_and_emits_its_event(
     """Two versions on one row. A (4) resolves from awaiting under v1; then v2 opens
     (v1 closes) and B (3) resolves early from in_queue under v2. v1's snapshot keeps
     exactly A's 4, v2's holds exactly B's 3: the credit lands on the snapshot active
-    at the time, and a close never moves it."""
+    at the time, and a close never moves it. A's 4 and B's 3 are legacy quantities
+    (`_with_legacy_quantity`): at one unit each, A's credit and B's could not be
+    told apart."""
     from tests.helpers.stock_report import create_snapshot_version
 
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
-    task_b, item_b = await _second_pair(db_session, seeded, "prb", quantity=3)
-    await _create_at(db_session, seeded, row, seeded.task, seeded.item, [S.AWAITING])
-    await _CR(db_session, seeded, row, task_b, item_b)
+    task_b, item_b = await _second_pair(db_session, seeded, "prb")
+    a_id = await _CR(db_session, seeded, row, seeded.task, seeded.item)
+    await _with_legacy_quantity(db_session, row, a_id, 4)
+    await _create_walk(db_session, seeded, a_id, [S.AWAITING])
+    b_id = await _CR(db_session, seeded, row, task_b, item_b)
+    await _with_legacy_quantity(db_session, row, b_id, 3)
     v1 = await create_snapshot_version(
         db_session, seeded.workspace.client_id, now=NOW, user_id=seeded.manager.client_id
     )

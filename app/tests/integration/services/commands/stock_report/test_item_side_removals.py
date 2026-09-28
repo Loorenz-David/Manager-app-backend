@@ -210,7 +210,7 @@ async def test_c2b_unlinking_a_related_item_does_nothing_to_the_primarys_assignm
 
     assignment = await _fresh_assignment(db_session, assignment_id)
     assert assignment.is_deleted is False
-    assert await _counters(db_session, row.client_id) == (4, 0, 0)
+    assert await _counters(db_session, row.client_id) == (1, 0, 0)
     assert [event.event_name for event in captured] == ["task:updated"]
     await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
@@ -241,7 +241,7 @@ async def test_c2c_swap_then_create_on_the_new_primary_succeeds(db_session):
     new_assignment_id = await _CR(db_session, seeded, row, seeded.task, replacement)
     new_assignment = await _fresh_assignment(db_session, new_assignment_id)
     assert new_assignment.is_deleted is False
-    assert await _counters(db_session, row.client_id) == (4, 0, 0)
+    assert await _counters(db_session, row.client_id) == (1, 0, 0)
     assignment = await _fresh_assignment(db_session, assignment_id)
     assert assignment.is_deleted is True
     await assert_stock_report_clean(db_session, seeded.workspace.client_id)

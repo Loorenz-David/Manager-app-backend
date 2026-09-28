@@ -224,7 +224,7 @@ async def test_c6b_deleting_an_awaiting_assignment_uncredits_the_goal(db_session
         db_session, assignment, S.AWAITING, workspace_id=seeded.workspace.client_id,
         actor_user_id=seeded.manager.client_id, now=NOW, trigger="test",
     )
-    assert await _goal_awaiting(db_session, goal.client_id) == 4
+    assert await _goal_awaiting(db_session, goal.client_id) == 1
 
     await _DL(db_session, seeded, [assignment_id])
 
@@ -249,7 +249,7 @@ async def test_c6i_deleting_a_resolved_early_assignment_keeps_its_goal_credit(
         db_session, assignment, S.RESOLVED_EARLY, workspace_id=seeded.workspace.client_id,
         actor_user_id=seeded.manager.client_id, now=NOW, trigger="test",
     )
-    assert await _goal_awaiting(db_session, goal.client_id) == 4
+    assert await _goal_awaiting(db_session, goal.client_id) == 1
     counters_before = await _counters(db_session, row.client_id)
     captured = capture_dispatch(
         monkeypatch,
@@ -263,7 +263,7 @@ async def test_c6i_deleting_a_resolved_early_assignment_keeps_its_goal_credit(
     assert captured[0].extra["state"] == "resolved_early"
     refreshed_task = await db_session.get(Task, seeded.task.client_id)
     assert refreshed_task.is_stock_assignment is False
-    assert await _goal_awaiting(db_session, goal.client_id) == 4
+    assert await _goal_awaiting(db_session, goal.client_id) == 1
     assignment = await _fresh_assignment(db_session, assignment_id)
     assert assignment.credited_history_record_id == goal.client_id
     await assert_stock_report_clean(db_session, seeded.workspace.client_id)
@@ -432,7 +432,9 @@ async def test_c6j_the_same_assignment_named_twice_in_one_delete_is_removed_once
     the master plan's independent citation, not reconciled silently.
 
     The batch succeeds; A is removed **once**, so R's `quantity_in_queue` falls by
-    4, not 8, and ends at B's remaining 4; exactly one
+    1, not 2, and ends at B's remaining 1 (`CR` writes one unit per item since the
+    set-size change, so the plan's "B(4)" is B(1) here; a double removal still
+    lands on 0, not below it, and fails the counter clause); exactly one
     `stock_task_assignment:deleted` for A; the response lists each id once,
     sorted."""
     seeded = await seed_stock_report_workspace(db_session)
@@ -497,7 +499,7 @@ async def test_c6j_the_same_assignment_named_twice_in_one_delete_is_removed_once
         ],
     )
     b_id = b_result["stock_task_assignments"][0]["client_id"]
-    assert await _counters(db_session, row.client_id) == (8, 0, 0)
+    assert await _counters(db_session, row.client_id) == (2, 0, 0)
     captured = capture_dispatch(
         monkeypatch,
         "beyo_manager.services.commands.stock_report.delete_stock_task_assignments.dispatch",
@@ -506,7 +508,7 @@ async def test_c6j_the_same_assignment_named_twice_in_one_delete_is_removed_once
     result = await _DL(db_session, seeded, [a_id, a_id])
 
     assert result["deleted_client_ids"] == [a_id]
-    assert await _counters(db_session, row.client_id) == (4, 0, 0)
+    assert await _counters(db_session, row.client_id) == (1, 0, 0)
     deleted_events = [e for e in captured if e.event_name == "stock_task_assignment:deleted"]
     assert len(deleted_events) == 1
     a = await _fresh_assignment(db_session, a_id)

@@ -409,19 +409,52 @@ async def _move(env: Env, assignment_id, target, *, space: Space | None = None):
     await env.session.commit()
 
 
+async def _with_legacy_quantity(env: Env, row_id, assignment_id, quantity):
+    """Give a just-created (`in_queue`, uncredited) assignment `quantity` units.
+
+    `CR` writes `quantity = 1` (one item is one board unit, a set included), but an
+    assignment created before that rule carries its item's set size and nothing
+    migrated it. With every assignment at 1, *which* assignment's credit left the
+    goal cannot show, so C3(a)'s six-state fixture keeps distinct quantities
+    through this. The row's `quantity_in_queue` moves with it, so the workspace
+    stays consistent and every later move runs on the stored quantity."""
+    moved = await env.session.execute(
+        StockTaskAssignment.__table__.update()
+        .where(
+            StockTaskAssignment.client_id == assignment_id,
+            StockTaskAssignment.state == S.IN_QUEUE,
+            StockTaskAssignment.quantity == 1,
+            StockTaskAssignment.credited_history_record_id.is_(None),
+        )
+        .values(quantity=quantity)
+    )
+    assert moved.rowcount == 1
+    await env.session.execute(
+        StockReportItem.__table__.update()
+        .where(StockReportItem.client_id == row_id)
+        .values(quantity_in_queue=StockReportItem.quantity_in_queue + quantity - 1)
+    )
+    await env.session.commit()
+
+
 async def _assignment_on(
     env: Env,
     row_id,
     *,
     quantity,
+    assignment_quantity=None,
     state=None,
     wood_type="Teak",
     space: Space | None = None,
 ):
+    """`quantity` is the item's set size; `CR` makes the assignment one unit
+    regardless, unless `assignment_quantity` gives it a legacy quantity."""
     item, task = await _make_pair(
         env, quantity=quantity, wood_type=wood_type, space=space
     )
     assignment_id = await _CR(env, row_id, item, task, space=space)
+    if assignment_quantity is not None:
+        await _with_legacy_quantity(env, row_id, assignment_id, assignment_quantity)
     if state is not None and state is not S.IN_QUEUE:
         if state is S.RESOLVED:
             await _move(env, assignment_id, S.AWAITING, space=space)
@@ -885,7 +918,8 @@ async def _seed_six_assignment_row(
 ):
     """C3(a)'s fixture: R in the `high` group as R2 of `A1 R2 C3`, with **six**
     assignments, one per member of the state enum (§14E E5 "any state", enumerated
-    and never sampled).
+    and never sampled). Each carries a distinct legacy quantity
+    (`_with_legacy_quantity`), so the goal's drop names the one credit that left.
 
     `space` builds the same shape in the foreign workspace — C5(e)'s control is this
     shape in W', not a bare row (review 1, S2). `properties` and `wood_type` only
@@ -917,6 +951,7 @@ async def _seed_six_assignment_row(
             env,
             row_id,
             quantity=quantity,
+            assignment_quantity=quantity,
             state=state,
             wood_type=wood_type,
             space=space,

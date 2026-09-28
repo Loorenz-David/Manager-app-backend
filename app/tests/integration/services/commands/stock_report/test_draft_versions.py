@@ -1120,16 +1120,16 @@ async def test_requested_quantity_on_a_draft_and_on_the_active_version(
 
         # Lowering below the covered quantity on the active version clamps its
         # missing in the same request (one coalesced event); a draft is not clamped.
-        await _assign_seeded_item(db_session, seeded, a)  # in_queue 4
-        await _SM(db_session, seeded, a, 6)  # ceiling 10 - 4
-        await _SM(db_session, seeded, a, 6, version_id=D)
+        await _assign_seeded_item(db_session, seeded, a)  # in_queue 1
+        await _SM(db_session, seeded, a, 9)  # ceiling 10 - 1
+        await _SM(db_session, seeded, a, 9, version_id=D)
         clamped, captured = await _SR(
             db_session, seeded, a, 5, version_id=A, monkeypatch=monkeypatch
         )
         assert (
             clamped["snapshot"]["quantity_requested"],
             clamped["snapshot"]["quantity_missing"],
-        ) == (5, 1)
+        ) == (5, 4)  # clamped to 5 - 1
         assert [
             (
                 e.client_id,
@@ -1137,12 +1137,12 @@ async def test_requested_quantity_on_a_draft_and_on_the_active_version(
                 e.extra["quantity_missing"],
             )
             for e in captured
-        ] == [(clamped["snapshot"]["client_id"], 5, 1)]
+        ] == [(clamped["snapshot"]["client_id"], 5, 4)]
         untouched, _ = await _SR(db_session, seeded, a, 5, version_id=D)
         assert (
             untouched["snapshot"]["quantity_requested"],
             untouched["snapshot"]["quantity_missing"],
-        ) == (5, 6)
+        ) == (5, 9)
         await assert_stock_report_clean(db_session, workspace_id)
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
@@ -1304,7 +1304,7 @@ async def test_version_reads(db_session):
         ids = await _by_token(db_session, workspace_id)
         a, b = ids["a"], ids["b"]
         v1, _ = await _CV(db_session, seeded)
-        await _assign_seeded_item(db_session, seeded, a)  # in_queue 4, live
+        await _assign_seeded_item(db_session, seeded, a)  # in_queue 1, live
         await _SM(db_session, seeded, a, 3)
         d1, _ = await _draft(db_session, seeded, now=NOW + timedelta(minutes=1))
         d2, _ = await _draft(db_session, seeded, now=NOW + timedelta(minutes=2))
@@ -1313,7 +1313,7 @@ async def test_version_reads(db_session):
 
         # A draft read: live counters, live requested, borrowed missing from v2 (0 now).
         rows = await _items(db_session, seeded, version_id=d1["client_id"])
-        assert rows[a]["snapshot"]["quantity_in_queue"] == 4
+        assert rows[a]["snapshot"]["quantity_in_queue"] == 1
         assert rows[a]["snapshot"]["quantity_requested"] == 10
         assert (
             rows[a]["snapshot"]["quantity_missing"],
@@ -1324,7 +1324,7 @@ async def test_version_reads(db_session):
         await _AD(db_session, workspace_id, [_entry(0, "a", 30)])
         closed = await _items(db_session, seeded, version_id=v1["client_id"])
         assert closed[a]["snapshot"]["quantity_requested"] == 10
-        assert closed[a]["snapshot"]["quantity_in_queue"] == 4
+        assert closed[a]["snapshot"]["quantity_in_queue"] == 1
         assert (
             closed[a]["snapshot"]["quantity_missing"],
             closed[a]["snapshot"]["active_quantity_missing"],
@@ -1624,7 +1624,7 @@ async def test_activation_freezes_settles_the_missing_and_closes_the_board(
         a, b, c = ids["a"], ids["b"], ids["c"]
         v1, _ = await _CV(db_session, seeded)
         await _SP(db_session, seeded, a, "high")
-        await _assign_seeded_item(db_session, seeded, a)  # a: in_queue 4, live
+        await _assign_seeded_item(db_session, seeded, a)  # a: in_queue 1, live
         await _SM(db_session, seeded, a, 3)
         await _SM(db_session, seeded, b, 2)
         draft, _ = await _draft(
@@ -1635,9 +1635,9 @@ async def test_activation_freezes_settles_the_missing_and_closes_the_board(
         await _SP(db_session, seeded, c, "high", version_id=D)
         await _SR(db_session, seeded, c, 5, version_id=D)  # an override on the draft
         await _SM(db_session, seeded, b, 1, version_id=D)  # typed on the draft
-        # Scanner moves after the draft was made: a drops to 5 (its board missing 3
-        # now exceeds the live ceiling 5 - 4), and a new row d arrives.
-        await _AD(db_session, workspace_id, [_entry(0, "a", 5), _entry(1, "d", 3)])
+        # Scanner moves after the draft was made: a drops to 3 (its board missing 3
+        # now exceeds the live ceiling 3 - 1), and a new row d arrives.
+        await _AD(db_session, workspace_id, [_entry(0, "a", 3), _entry(1, "d", 3)])
         d = (await _by_token(db_session, workspace_id))["d"]
         # §4.1's window, forced by hand: the draft lacks d's snapshot.
         await db_session.execute(
@@ -1684,7 +1684,7 @@ async def test_activation_freezes_settles_the_missing_and_closes_the_board(
         previous = await _version_row(db_session, v1["client_id"])
         assert previous.closed_at == LATER
         closed_a = (await _snapshots_of(db_session, v1["client_id"]))[a]
-        assert (closed_a.closed_at, closed_a.quantity_in_queue) == (LATER, 4)
+        assert (closed_a.closed_at, closed_a.quantity_in_queue) == (LATER, 1)
         # The new board: one statement's worth of freeze, settle and stamp.
         snapshots = await _snapshots_of(db_session, D)
         assert {
@@ -1698,7 +1698,7 @@ async def test_activation_freezes_settles_the_missing_and_closes_the_board(
             )
             for r, s in snapshots.items()
         } == {
-            a: (5, None, 1, LATER, None, None),  # carried 3, clamped to 5 - 4
+            a: (3, None, 2, LATER, None, None),  # carried 3, clamped to 3 - 1
             b: (4, None, 1, LATER, "high", 1),  # typed 1 beats the board's 2
             c: (6, 5, 0, LATER, "high", 2),  # the board had 0 for c; override kept
             d: (3, None, 0, LATER, None, None),  # reconciled in; no board twin
@@ -1710,7 +1710,7 @@ async def test_activation_freezes_settles_the_missing_and_closes_the_board(
             board[c]["snapshot"]["quantity_requested_scanner"],
             board[c]["snapshot"]["quantity_requested_source"],
         ) == (5, 6, "manual")
-        assert board[a]["snapshot"]["quantity_missing"] == 1
+        assert board[a]["snapshot"]["quantity_missing"] == 2
         # History: b and c only, with the effective value and its source.
         records = (await _records(db_session, workspace_id))[records_before:]
         assert sorted(
@@ -1780,13 +1780,13 @@ async def test_activation_resets_untyped_missing_and_needs_no_previous_board(
         ids = await _by_token(db_session, workspace_id)
         a, b = ids["a"], ids["b"]
         await _CV(db_session, seeded)
-        await _assign_seeded_item(db_session, seeded, a)  # in_queue 4
+        await _assign_seeded_item(db_session, seeded, a)  # in_queue 1
         await _SM(db_session, seeded, a, 3)
         await _SM(db_session, seeded, b, 5)
         draft, _ = await _draft(db_session, seeded)
         D = draft["client_id"]
-        await _SM(db_session, seeded, a, 6, version_id=D)  # typed, at the ceiling
-        await _AD(db_session, workspace_id, [_entry(0, "a", 8)])  # ceiling now 4
+        await _SM(db_session, seeded, a, 9, version_id=D)  # typed, at the ceiling 10 - 1
+        await _AD(db_session, workspace_id, [_entry(0, "a", 8)])  # ceiling now 8 - 1
 
         version, captured = await _activate(
             db_session,
@@ -1797,7 +1797,7 @@ async def test_activation_resets_untyped_missing_and_needs_no_previous_board(
         )
         assert captured[-1].extra["keep_active_missing"] is False
         snapshots = await _snapshots_of(db_session, D)
-        assert (snapshots[a].quantity_missing, snapshots[b].quantity_missing) == (4, 0)
+        assert (snapshots[a].quantity_missing, snapshots[b].quantity_missing) == (7, 0)
         assert snapshots[a].quantity_requested_scanner == 8
         await assert_stock_report_clean(db_session, workspace_id)
 
@@ -1851,8 +1851,8 @@ async def test_refresh_refreezes_the_active_version(db_session, monkeypatch):
         V = v1["client_id"]
         await _SP(db_session, seeded, a, "high")
         await _SP(db_session, seeded, b, "high")
-        await _assign_seeded_item(db_session, seeded, a)  # in_queue 4
-        await _SM(db_session, seeded, a, 6)  # ceiling 10 - 4
+        await _assign_seeded_item(db_session, seeded, a)  # in_queue 1
+        await _SM(db_session, seeded, a, 9)  # ceiling 10 - 1
         await _SM(db_session, seeded, b, 4)  # target 0: b is complete
         draft, _ = await _draft(db_session, seeded)
         assert (await _progress(db_session, seeded, V))["items_completed"] == 1
@@ -1876,12 +1876,12 @@ async def test_refresh_refreezes_the_active_version(db_session, monkeypatch):
         assert (result["changed"], result["added"]) == (2, 1)
         assert result["stock_report_snapshot_version"]["snapshot_count"] == 3
         snapshots = await _snapshots_of(db_session, V)
-        # a re-frozen and its missing clamped to 7 - 4; b re-frozen, missing kept;
+        # a re-frozen and its missing clamped to 7 - 1; b re-frozen, missing kept;
         # c joined with the version's own `active_at` (P-15), frozen now.
         assert (
             snapshots[a].quantity_requested_scanner,
             snapshots[a].quantity_missing,
-        ) == (7, 3)
+        ) == (7, 6)
         assert (
             snapshots[b].quantity_requested_scanner,
             snapshots[b].quantity_missing,
@@ -1893,16 +1893,24 @@ async def test_refresh_refreezes_the_active_version(db_session, monkeypatch):
             snapshots[c].priority,
         ) == (5, 0, NOW, None)
         # One coalesced event per touched snapshot (a: scanner + clamp), none for
-        # the new row, then `:refreshed`.
-        assert [(e.event_name, e.client_id) for e in captured] == [
-            ("stock_report_item_snapshot:updated", snapshots[a].client_id),
-            ("stock_report_item_snapshot:updated", snapshots[b].client_id),
-            ("stock_report_snapshot_version:refreshed", V),
-        ]
+        # the new row, then `:refreshed`. The snapshot events come in the order the
+        # re-freeze `UPDATE ... RETURNING` yields them, which no clause fixes, so
+        # they are compared sorted.
+        assert sorted((e.event_name, e.client_id) for e in captured[:-1]) == sorted(
+            [
+                ("stock_report_item_snapshot:updated", snapshots[a].client_id),
+                ("stock_report_item_snapshot:updated", snapshots[b].client_id),
+            ]
+        )
+        assert (captured[-1].event_name, captured[-1].client_id) == (
+            "stock_report_snapshot_version:refreshed",
+            V,
+        )
+        event_a = next(e for e in captured if e.client_id == snapshots[a].client_id)
         assert (
-            captured[0].extra["quantity_requested_scanner"],
-            captured[0].extra["quantity_missing"],
-        ) == (7, 3)
+            event_a.extra["quantity_requested_scanner"],
+            event_a.extra["quantity_missing"],
+        ) == (7, 6)
         assert captured[-1].extra == {
             "snapshot_count": 3,
             "changed": 2,

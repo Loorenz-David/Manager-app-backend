@@ -155,7 +155,8 @@ async def _SM(session, seeded, row_id, value, *, monkeypatch=None):
 
 
 async def _assign_seeded_item(session, seeded, row_id, *, monkeypatch=None):
-    """The seeded item (quantity 4) on the seeded task (PRIMARY): in_queue += 4."""
+    """The seeded item on the seeded task (PRIMARY): in_queue += 1 — one item is
+    one unit of the board, whatever its set size (the seed's `quantity=4`)."""
     captured = (
         capture_dispatch(monkeypatch, CREATE_SITE) if monkeypatch is not None else None
     )
@@ -223,10 +224,11 @@ async def test_set_missing_writes_the_active_snapshot_and_emits_one_event(
         await db_session.commit()
 
 
-@pytest.mark.parametrize("value", [-1, 7, 11])
+@pytest.mark.parametrize("value", [-1, 10, 11])
 async def test_set_missing_refuses_values_outside_the_ceiling(db_session, value):
-    """Requested 10 (frozen), 4 covered by an assignment: ceiling 6. Negative, 7 and
-    11 are all refused with the identity; nothing is written."""
+    """Requested 10 (frozen), 1 covered by an assignment: ceiling 9. Negative, 10
+    (the requested itself, legal only if coverage were ignored) and 11 are all
+    refused with the identity; nothing is written."""
     seeded = _pin(db_session, await seed_stock_report_workspace(db_session))
     await db_session.commit()
     workspace_id = seeded.workspace.client_id
@@ -240,11 +242,11 @@ async def test_set_missing_refuses_values_outside_the_ceiling(db_session, value)
         await db_session.rollback()
 
         assert str(excinfo.value).startswith("STOCK_REPORT_MISSING_EXCEEDS_CEILING:")
-        assert "6" in str(excinfo.value)
+        assert "0..9" in str(excinfo.value)
         assert (await active_snapshot(db_session, row_id)).quantity_missing == 0
         # The ceiling itself is accepted.
-        await _SM(db_session, seeded, row_id, 6)
-        assert (await active_snapshot(db_session, row_id)).quantity_missing == 6
+        await _SM(db_session, seeded, row_id, 9)
+        assert (await active_snapshot(db_session, row_id)).quantity_missing == 9
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
         await db_session.commit()
@@ -319,8 +321,8 @@ async def test_set_missing_boundaries_no_snapshot_deleted_foreign_absent(db_sess
 
 
 async def test_creation_clamps_missing_down_to_the_new_remainder(db_session, monkeypatch):
-    """Requested 10, all 10 marked missing; assigning the seeded item (4) leaves 6
-    uncovered, so missing falls to 6, stamped by the assigning user, with one
+    """Requested 10, all 10 marked missing; assigning the seeded item (1 unit) leaves
+    9 uncovered, so missing falls to 9, stamped by the assigning user, with one
     snapshot event beside the row's and the assignment's."""
     seeded = _pin(db_session, await seed_stock_report_workspace(db_session))
     await db_session.commit()
@@ -334,7 +336,7 @@ async def test_creation_clamps_missing_down_to_the_new_remainder(db_session, mon
         )
 
         snapshot = await active_snapshot(db_session, row_id)
-        assert snapshot.quantity_missing == 6
+        assert snapshot.quantity_missing == 9
         assert snapshot.updated_by_id == seeded.manager.client_id
         names = sorted(e.event_name for e in captured)
         assert names == [
@@ -346,7 +348,7 @@ async def test_creation_clamps_missing_down_to_the_new_remainder(db_session, mon
             e for e in captured if e.event_name == "stock_report_item_snapshot:updated"
         )
         assert snapshot_event.client_id == snapshot.client_id
-        assert snapshot_event.extra["quantity_missing"] == 6
+        assert snapshot_event.extra["quantity_missing"] == 9
         assert snapshot_event.extra["stock_report_item_id"] == row_id
         await assert_stock_report_clean(db_session, workspace_id)
     finally:
@@ -355,7 +357,7 @@ async def test_creation_clamps_missing_down_to_the_new_remainder(db_session, mon
 
 
 async def test_creation_leaves_missing_alone_when_it_still_fits(db_session, monkeypatch):
-    """Requested 10, missing 2; assigning 4 leaves 6 uncovered >= 2: untouched, no
+    """Requested 10, missing 2; assigning 1 leaves 9 uncovered >= 2: untouched, no
     snapshot event, no stamp."""
     seeded = _pin(db_session, await seed_stock_report_workspace(db_session))
     await db_session.commit()
@@ -388,7 +390,7 @@ async def test_moves_and_removals_never_clamp(db_session):
     try:
         row_id = await _row_with_version(db_session, seeded)
         assignment_id, _ = await _assign_seeded_item(db_session, seeded, row_id)
-        await _SM(db_session, seeded, row_id, 6)  # the full remainder
+        await _SM(db_session, seeded, row_id, 9)  # the full remainder
 
         assignment = (
             await db_session.execute(
@@ -407,13 +409,13 @@ async def test_moves_and_removals_never_clamp(db_session):
             trigger="test",
         )
         await db_session.commit()
-        assert (await active_snapshot(db_session, row_id)).quantity_missing == 6
+        assert (await active_snapshot(db_session, row_id)).quantity_missing == 9
 
         await delete_stock_task_assignments(
             _ctx(db_session, seeded, {"client_ids": [assignment_id]})
         )
         await db_session.commit()
-        assert (await active_snapshot(db_session, row_id)).quantity_missing == 6
+        assert (await active_snapshot(db_session, row_id)).quantity_missing == 9
         await assert_stock_report_clean(db_session, workspace_id)
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
@@ -451,8 +453,9 @@ async def _resolve_seeded_item(session, seeded, monkeypatch):
 async def test_resolved_units_lower_the_ceiling_for_the_route_and_the_checker(
     db_session, monkeypatch
 ):
-    """Requested 10; the seeded item (4) is assigned and then processed by Scanner:
-    the row's counters are back to 0, yet only 6 units can be missing."""
+    """Requested 10; the seeded item (1 unit) is assigned and then processed by
+    Scanner: the row's counters are back to 0, yet only 9 units can be missing —
+    10, which the requested alone would allow, is refused and flagged."""
     seeded = _pin(db_session, await seed_stock_report_workspace(db_session))
     await db_session.commit()
     workspace_id = seeded.workspace.client_id
@@ -461,22 +464,22 @@ async def test_resolved_units_lower_the_ceiling_for_the_route_and_the_checker(
         await _assign_seeded_item(db_session, seeded, row_id)
         await _resolve_seeded_item(db_session, seeded, monkeypatch)
         snapshot = await active_snapshot(db_session, row_id)
-        assert snapshot.quantity_resolved == 4
+        assert snapshot.quantity_resolved == 1
 
-        result, _ctx_, _ = await _SM(db_session, seeded, row_id, 6)
-        assert result["stock_report_item"]["snapshot"]["quantity_missing"] == 6
+        result, _ctx_, _ = await _SM(db_session, seeded, row_id, 9)
+        assert result["stock_report_item"]["snapshot"]["quantity_missing"] == 9
         # The wire awaiting keeps the processed units even though the row's is 0.
-        assert result["stock_report_item"]["snapshot"]["quantity_awaiting"] == 4
+        assert result["stock_report_item"]["snapshot"]["quantity_awaiting"] == 1
         assert result["stock_report_item"]["quantity_awaiting"] == 0
 
         with pytest.raises(ValidationError) as refused:
-            await _SM(db_session, seeded, row_id, 7)
+            await _SM(db_session, seeded, row_id, 10)
         assert str(refused.value).startswith("STOCK_REPORT_MISSING_EXCEEDS_CEILING:")
         await db_session.rollback()
 
         await db_session.execute(
             text(
-                "UPDATE stock_report_item_snapshots SET quantity_missing = 8 "
+                "UPDATE stock_report_item_snapshots SET quantity_missing = 10 "
                 "WHERE stock_report_item_id = :id AND closed_at IS NULL"
             ),
             {"id": row_id},
@@ -487,7 +490,7 @@ async def test_resolved_units_lower_the_ceiling_for_the_route_and_the_checker(
             for d in await compute_stock_report_divergences(db_session, workspace_id)
             if d["kind"] == "missing_over_ceiling"
         ]
-        assert [(d["stored"], d["expected"]) for d in divergences] == [(8, 6)]
+        assert [(d["stored"], d["expected"]) for d in divergences] == [(10, 9)]
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
         await db_session.commit()
@@ -538,9 +541,9 @@ async def _second_pair(session, seeded, *, quantity=4):
 
 
 async def test_creation_clamp_counts_resolved_units_as_covered(db_session, monkeypatch):
-    """Requested 10; 4 processed (resolved), missing set to the remaining 6; assigning
-    a second item (4 more) leaves 2 uncovered — the clamp must see the 4 resolved
-    units, or it would leave missing at 6 (ceiling 6 without them)."""
+    """Requested 10; 1 processed (resolved), missing set to the remaining 9; assigning
+    a second item (1 more) leaves 8 uncovered — the clamp must see the resolved
+    unit, or it would leave missing at 9 (ceiling 10 - 1 without it)."""
     seeded = _pin(db_session, await seed_stock_report_workspace(db_session))
     await db_session.commit()
     workspace_id = seeded.workspace.client_id
@@ -548,7 +551,7 @@ async def test_creation_clamp_counts_resolved_units_as_covered(db_session, monke
         row_id = await _row_with_version(db_session, seeded)
         await _assign_seeded_item(db_session, seeded, row_id)
         await _resolve_seeded_item(db_session, seeded, monkeypatch)
-        await _SM(db_session, seeded, row_id, 6)
+        await _SM(db_session, seeded, row_id, 9)
         task_id, item_id = await _second_pair(db_session, seeded)
 
         captured = capture_dispatch(monkeypatch, CREATE_SITE)
@@ -571,13 +574,13 @@ async def test_creation_clamp_counts_resolved_units_as_covered(db_session, monke
         await db_session.commit()
 
         snapshot = await active_snapshot(db_session, row_id)
-        assert snapshot.quantity_missing == 2
-        assert snapshot.quantity_resolved == 4
+        assert snapshot.quantity_missing == 8
+        assert snapshot.quantity_resolved == 1
         snapshot_event = next(
             e for e in captured if e.event_name == "stock_report_item_snapshot:updated"
         )
-        assert snapshot_event.extra["quantity_missing"] == 2
-        assert snapshot_event.extra["quantity_resolved"] == 4
+        assert snapshot_event.extra["quantity_missing"] == 8
+        assert snapshot_event.extra["quantity_resolved"] == 1
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
         await db_session.commit()

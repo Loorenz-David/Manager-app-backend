@@ -401,7 +401,7 @@ async def test_s1_transition_step_state_advances_the_assignment(db_session, monk
         assert task_after.state == TaskStateEnum.WORKING
         assignment = await _fresh_assignment(db_session, assignment_id)
         assert assignment.state == S.IN_PROGRESS
-        assert await _counters(db_session, row.client_id) == (0, 4, 0)
+        assert await _counters(db_session, row.client_id) == (0, 1, 0)
 
         await assert_stock_report_clean(db_session, workspace_id)
     finally:
@@ -480,7 +480,7 @@ async def test_c1m_sync_selects_the_active_assignment_over_a_terminal_one(
         assert a1_after.state == S.FAILED  # untouched
         a2_after = await _fresh_assignment(db_session, a2_id)
         assert a2_after.state == S.IN_PROGRESS
-        assert await _counters(db_session, row.client_id) == (0, 4, 0)
+        assert await _counters(db_session, row.client_id) == (0, 1, 0)
 
         state_changed = [
             event
@@ -530,7 +530,7 @@ async def test_s4_resolve_task_moves_in_progress_to_awaiting(db_session, monkeyp
 
         assignment = await _fresh_assignment(db_session, assignment_id)
         assert assignment.state == S.AWAITING
-        assert await _counters(db_session, row.client_id) == (0, 0, 4)
+        assert await _counters(db_session, row.client_id) == (0, 0, 1)
 
         await assert_stock_report_clean(db_session, workspace_id)
     finally:
@@ -556,7 +556,7 @@ async def test_s5_fail_task_moves_the_assignment_to_failed(db_session, monkeypat
 
     workspace_id = seeded.workspace.client_id
     try:
-        assert await _counters(db_session, row.client_id) == (0, 4, 0)
+        assert await _counters(db_session, row.client_id) == (0, 1, 0)
         ctx = await _terminal_ctx(db_session, seeded, seeded.task)
         await fail_task(ctx)
 
@@ -582,7 +582,7 @@ async def test_s6_cancel_task_moves_the_assignment_to_failed(db_session, monkeyp
 
     workspace_id = seeded.workspace.client_id
     try:
-        assert await _counters(db_session, row.client_id) == (4, 0, 0)
+        assert await _counters(db_session, row.client_id) == (1, 0, 0)
         ctx = await _terminal_ctx(db_session, seeded, seeded.task)
         await cancel_task(ctx)
 
@@ -719,7 +719,7 @@ async def test_s8_remove_task_step_moves_in_progress_to_in_queue(db_session, mon
         assert task_after.state == TaskStateEnum.PENDING
         assignment = await _fresh_assignment(db_session, assignment_id)
         assert assignment.state == S.IN_QUEUE
-        assert await _counters(db_session, row.client_id) == (4, 0, 0)
+        assert await _counters(db_session, row.client_id) == (1, 0, 0)
 
         await assert_stock_report_clean(db_session, workspace_id)
     finally:
@@ -844,8 +844,8 @@ async def test_c1b_s1_last_step_completed_sends_the_assignment_to_awaiting(
         assert task_after.state == TaskStateEnum.READY
         assignment = await _fresh_assignment(db_session, assignment_id)
         assert assignment.state == S.AWAITING
-        assert await _counters(db_session, row.client_id) == (0, 0, 4)
-        assert await _goal_awaiting(db_session, goal.client_id) == 4
+        assert await _counters(db_session, row.client_id) == (0, 0, 1)
+        assert await _goal_awaiting(db_session, goal.client_id) == 1
 
         await assert_stock_report_clean(db_session, workspace_id)
     finally:
@@ -902,7 +902,7 @@ async def test_c1c_s2_batch_two_tasks_on_one_row_emit_one_updated(db_session, mo
             assert task_after.state == TaskStateEnum.WORKING
             assignment = await _fresh_assignment(db_session, assignment_id)
             assert assignment.state == S.IN_PROGRESS
-        assert await _counters(db_session, row.client_id) == (0, 8, 0)
+        assert await _counters(db_session, row.client_id) == (0, 2, 0)
 
         updated = [
             event
@@ -944,7 +944,7 @@ async def test_c1d_s3_force_task_ready_moves_in_queue_to_awaiting(db_session, mo
         assert task_after.state == TaskStateEnum.READY
         assignment = await _fresh_assignment(db_session, assignment_id)
         assert assignment.state == S.AWAITING
-        assert await _counters(db_session, row.client_id) == (0, 0, 4)
+        assert await _counters(db_session, row.client_id) == (0, 0, 1)
 
         await assert_stock_report_clean(db_session, workspace_id)
     finally:
@@ -987,7 +987,7 @@ async def test_c1f_s4_resolve_task_from_ready_leaves_awaiting_untouched(
 
         assignment = await _fresh_assignment(db_session, assignment_id)
         assert assignment.state == S.AWAITING
-        assert await _counters(db_session, row.client_id) == (0, 0, 4)
+        assert await _counters(db_session, row.client_id) == (0, 0, 1)
         stock_events = [
             event for event in captured if event.event_name.startswith("stock_")
         ]
@@ -1032,7 +1032,7 @@ async def test_c1i_s7_add_task_steps_on_pending_leaves_in_queue_untouched(
         assert task_after.state == TaskStateEnum.ASSIGNED
         assignment = await _fresh_assignment(db_session, assignment_id)
         assert assignment.state == S.IN_QUEUE
-        assert await _counters(db_session, row.client_id) == (4, 0, 0)
+        assert await _counters(db_session, row.client_id) == (1, 0, 0)
         stock_events = [
             event for event in captured if event.event_name.startswith("stock_")
         ]
@@ -1073,7 +1073,7 @@ async def test_c1j_s7_add_task_steps_reopens_ready_and_uncredits_the_goal(
 
     workspace_id = seeded.workspace.client_id
     try:
-        assert await _goal_awaiting(db_session, goal.client_id) == 4
+        assert await _goal_awaiting(db_session, goal.client_id) == 1
         ctx = make_ctx(
             db_session, seeded, role_name="manager",
             incoming_data={
@@ -1087,7 +1087,7 @@ async def test_c1j_s7_add_task_steps_reopens_ready_and_uncredits_the_goal(
         assert task_after.state == TaskStateEnum.WORKING
         assignment = await _fresh_assignment(db_session, assignment_id)
         assert assignment.state == S.IN_PROGRESS
-        assert await _counters(db_session, row.client_id) == (0, 4, 0)
+        assert await _counters(db_session, row.client_id) == (0, 1, 0)
         assert await _goal_awaiting(db_session, goal.client_id) == 0
         assert assignment.credited_history_record_id is None
 
@@ -1238,7 +1238,7 @@ async def test_c2a_s8_removing_one_of_two_completed_steps_keeps_ready_untouched(
         assert task_after.state == TaskStateEnum.READY
         assignment = await _fresh_assignment(db_session, assignment_id)
         assert assignment.state == S.AWAITING
-        assert await _goal_awaiting(db_session, goal.client_id) == 4
+        assert await _goal_awaiting(db_session, goal.client_id) == 1
         assert assignment.credited_history_record_id == memory_before
         assert [
             event for event in captured if event.event_name.startswith("stock_")
@@ -1400,7 +1400,7 @@ async def test_c3b_s8_reopen_never_moves_a_failed_assignment(db_session, monkeyp
 
 async def _resolved_early_via_scanner(db_session, seeded, monkeypatch, row):
     """A `in_progress` on a `working` T, then Scanner resolves it early: A
-    `resolved_early`, `G == 4`, `mem == G` (§14F F4)."""
+    `resolved_early`, `G == 1` (one unit per item), `mem == G` (§14F F4)."""
     from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 
     goal = await _make_goal(db_session, seeded, row)
@@ -1429,7 +1429,7 @@ async def _resolved_early_via_scanner(db_session, seeded, monkeypatch, row):
     await db_session.commit()
     assignment = await _fresh_assignment(db_session, assignment_id)
     assert assignment.state == S.RESOLVED_EARLY
-    assert await _goal_awaiting(db_session, goal.client_id) == 4
+    assert await _goal_awaiting(db_session, goal.client_id) == 1
     assert assignment.credited_history_record_id == goal.client_id
     return assignment_id, goal, step, section
 
@@ -1510,7 +1510,7 @@ async def test_c3cf_the_sync_never_moves_a_resolved_early_assignment(
         assignment = await _fresh_assignment(db_session, assignment_id)
         assert assignment.state == S.RESOLVED_EARLY
         assert await _counters(db_session, row.client_id) == (0, 0, 0)
-        assert await _goal_awaiting(db_session, goal.client_id) == 4
+        assert await _goal_awaiting(db_session, goal.client_id) == 1
         assert assignment.credited_history_record_id == goal.client_id
         assert [
             event for event in captured if event.event_name.startswith("stock_")

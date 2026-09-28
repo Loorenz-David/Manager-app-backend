@@ -118,7 +118,13 @@ The wire `quantity_requested` is the *effective* value (manual override, else Sc
 draft can be scheduled; see "Running the app" for the processes that fire it.
 Contract:
 `.../handoffs/to_frontend/HANDOFF_TO_FRONTEND_stock_report_snapshots_v11_20260928.md` — the
-one current file (v7–v10 were deltas, merged into it); v6 and earlier are in `archived/`.
+complete current file (v7–v10 were deltas, merged into it) — plus the one-meaning delta
+`…_v12_20260928.md`; v6 and earlier are in `archived/`. The docs guard reads v11.
+
+**The unit is the item (2026-09-28):** every stock-report quantity counts items; a set of 6
+chairs is 1. Scanner sends item counts (`docs/handoff/to_scanner/STOCK_REPORT_WEBHOOKS_v3_20260928.md`),
+and an assignment is created with `quantity = 1`. `Item.quantity` (the set size) only matches the
+`quantity` criterion.
 
 The three Scanner webhooks are `POST /api/v1/location-tracker/webhooks/{stock-demand,
 items-processed,stock-demand-deleted}`, all key-authenticated by `X-API-KEY` against

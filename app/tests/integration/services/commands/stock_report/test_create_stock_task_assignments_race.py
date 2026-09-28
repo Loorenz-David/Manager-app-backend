@@ -315,7 +315,8 @@ async def test_c5b_two_sessions_crossing_two_items_never_deadlock(db_session):
                     ).where(StockReportItem.client_id == row_id)
                 )
             ).one()
-            assert counters == (4, 0, 0)
+            # One item is one unit: the winner's single assignment per row.
+            assert counters == (1, 0, 0)
 
         await assert_stock_report_clean(db_session, workspace_id)
     finally:
