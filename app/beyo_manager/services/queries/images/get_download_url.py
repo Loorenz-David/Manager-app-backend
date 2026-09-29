@@ -15,8 +15,7 @@ async def get_download_url(ctx: ServiceContext) -> dict:
         # Item photos are served unsigned and never expire, so there is nothing to count down.
         # `expires_in: None` distinguishes "does not expire" from "expires in 0 seconds".
         return {"download_url": storage.public_url(image.image_url), "expires_in": None}
-    return {
-        "download_url": storage.generate_presigned_get_url(image.image_url, _GET_TTL),
-        # Stable URLs are backdated, so the returned URL has less than _GET_TTL left.
-        "expires_in": storage.presigned_get_remaining_seconds(image.image_url, _GET_TTL),
-    }
+    # Stable URLs are backdated and end with their signing credentials, so the returned
+    # URL has less than _GET_TTL left.
+    download_url, expires_in = storage.generate_presigned_get_url_with_remaining(image.image_url, _GET_TTL)
+    return {"download_url": download_url, "expires_in": expires_in}

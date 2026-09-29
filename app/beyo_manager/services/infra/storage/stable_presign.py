@@ -17,10 +17,16 @@ a returned URL always has at least 75% of its TTL left.
 Scoping matters: this must apply to GET URLs only. Backdating a 15-minute upload PUT URL
 by hours would hand out already-expired URLs, so this signer is registered under a private
 signature version and used by a dedicated client — see ``S3Client``.
+
+Temporary credentials (an EC2 instance role) end a URL's validity when they expire,
+whatever ``X-Amz-Expires`` says. ``S3Client`` therefore caps each URL at the expiry of the
+credentials that sign it, and this signer refuses to sign with credentials other than the
+ones that cap was computed for (:class:`CredentialsRotated`).
 """
 
 import contextlib
 import contextvars
+import dataclasses
 import datetime
 import hashlib
 import time
@@ -28,21 +34,38 @@ import time
 import botocore.auth
 from botocore.exceptions import NoCredentialsError
 
+
+class CredentialsRotated(Exception):
+    """The credentials changed between reading their expiry and signing with them."""
+
+
+@dataclasses.dataclass(frozen=True)
+class _SigningContext:
+    key: str
+    bucket_start: int | None
+    access_key: str | None
+
+
 # The signer needs the storage key to derive this key's bucket offset, and botocore
 # offers no way to thread custom context into generate_presigned_url. Presigning is
 # fully synchronous with no await between set and read, so a ContextVar is exact.
-_signing_key: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "beyo_stable_signing_key", default=None
+_signing_context: contextvars.ContextVar[_SigningContext | None] = contextvars.ContextVar(
+    "beyo_stable_signing_context", default=None
 )
 
 
 @contextlib.contextmanager
-def signing_key(key: str):
-    token = _signing_key.set(key)
+def signing_key(key: str, *, bucket_start: int | None = None, access_key: str | None = None):
+    """Scope one signature.
+
+    ``bucket_start`` pins X-Amz-Date (otherwise derived from the key and X-Amz-Expires);
+    ``access_key``, when given, is the only credential allowed to sign.
+    """
+    token = _signing_context.set(_SigningContext(key, bucket_start, access_key))
     try:
         yield
     finally:
-        _signing_key.reset(token)
+        _signing_context.reset(token)
 
 # Private signature version. `RequestSigner._choose_signer` appends "-query" for
 # presign-url signing, so a client configured with SIGNATURE_VERSION resolves to
@@ -103,11 +126,17 @@ class StableS3SigV4QueryAuth(botocore.auth.S3SigV4QueryAuth):
     def add_auth(self, request):
         if self.credentials is None:
             raise NoCredentialsError()
+        context = _signing_context.get()
+        if context is not None and context.access_key is not None:
+            if self.credentials.access_key != context.access_key:
+                raise CredentialsRotated()
         # Falls back to the URL (which embeds the key) if no key was scoped in, so the
         # signer still produces stable output rather than silently reverting to now().
-        key = _signing_key.get() or request.url
-        expires_in = int(self._expires)
-        start = bucket_start(key, expires_in)
+        if context is not None and context.bucket_start is not None:
+            start = context.bucket_start
+        else:
+            key = context.key if context is not None else request.url
+            start = bucket_start(key, int(self._expires))
         request.context["timestamp"] = datetime.datetime.fromtimestamp(
             start, datetime.UTC
         ).strftime(botocore.auth.SIGV4_TIMESTAMP)

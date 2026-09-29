@@ -11,8 +11,7 @@ async def get_pending_upload_download_url(ctx: ServiceContext) -> dict:
     if upload is None or upload.workspace_id != ctx.workspace_id:
         raise NotFound("PendingUpload not found")
     storage = get_storage_client()
-    return {
-        "download_url": storage.generate_presigned_get_url(upload.storage_key, _GET_TTL),
-        # Stable URLs are backdated, so the returned URL has less than _GET_TTL left.
-        "expires_in_seconds": storage.presigned_get_remaining_seconds(upload.storage_key, _GET_TTL),
-    }
+    # Stable URLs are backdated and end with their signing credentials, so the returned
+    # URL has less than _GET_TTL left.
+    download_url, expires_in = storage.generate_presigned_get_url_with_remaining(upload.storage_key, _GET_TTL)
+    return {"download_url": download_url, "expires_in_seconds": expires_in}
