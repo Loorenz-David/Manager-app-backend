@@ -16,6 +16,7 @@ from beyo_manager.errors.external_service import ExternalServiceError, ShopifyGr
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.shopify.shopify_shop_integration import ShopifyShopIntegration
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.infra.execution.outbound import require_outbound_integrations
 from beyo_manager.services.infra.shopify.product_identity_client import fetch_shopify_orders_by_product_identity
 
 IdentityType = Literal["sku", "barcode"]
@@ -54,6 +55,8 @@ def parse_shopify_product_identity_lookup_request(data: dict) -> ShopifyProductI
 
 
 async def lookup_shopify_customers_by_product_identity(ctx: ServiceContext) -> dict:
+    # Reads the shop's orders and customers with its stored access token.
+    require_outbound_integrations()
     request = parse_shopify_product_identity_lookup_request(ctx.incoming_data)
     query = (
         select(ShopifyShopIntegration)

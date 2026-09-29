@@ -5,9 +5,12 @@ from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.emails.email_connection import EmailConnection
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.email_providers.registry import get_email_provider
+from beyo_manager.services.infra.execution.outbound import require_outbound_integrations
 
 
 async def test_email_connection(ctx: ServiceContext) -> dict:
+    # Signs in to the stored mailbox with its decrypted password.
+    require_outbound_integrations()
     connection_client_id = str(ctx.incoming_data.get("connection_client_id") or "").strip()
 
     result = await ctx.session.execute(

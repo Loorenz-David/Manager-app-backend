@@ -13,6 +13,7 @@ from datetime import datetime
 
 from beyo_manager.config import settings
 from beyo_manager.domain.execution.enums import ExecutionTaskStateEnum, TaskType
+from beyo_manager.errors.external_service import OutboundIntegrationsDisabledError
 from beyo_manager.models.tables.execution.execution_task import ExecutionTask
 
 OUTBOUND_TASK_TYPES: frozenset[TaskType] = frozenset({
@@ -67,6 +68,17 @@ OUTBOUND_DISABLED_REASON = (
 
 def outbound_blocked(task_type: TaskType) -> bool:
     return task_type in OUTBOUND_TASK_TYPES and not settings.outbound_integrations_enabled
+
+
+def require_outbound_integrations() -> None:
+    """Refuse a request-path call that reaches a third party with stored credentials.
+
+    Tasks are covered by the router and workers; this covers the few API routes that
+    call a mailbox or a Shopify shop directly. Defence in depth only: on a staging that
+    holds a production copy, the network egress allow-list is the boundary.
+    """
+    if not settings.outbound_integrations_enabled:
+        raise OutboundIntegrationsDisabledError()
 
 
 def cancel_outbound_task(task: ExecutionTask, now: datetime) -> None:

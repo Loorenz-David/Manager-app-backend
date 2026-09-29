@@ -21,6 +21,7 @@ from beyo_manager.services.commands.shopify.requests.create_shopify_metafield_pr
 from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.infra.execution.outbound import require_outbound_integrations
 from beyo_manager.services.infra.shopify.metafield_definition_client import (
     SHOPIFY_PRODUCT_METAFIELD_OWNER_TYPE,
     fetch_shopify_metafield_definition_by_id,
@@ -30,6 +31,8 @@ from beyo_manager.services.infra.shopify.metafield_definition_client import (
 async def create_shopify_metafield_preferences(
     ctx: ServiceContext,
 ) -> list[dict]:
+    # Validates the definitions against the shop with its stored access token.
+    require_outbound_integrations()
     request = parse_create_shopify_metafield_preferences_request(ctx.incoming_data)
 
     for selection in request.preferences:

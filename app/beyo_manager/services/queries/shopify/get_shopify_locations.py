@@ -12,12 +12,15 @@ from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.shopify.shopify_shop_integration import ShopifyShopIntegration
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.infra.execution.outbound import require_outbound_integrations
 from beyo_manager.services.infra.shopify.inventory_client import fetch_shop_locations
 
 logger = logging.getLogger(__name__)
 
 
 async def get_shopify_locations(ctx: ServiceContext) -> dict:
+    # Calls the shop with its stored access token.
+    require_outbound_integrations()
     requested_ids = _parse_shop_integration_ids(ctx.query_params.get("shop_integration_ids"))
     if not requested_ids:
         raise ValidationError("Provide at least one shop_integration_id.")

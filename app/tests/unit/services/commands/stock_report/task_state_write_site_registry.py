@@ -78,7 +78,7 @@ REGISTRY: dict[tuple[str, int], dict] = {
     # ------------------------------------------------------------------
     ("beyo_manager/operations/connecteam_dead_letter.py", 58): {"classification": NOT_TASK, "model": "ExecutionTask"},
     ("beyo_manager/operations/connecteam_dead_letter.py", 83): {"classification": NOT_TASK, "model": "ExecutionTask"},
-    ("beyo_manager/services/infra/execution/outbound.py", 73): {"classification": NOT_TASK, "model": "ExecutionTask"},
+    ("beyo_manager/services/infra/execution/outbound.py", 85): {"classification": NOT_TASK, "model": "ExecutionTask"},
     ("beyo_manager/services/infra/execution/task_router.py", 142): {"classification": NOT_TASK, "model": "ExecutionTask"},
     ("beyo_manager/services/infra/execution/task_router.py", 166): {"classification": NOT_TASK, "model": "ExecutionTask"},
     ("beyo_manager/services/infra/execution/task_router.py", 185): {"classification": NOT_TASK, "model": "ExecutionTask"},

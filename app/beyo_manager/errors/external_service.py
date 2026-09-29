@@ -8,6 +8,18 @@ class ExternalServiceError(DomainError):
         super().__init__(message)
 
 
+class OutboundIntegrationsDisabledError(DomainError):
+    """A request would reach a third party, and this environment makes no such calls."""
+
+    http_status = 503
+
+    def __init__(
+        self,
+        message: str = "Outbound integrations are disabled in this environment.",
+    ) -> None:
+        super().__init__(message)
+
+
 class ShopifyGraphQLError(ExternalServiceError):
     def __init__(
         self,

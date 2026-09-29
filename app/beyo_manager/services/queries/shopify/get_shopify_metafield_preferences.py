@@ -28,6 +28,7 @@ from beyo_manager.models.tables.shopify.shopify_shop_integration import (
 )
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.infra.execution.outbound import require_outbound_integrations
 from beyo_manager.services.infra.shopify.metafield_definition_client import (
     SHOPIFY_PRODUCT_METAFIELD_OWNER_TYPE,
     fetch_shopify_metafield_definitions_by_ids,
@@ -39,6 +40,8 @@ from beyo_manager.services.queries.shopify.enrich_shopify_metafield_references i
 
 
 async def get_shopify_metafield_preferences(ctx: ServiceContext) -> dict:
+    # Reads metafield definitions from the shop with its stored access token.
+    require_outbound_integrations()
     shop_integration_ids = normalize_shop_integration_ids(
         ctx.query_params.get("shop_integration_ids")
     )
