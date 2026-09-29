@@ -1,27 +1,31 @@
-# VCS
-.git
-.gitignore
+# Allowlist. Everything is excluded unless re-included below, so a new local file
+# (a log, a dump, an .env copy, a key) can never reach the image by accident.
+*
 
-# Python
-__pycache__/
-*.py[cod]
-*.so
-*.egg-info/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
+# What the runtime image needs
+!requirements.txt
+!run.py
+!alembic.ini
+!beyo_manager
+!migrations
+!scripts
 
-# Virtual env and local tooling
-.venv/
-venv/
-.python-version
+# Never, even inside an allowed directory
+**/__pycache__
+**/*.py[cod]
+**/.DS_Store
+**/.env
+**/.env.*
+**/*.log
+**/*.pem
+**/*.key
+**/.test_token_bootstrap
 
-# Local/dev files
-.env
-.env.*
-*.log
-.DS_Store
+# Operator data exports under scripts/ (contain people's names)
+scripts/**/*.csv
 
-# Build outputs
-dist/
-build/
+# Developer-machine tooling: needs Docker or a local checkout, never runs in a container
+scripts/bootstrap_local.sh
+scripts/reset_bootstrap.sh
+scripts/ci_validate.py
+scripts/validate_bootstrap.py

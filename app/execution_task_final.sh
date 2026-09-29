@@ -1,7 +1,7 @@
 set -e
 BASE_URL="http://127.0.0.1:8000"
 ADMIN_EMAIL="admin@beyo.dev"
-ADMIN_PASS="Admin1234!"
+ADMIN_PASS="${BOOTSTRAP_ADMIN_PASSWORD:?export BOOTSTRAP_ADMIN_PASSWORD (the local admin password) first}"
 WORKER_EMAIL="nw_1747655692@beyo.dev"
 WORKER_PASS="Test1234!"
 

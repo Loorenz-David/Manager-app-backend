@@ -94,7 +94,8 @@ PYEOF
 }
 
 ADMIN_EMAIL="$(get_env_value BOOTSTRAP_ADMIN_EMAIL admin@beyo.dev)"
-ADMIN_PASSWORD="$(get_env_value BOOTSTRAP_ADMIN_PASSWORD Admin1234!)"
+ADMIN_PASSWORD="$(get_env_value BOOTSTRAP_ADMIN_PASSWORD "${BOOTSTRAP_ADMIN_PASSWORD:-}")"
+[ -n "$ADMIN_PASSWORD" ] || { echo "❌ BOOTSTRAP_ADMIN_PASSWORD is not set in .env or the environment"; exit 1; }
 
 PASSED=0
 FAILED=0

@@ -12,7 +12,7 @@ bash tests/working_sections_tests/test_working_sections.sh <email> <password>
 
 ### Test with bootstrap admin credentials
 ```bash
-bash tests/working_sections_tests/test_working_sections.sh admin@beyo.dev Admin1234!
+bash tests/working_sections_tests/test_working_sections.sh admin@beyo.dev "$BOOTSTRAP_ADMIN_PASSWORD"
 ```
 
 ### Test with any authenticated user

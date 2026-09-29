@@ -31,6 +31,10 @@ async def run_email_idle_watcher() -> None:
     if not settings.email_idle_enabled:
         logger.info("email_idle_watcher_disabled")
         return
+    # The watcher logs in to mailboxes itself, so the outbound switch covers it too.
+    if not settings.outbound_integrations_enabled:
+        logger.info("email_idle_watcher_disabled | reason=outbound_integrations_disabled")
+        return
 
     _register_shutdown_handler()
     active: dict[str, WatchHandle] = {}

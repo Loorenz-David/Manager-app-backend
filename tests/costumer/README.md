@@ -11,7 +11,7 @@ bash tests/costumer/test_costumer.sh <email> <password>
 ## Example
 
 ```bash
-bash tests/costumer/test_costumer.sh admin@beyo.dev Admin1234!
+bash tests/costumer/test_costumer.sh admin@beyo.dev "$BOOTSTRAP_ADMIN_PASSWORD"
 ```
 
 ## What it validates

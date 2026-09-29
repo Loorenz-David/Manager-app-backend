@@ -38,14 +38,15 @@ def _register_routers(app: FastAPI) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from beyo_manager.core.logging.redaction import redact_url
     from beyo_manager.models.database import init_db, close_db
     await init_db()
     _startup_logger.info(
         "startup | env=%s database_url=%s redis_url=%s "
         "db_pool_size=%d db_max_overflow=%d db_pool_recycle=%d",
         settings.environment,
-        settings.database_url,
-        settings.redis_url,
+        redact_url(settings.database_url),
+        redact_url(settings.redis_url),
         settings.db_pool_size,
         settings.db_max_overflow,
         settings.db_pool_recycle,

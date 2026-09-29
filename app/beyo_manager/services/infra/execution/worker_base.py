@@ -13,6 +13,7 @@ from beyo_manager.config import settings
 from beyo_manager.domain.execution.enums import ExecutionTaskStateEnum, TaskType
 from beyo_manager.models.database import get_db_session
 from beyo_manager.models.tables.execution.execution_task import ExecutionTask
+from beyo_manager.services.infra.execution.outbound import cancel_outbound_task, outbound_blocked
 from beyo_manager.services.infra.redis import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -91,6 +92,11 @@ async def _process_task(
     if task_type is None:
         return
 
+    # Queued before OUTBOUND_INTEGRATIONS_ENABLED was turned off.
+    if outbound_blocked(task_type):
+        await _mark_outbound_disabled(task_client_id, task_type)
+        return
+
     handler = handler_map.get(task_type)
     if not handler:
         await _mark_no_handler(task_client_id, task_type)
@@ -149,6 +155,18 @@ async def _mark_no_handler(task_client_id: str, task_type: TaskType) -> None:
         if task:
             task.state      = ExecutionTaskStateEnum.FAIL
             task.last_error = "No handler registered for task_type."
+            await session.commit()
+
+
+async def _mark_outbound_disabled(task_client_id: str, task_type: TaskType) -> None:
+    logger.info("outbound_task_cancelled | task_type=%s task_id=%s", task_type.value, task_client_id)
+    async for session in get_db_session():
+        result = await session.execute(
+            select(ExecutionTask).where(ExecutionTask.client_id == task_client_id)
+        )
+        task = result.scalar_one_or_none()
+        if task:
+            cancel_outbound_task(task, datetime.now(timezone.utc))
             await session.commit()
 
 

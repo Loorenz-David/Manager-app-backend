@@ -33,8 +33,8 @@ Gmail requirements before running:
     3. Use a DEDICATED TEST ACCOUNT — this test reads your INBOX.
 
 Example:
-    python tests/emails/test_email_live.py admin@company.com Admin1234! test.mailbox@gmail.com abcdabcdabcdabcd
-    python tests/emails/test_email_live.py admin@company.com Admin1234! test.mailbox@gmail.com abcdabcdabcdabcd --send-to friend@example.com
+    python tests/emails/test_email_live.py admin@company.com "$BOOTSTRAP_ADMIN_PASSWORD" test.mailbox@gmail.com abcdabcdabcdabcd
+    python tests/emails/test_email_live.py admin@company.com "$BOOTSTRAP_ADMIN_PASSWORD" test.mailbox@gmail.com abcdabcdabcdabcd --send-to friend@example.com
 """
 
 from __future__ import annotations

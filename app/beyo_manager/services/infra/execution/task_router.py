@@ -9,6 +9,7 @@ from beyo_manager.config import settings
 from beyo_manager.domain.execution.enums import ExecutionTaskStateEnum, TaskType
 from beyo_manager.models.database import get_db_session
 from beyo_manager.models.tables.execution.execution_task import ExecutionTask
+from beyo_manager.services.infra.execution.outbound import cancel_outbound_task, outbound_blocked
 from beyo_manager.services.infra.redis import get_redis_client
 from beyo_manager.services.infra.sleep.activity_tracker import ActivityTracker
 
@@ -60,7 +61,7 @@ async def _listen_for_task_events() -> None:
     while True:
         try:
             dsn = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
-            conn = await asyncpg.connect(dsn)
+            conn = await asyncpg.connect(dsn, server_settings={"application_name": "managerbeyo:task_router_listen"})
 
             async def _on_notify(conn, pid, channel, payload):
                 _notify_event.set()
@@ -121,8 +122,16 @@ async def _route_open_tasks(redis) -> None:
             .limit(BATCH_SIZE)
         )
         tasks = result.scalars().all()
+        routed: list[tuple[str, str]] = []
 
         for task in tasks:
+            if outbound_blocked(task.task_type):
+                cancel_outbound_task(task, now)
+                logger.info(
+                    "outbound_task_cancelled | task_type=%s task_id=%s",
+                    task.task_type.value, task.client_id,
+                )
+                continue
             queue_name = QUEUE_MAP.get(task.task_type)
             if not queue_name:
                 logger.error(
@@ -130,14 +139,17 @@ async def _route_open_tasks(redis) -> None:
                     task.task_type, task.client_id,
                 )
                 continue
-            redis.rpush(queue_name, task.client_id)
             task.state = ExecutionTaskStateEnum.PENDING
             task.locked_at = now
+            routed.append((queue_name, task.client_id))
 
         if tasks:
+            # Commit before pushing so a worker can claim every queued task id.
             await session.commit()
+            for queue_name, task_id in routed:
+                redis.rpush(queue_name, task_id)
             depths = {name: redis.llen(name) for name in set(QUEUE_MAP.values())}
-            logger.info("task_router | routed=%d queue_depths=%s", len(tasks), depths)
+            logger.info("task_router | routed=%d queue_depths=%s", sum(t.state is ExecutionTaskStateEnum.PENDING for t in tasks), depths)
 
 
 async def _requeue_retry_scheduled_tasks() -> None:

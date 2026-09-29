@@ -35,7 +35,7 @@ bash tests/item/test_item.sh
 
 ### Test with explicit credentials
 ```bash
-bash tests/item/test_item.sh admin@beyo.dev Admin1234!
+bash tests/item/test_item.sh admin@beyo.dev "$BOOTSTRAP_ADMIN_PASSWORD"
 ```
 
 ### Test with custom user

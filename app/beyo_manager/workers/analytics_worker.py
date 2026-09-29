@@ -4,6 +4,7 @@ import asyncio
 
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.models.database import init_db
+from beyo_manager.workers.heartbeat import start_heartbeat
 from beyo_manager.services.infra.execution.worker_base import run_worker
 from beyo_manager.services.tasks.analytics.process_step_transition import handle_process_step_transition
 from beyo_manager.services.tasks.analytics.process_item_cost_result import handle_process_item_cost_result
@@ -16,6 +17,7 @@ HANDLER_MAP = {
 
 async def main() -> None:
     await init_db()
+    start_heartbeat()
     await run_worker("queue:analytics", HANDLER_MAP)
 
 

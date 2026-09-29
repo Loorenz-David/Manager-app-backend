@@ -6,7 +6,7 @@
 #           soft-delete behavior, and query filters.
 # Run from: <project>/backend/
 # Usage   : bash tests/item/test_item.sh [<email> <password>]
-# Example : bash tests/item/test_item.sh admin@beyo.dev Admin1234!
+# Example : bash tests/item/test_item.sh admin@beyo.dev "$BOOTSTRAP_ADMIN_PASSWORD"
 # =============================================================================
 set -euo pipefail
 
@@ -16,7 +16,8 @@ APP_DIR="$PROJECT_ROOT/app"
 
 # Default credentials if not provided
 EMAIL="${1:-admin@beyo.dev}"
-PASSWORD="${2:-Admin1234!}"
+PASSWORD="${2:-${BOOTSTRAP_ADMIN_PASSWORD:-}}"
+[ -n "$PASSWORD" ] || { echo "❌ No admin password: pass it as the second argument or export BOOTSTRAP_ADMIN_PASSWORD"; exit 1; }
 
 # Validate Python environment
 if [ ! -f "$APP_DIR/.venv/bin/python" ]; then
@@ -372,7 +373,7 @@ class TestSuite:
 
 if __name__ == "__main__":
     email = sys.argv[1] if len(sys.argv) > 1 else "admin@beyo.dev"
-    password = sys.argv[2] if len(sys.argv) > 2 else "Admin1234!"
+    password = sys.argv[2] if len(sys.argv) > 2 else ""
     
     suite = TestSuite(email, password)
     success = suite.run_all()

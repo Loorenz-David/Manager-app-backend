@@ -5,6 +5,7 @@ import time
 import asyncpg
 
 from beyo_manager.config import settings
+from beyo_manager.core.logging.redaction import redact_url
 
 
 def _admin_dsn(database_url: str) -> tuple[str, str]:
@@ -12,7 +13,7 @@ def _admin_dsn(database_url: str) -> tuple[str, str]:
     dsn = re.sub(r"^postgresql\+asyncpg://", "postgresql://", database_url)
     match = re.match(r"(.*)/([^/?]+)(\?.*)?$", dsn)
     if not match:
-        raise RuntimeError(f"Cannot parse DATABASE_URL: {database_url!r}")
+        raise RuntimeError(f"Cannot parse DATABASE_URL: {redact_url(database_url)}")
     return match.group(1) + "/postgres", match.group(2)
 
 

@@ -25,5 +25,7 @@ migration_reports/
 
 # Local secrets
 /secretes
+# Access token written by tests/bootstrap_tests/01_seed_identity.sh
+.test_token_bootstrap
 # Archgraph working context — per-session, never shared
 .archgraph/contexts/

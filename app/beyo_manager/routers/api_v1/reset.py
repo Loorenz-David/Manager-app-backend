@@ -2,6 +2,10 @@ from fastapi import APIRouter, Header, HTTPException
 
 from beyo_manager.models.database import get_db_session
 from beyo_manager.routers.http.response import build_err, build_ok
+from beyo_manager.routers.utils.destructive_guard import (
+    require_destructive_operations_allowed,
+    secret_matches,
+)
 from beyo_manager.services.commands.reset.reset_app import reset_app
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.run_service import run_service
@@ -16,11 +20,13 @@ async def reset_route(
     delete_orphan_bootstrap_users: bool = True,
     x_reset_secret: str | None = Header(default=None, alias="X-Reset-Secret"),
 ):
+    require_destructive_operations_allowed()
+
     # Reset is disabled if RESET_SECRET env var is empty/not set.
     if not settings.reset_secret:
         raise HTTPException(status_code=501, detail="Reset endpoint is disabled. Set RESET_SECRET to enable.")
 
-    if not x_reset_secret or x_reset_secret != settings.reset_secret:
+    if not secret_matches(x_reset_secret, settings.reset_secret):
         raise HTTPException(status_code=403, detail="Invalid or missing reset secret.")
 
     session_iter = get_db_session()

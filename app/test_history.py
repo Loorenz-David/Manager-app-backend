@@ -1,4 +1,5 @@
 import asyncio
+import os
 import httpx
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
@@ -57,7 +58,7 @@ async def test():
         # Sign in
         login_res = await client.post("http://localhost:8000/api/v1/auth/sign-in", json={
             "email":"admin@beyo.dev",
-            "password":"Admin1234!",
+            "password": os.environ["BOOTSTRAP_ADMIN_PASSWORD"],
             "app_scope":"admin"
         })
         login_data = login_res.json()

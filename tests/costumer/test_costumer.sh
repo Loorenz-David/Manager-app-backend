@@ -6,7 +6,7 @@
 #           and soft-delete behavior.
 # Run from: <project>/backend/
 # Usage   : bash tests/costumer/test_costumer.sh <email> <password>
-# Example : bash tests/costumer/test_costumer.sh admin@beyo.dev Admin1234!
+# Example : bash tests/costumer/test_costumer.sh admin@beyo.dev "$BOOTSTRAP_ADMIN_PASSWORD"
 # =============================================================================
 set -euo pipefail
 
@@ -15,7 +15,7 @@ TIMESTAMP=$(date +%s)
 
 if [ $# -lt 2 ]; then
   echo "Usage: $0 <email> <password>"
-  echo "Example: $0 admin@beyo.dev Admin1234!"
+  echo "Example: $0 admin@beyo.dev \"\$BOOTSTRAP_ADMIN_PASSWORD\""
   exit 1
 fi
 

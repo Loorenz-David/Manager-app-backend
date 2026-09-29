@@ -26,6 +26,8 @@ from beyo_manager.services.context import ServiceContext
 async def bootstrap_app(ctx: ServiceContext) -> dict:
     if not (settings.bootstrap_admin_email and settings.bootstrap_admin_username and settings.bootstrap_admin_password):
         raise ValidationError("Bootstrap admin credentials are not configured in environment variables.")
+    if not settings.bootstrap_worker_password:
+        raise ValidationError("BOOTSTRAP_WORKER_PASSWORD must be set to create the seeded worker accounts.")
 
     async with ctx.session.begin():
         role_ids = await seed_roles(ctx.session)
@@ -83,6 +85,7 @@ async def bootstrap_app(ctx: ServiceContext) -> dict:
             ctx.session,
             workspace_result,
             worker_result,
+            settings,
         )
 
     return {

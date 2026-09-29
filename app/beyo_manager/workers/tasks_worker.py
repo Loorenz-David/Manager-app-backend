@@ -6,6 +6,7 @@ from beyo_manager.services.tasks.location_tracker.handle_push_item_locations imp
     handle_push_item_locations,
 )
 from beyo_manager.models.database import init_db
+from beyo_manager.workers.heartbeat import start_heartbeat
 from beyo_manager.services.infra.execution.worker_base import run_worker
 from beyo_manager.services.tasks.emails.handle_sync_email_threads_targeted import (
     handle_sync_email_threads_targeted,
@@ -40,6 +41,7 @@ HANDLER_MAP = {
 
 async def main() -> None:
     await init_db()
+    start_heartbeat()
     await run_worker("queue:tasks", HANDLER_MAP)
 
 

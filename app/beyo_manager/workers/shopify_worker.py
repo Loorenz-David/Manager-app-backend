@@ -3,6 +3,7 @@ import asyncio
 from beyo_manager.core.logging.config import configure_logging
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.models.database import init_db
+from beyo_manager.workers.heartbeat import start_heartbeat
 from beyo_manager.services.infra.execution.worker_base import run_worker
 from beyo_manager.services.tasks.shopify.handle_shopify_process_webhook import (
     handle_shopify_process_webhook,
@@ -29,6 +30,7 @@ HANDLER_MAP = {
 async def main() -> None:
     configure_logging()
     await init_db()
+    start_heartbeat()
     await run_worker("queue:shopify", HANDLER_MAP)
 
 

@@ -28,8 +28,6 @@ _WORKER_NAMES = [
     "Stina",
 ]
 
-_WORKER_PASSWORD = "Admin1234!"
-
 _WORKER_EMAILS: dict[str, str] = {
     "Andrii": "andrii@beyovintage.se",
     "Roman": "roman@beyovintage.se",
@@ -213,7 +211,7 @@ def _resolve_worker_workspace_role_id(
 
 async def seed_workers(
     session: AsyncSession,
-    _settings: Settings,
+    settings: Settings,
     workspace_result: dict[str, str],
     section_ids: dict[str, str],
     admin_user_id: str,
@@ -230,8 +228,12 @@ async def seed_workers(
         if existing_user is None:
             existing_user = await session.scalar(select(User).where(User.username == username))
         if existing_user is None:
+            if not settings.bootstrap_worker_password:
+                raise ValidationError(
+                    "BOOTSTRAP_WORKER_PASSWORD must be set to create the seeded worker accounts."
+                )
             hashed_password = bcrypt.hashpw(
-                _WORKER_PASSWORD.encode(),
+                settings.bootstrap_worker_password.encode(),
                 bcrypt.gensalt(),
             ).decode()
             user = User(

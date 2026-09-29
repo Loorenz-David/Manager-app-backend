@@ -9,7 +9,7 @@ All users below are created by the bootstrap identity script (`backend/tests/boo
 ### Admin User
 
 - **Email:** `admin@beyo.dev`
-- **Password:** `Admin1234!`
+- **Password:** the value of `BOOTSTRAP_ADMIN_PASSWORD` in `app/.env`
 - **Client ID:** (auto-generated on first bootstrap)
 - **Workspace:** (auto-generated on first bootstrap)
 - **Role:** Admin
@@ -79,7 +79,7 @@ curl -X POST http://localhost:8000/api/v1/auth/sign-in \
 ```bash
 TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/sign-in \
   -H 'Content-Type: application/json' \
-  -d '{"email":"admin@beyo.dev","password":"Admin1234!","app_scope":"admin"}' \
+  -d '{"email":"admin@beyo.dev","password":"'"$BOOTSTRAP_ADMIN_PASSWORD"'","app_scope":"admin"}' \
   | jq -r '.data.access_token')
 ```
 
@@ -101,7 +101,7 @@ curl -X GET http://localhost:8000/api/v1/working-sections \
    ```bash
    TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/sign-in \
      -H 'Content-Type: application/json' \
-     -d '{"email":"admin@beyo.dev","password":"Admin1234!","app_scope":"admin"}' \
+     -d '{"email":"admin@beyo.dev","password":"'"$BOOTSTRAP_ADMIN_PASSWORD"'","app_scope":"admin"}' \
      | jq -r '.data.access_token')
    ```
 4. Call endpoints with Bearer token:

@@ -1,20 +1,18 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from beyo_manager.config import Settings
 from beyo_manager.domain.emails.enums import EmailConnectionStatusEnum, EmailProviderTypeEnum, EmailSecurityEnum
 from beyo_manager.models.tables.emails.email_connection import EmailConnection
 from beyo_manager.models.tables.emails.email_sync_state import EmailSyncState
 from beyo_manager.services.infra.crypto.field_encryption import encrypt_field
 
-# ---------------------------------------------------------------------------
-# Fill in the Gmail App Password for Stina's connection before running
-# bootstrap. Leave empty to skip the seed.
-# ---------------------------------------------------------------------------
-_APP_PASSWORD = "hktrdsogubjavaak"
+# The mailbox address and its app password come from BOOTSTRAP_EMAIL_ADDRESS and
+# BOOTSTRAP_EMAIL_APP_PASSWORD. Leave either unset to skip this seed; the rest of
+# bootstrap does not depend on it.
 
 _OWNER_WORKER_NAME = "Stina"
 
-_EMAIL_ADDRESS = "loorenz.david@gmail.com"
 _DISPLAY_NAME = "Test Beyo Vintage"
 
 _SMTP_HOST = "smtp.gmail.com"
@@ -32,8 +30,11 @@ async def seed_email_connection(
     session: AsyncSession,
     workspace_result: dict[str, str],
     worker_name_to_user_id: dict[str, str],
+    settings: Settings,
 ) -> dict | None:
-    if not _APP_PASSWORD:
+    email_address = (settings.bootstrap_email_address or "").strip()
+    app_password = settings.bootstrap_email_app_password
+    if not email_address or not app_password:
         return None
 
     workspace_id = workspace_result["workspace_id"]
@@ -45,7 +46,7 @@ async def seed_email_connection(
         select(EmailConnection).where(
             EmailConnection.workspace_id == workspace_id,
             EmailConnection.owner_user_id == owner_user_id,
-            EmailConnection.email_address == _EMAIL_ADDRESS,
+            EmailConnection.email_address == email_address,
             EmailConnection.deleted_at.is_(None),
         )
     )
@@ -55,20 +56,20 @@ async def seed_email_connection(
     connection = EmailConnection(
         workspace_id=workspace_id,
         owner_user_id=owner_user_id,
-        email_address=_EMAIL_ADDRESS,
+        email_address=email_address,
         display_name=_DISPLAY_NAME,
         provider_type=EmailProviderTypeEnum.SMTP_IMAP.value,
         status=EmailConnectionStatusEnum.ACTIVE.value,
         smtp_host=_SMTP_HOST,
         smtp_port=_SMTP_PORT,
         smtp_security=_SMTP_SECURITY.value,
-        smtp_username=_EMAIL_ADDRESS,
-        smtp_password_encrypted=encrypt_field(_APP_PASSWORD),
+        smtp_username=email_address,
+        smtp_password_encrypted=encrypt_field(app_password),
         imap_host=_IMAP_HOST,
         imap_port=_IMAP_PORT,
         imap_security=_IMAP_SECURITY.value,
-        imap_username=_EMAIL_ADDRESS,
-        imap_password_encrypted=encrypt_field(_APP_PASSWORD),
+        imap_username=email_address,
+        imap_password_encrypted=encrypt_field(app_password),
         inbox_folder=_INBOX_FOLDER,
     )
     session.add(connection)

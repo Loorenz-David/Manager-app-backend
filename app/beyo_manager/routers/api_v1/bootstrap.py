@@ -1,14 +1,13 @@
-"""Bootstrap endpoint.
+"""Bootstrap and wipe-db endpoints (development tools).
 
-Example curl:
-curl -X POST 'http://localhost:8000/api/v1/bootstrap' \
-    -H 'X-Bootstrap-Secret: local-bootstrap-secret-dev'
-    
-    curl -X POST 'https://api-manager.beyoworkaroundtheclock.com/api/v1/bootstrap' \
-    -H 'X-Bootstrap-Secret: local-bootstrap-secret-dev'
+Both are refused in production and otherwise require DESTRUCTIVE_ENDPOINTS_ENABLED=true;
+see `routers/utils/destructive_guard.py`. The secret comes from BOOTSTRAP_SECRET.
 
+    curl -X POST 'http://localhost:8000/api/v1/bootstrap' \
+        -H "X-Bootstrap-Secret: $BOOTSTRAP_SECRET"
 
-
+    curl -X DELETE 'http://localhost:8000/api/v1/bootstrap/wipe-db' \
+        -H "X-Bootstrap-Secret: $BOOTSTRAP_SECRET"
 """
 
 from fastapi import APIRouter, Header, HTTPException
@@ -16,6 +15,10 @@ from sqlalchemy import text
 
 from beyo_manager.models.database import get_db_session
 from beyo_manager.routers.http.response import build_err, build_ok
+from beyo_manager.routers.utils.destructive_guard import (
+    require_destructive_operations_allowed,
+    secret_matches,
+)
 from beyo_manager.services.commands.bootstrap.bootstrap_app import bootstrap_app
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.run_service import run_service
@@ -34,7 +37,8 @@ def _build_truncate_sql(schema: str, tables: list[str]) -> str:
 
 
 def _validate_bootstrap_secret(x_bootstrap_secret: str | None) -> None:
-    if not settings.bootstrap_secret or not x_bootstrap_secret or x_bootstrap_secret != settings.bootstrap_secret:
+    require_destructive_operations_allowed()
+    if not secret_matches(x_bootstrap_secret, settings.bootstrap_secret):
         raise HTTPException(status_code=403, detail="Invalid or missing bootstrap secret.")
 
 
@@ -98,13 +102,3 @@ async def wipe_db_route(
         )
     finally:
         await session_iter.aclose()
-
-
-"""
-Wipe DB data:
-curl -X DELETE 'http://localhost:8000/api/v1/bootstrap/wipe-db' \
-    -H 'X-Bootstrap-Secret: local-bootstrap-secret-dev'
-    
-    curl -X DELETE 'https://api-manager.beyoworkaroundtheclock.com/api/v1/bootstrap/wipe-db' \
-    -H 'X-Bootstrap-Secret: local-bootstrap-secret-dev'
-"""

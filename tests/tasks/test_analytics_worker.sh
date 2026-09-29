@@ -3,7 +3,8 @@
 set -e
 
 ADMIN_EMAIL="${1:-admin@beyo.dev}"
-ADMIN_PASS="${2:-Admin1234!}"
+ADMIN_PASS="${2:-${BOOTSTRAP_ADMIN_PASSWORD:-}}"
+[ -n "$ADMIN_PASS" ] || { echo "❌ No admin password: pass it as the second argument or export BOOTSTRAP_ADMIN_PASSWORD"; exit 1; }
 
 # Colors for output
 PASS="\033[0;32m✓\033[0m"

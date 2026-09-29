@@ -91,6 +91,16 @@ class Settings(BaseSettings):
     sleep_mode_enabled: bool = Field(default=True, alias="SLEEP_MODE_ENABLED")
     idle_sleep_threshold_seconds: int = Field(default=600, alias="IDLE_SLEEP_THRESHOLD_SECONDS")
 
+    # Background tasks that reach third parties (email, Web Push, Shopify, Scanner,
+    # outbound webhooks) — see services/infra/execution/outbound.py. When false the
+    # router cancels them instead of queueing them. Defaults to true so a host whose
+    # env predates the setting keeps today's behaviour; deployments set it explicitly.
+    outbound_integrations_enabled: bool = Field(default=True, alias="OUTBOUND_INTEGRATIONS_ENABLED")
+
+    # Background processes touch this file every few seconds when set; the container
+    # health check reads its age (beyo_manager/workers/heartbeat.py).
+    worker_heartbeat_file: str | None = Field(default=None, alias="WORKER_HEARTBEAT_FILE")
+
     # Email IDLE watcher
     email_idle_enabled: bool = Field(default=False, alias="EMAIL_IDLE_ENABLED")
     email_idle_shard_count: int = Field(default=1, alias="EMAIL_IDLE_SHARD_COUNT")
@@ -107,9 +117,18 @@ class Settings(BaseSettings):
     bootstrap_admin_password: str | None = Field(default=None, alias="BOOTSTRAP_ADMIN_PASSWORD")
     bootstrap_workspace_name: str = Field(default="My Workspace", alias="BOOTSTRAP_WORKSPACE_NAME")
     bootstrap_workspace_timezone: str = Field(default="UTC", alias="BOOTSTRAP_WORKSPACE_TIMEZONE")
+    # Initial password for the seeded worker accounts, applied only when an account is created.
+    bootstrap_worker_password: str | None = Field(default=None, alias="BOOTSTRAP_WORKER_PASSWORD")
+    # Seeded SMTP/IMAP mailbox. Both unset (the default) skips the email seed.
+    bootstrap_email_address: str | None = Field(default=None, alias="BOOTSTRAP_EMAIL_ADDRESS")
+    bootstrap_email_app_password: str | None = Field(default=None, alias="BOOTSTRAP_EMAIL_APP_PASSWORD")
 
     # Reset (development only)
     reset_secret: str = Field(default="", alias="RESET_SECRET")
+
+    # Bootstrap, wipe-db and reset are refused unless this is true AND ENVIRONMENT is
+    # explicitly a non-production value. Production refuses them regardless.
+    destructive_endpoints_enabled: bool = Field(default=False, alias="DESTRUCTIVE_ENDPOINTS_ENABLED")
     field_encryption_key: str | None = Field(default=None, alias="FIELD_ENCRYPTION_KEY")
 
     # Shopify
