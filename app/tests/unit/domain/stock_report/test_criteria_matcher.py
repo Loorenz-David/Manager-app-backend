@@ -106,6 +106,28 @@ def test_item_shape_alias_matches_the_scanner_value():
 
 
 @pytest.mark.unit
+def test_material_type_stands_in_for_a_missing_wood_type():
+    # The purchase app stores some categories' wood as `material_type` (article
+    # 0001728: a teak cabinet refused `wood_group: teak` as missing_on_item).
+    cabinet = item({"parts": "2", "door_type": "Opening doors", "material_type": "Teak"})
+    assert matches_stock_criteria(cabinet, {"wood_group": ["teak"]})
+    assert matches_stock_criteria(cabinet, {"wood_type": ["teak"]})
+    assert build_item_property_bag(cabinet)["material_type"] == "Teak"
+    # `wood_type` wins when the item carries both.
+    failure = evaluate_stock_criteria(
+        item({"wood_type": "Oak", "material_type": "Teak"}), {"wood_group": ["teak"]}
+    )[0]
+    assert failure.reason is StockCriteriaMismatchReasonEnum.VALUE_NOT_ACCEPTED
+    assert failure.item_values == ("light",)
+    # A material that is no wood derives no group; it is not reported missing.
+    failure = evaluate_stock_criteria(
+        item({"material_type": "Metal"}), {"wood_group": ["teak"]}
+    )[0]
+    assert failure.reason is StockCriteriaMismatchReasonEnum.NO_GROUP_FOR_VALUE
+    assert failure.item_values == ("metal",)
+
+
+@pytest.mark.unit
 def test_plain_rosewood_derives_the_dark_group():
     assert matches_stock_criteria(
         item({"wood_type": "Rosewood"}), {"wood_group": ["dark"]}

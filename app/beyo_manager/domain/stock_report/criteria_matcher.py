@@ -7,6 +7,7 @@ from beyo_manager.domain.stock_report.scanner_property_tables import (
     DRAWERS_QTY_KEY,
     DRAWERS_RANGE_KEY,
     EXCLUDED_ITEM_PROPERTY_KEYS,
+    ITEM_KEY_ALIASES,
     WOOD_GROUP_KEY,
     WOOD_TYPE_KEY,
     canonical_item_token,
@@ -64,6 +65,11 @@ def build_item_property_bag(item) -> dict[str, str]:
             bag[normalized_key] = value.strip()
     for key in EXCLUDED_ITEM_PROPERTY_KEYS:
         bag.pop(key, None)
+    for key, aliases in ITEM_KEY_ALIASES.items():
+        if key not in bag:
+            alias = next((alias for alias in aliases if alias in bag), None)
+            if alias is not None:
+                bag[key] = bag[alias]
     bag["quantity"] = str(item.quantity)
     if wood := bag.get(WOOD_TYPE_KEY):
         if (

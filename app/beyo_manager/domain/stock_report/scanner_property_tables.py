@@ -28,6 +28,12 @@ DRAWER_RANGES = [("1-2", 1, 2), ("3-5", 3, 5), ("6+", 6, None)]
 ITEM_VALUE_ALIASES = {
     "shape": {"squared": "square"},
 }
+# Manager-side, not read from Scanner: item keys that stand in for a Scanner key the
+# item does not carry itself, in order of preference. The purchase app stores some
+# categories' wood as `material_type`. The Scanner key always wins when present.
+ITEM_KEY_ALIASES = {
+    WOOD_TYPE_KEY: ("material_type",),
+}
 
 
 def validate_wood_groups(groups) -> None:
