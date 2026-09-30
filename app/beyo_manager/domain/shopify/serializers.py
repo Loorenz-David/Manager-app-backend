@@ -21,7 +21,10 @@ from beyo_manager.domain.shopify.scopes import (
     compare_requested_and_granted_scopes,
     has_all_required_scopes,
 )
-from beyo_manager.domain.shopify.webhook_registry import SHOPIFY_WEBHOOK_REGISTRY
+from beyo_manager.domain.shopify.webhook_registry import (
+    SHOPIFY_WEBHOOK_REGISTRY,
+    webhook_definition_enabled,
+)
 from beyo_manager.domain.users.serializers import serialize_user_working_section_member
 
 if TYPE_CHECKING:
@@ -271,7 +274,7 @@ def _derive_webhooks_status(
         return "has_failures"
 
     for definition in SHOPIFY_WEBHOOK_REGISTRY:
-        if not definition.enabled:
+        if not webhook_definition_enabled(definition):
             continue
         if not has_all_required_scopes(
             definition.required_scopes, integration.granted_scopes or ()

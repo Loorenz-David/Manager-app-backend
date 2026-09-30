@@ -150,6 +150,11 @@ class Settings(BaseSettings):
     shopify_webhook_base_url: str | None = Field(default=None, alias="SHOPIFY_WEBHOOK_BASE_URL")
     shopify_integration_debug_logs: bool = Field(default=False, alias="SHOPIFY_INTEGRATION_DEBUG_LOGS")
     shopify_webhook_secret: str | None = Field(default=None, alias="SHOPIFY_WEBHOOK_SECRET")
+    # False: no Shopify webhook topic is subscribed. The next webhook sync for a shop
+    # deletes the subscriptions this backend owns and marks them REMOVED; the
+    # integration and its token stay (outbound pushes continue). True (the default,
+    # the legacy server) keeps today's registry. See domain/shopify/webhook_registry.py.
+    shopify_webhooks_enabled: bool = Field(default=True, alias="SHOPIFY_WEBHOOKS_ENABLED")
 
     # Connecteam time-activity webhook
     connecteam_webhook_secret: str | None = Field(default=None, alias="CONNECTEAM_WEBHOOK_SECRET")

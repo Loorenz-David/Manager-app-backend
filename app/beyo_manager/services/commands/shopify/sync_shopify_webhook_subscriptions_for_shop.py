@@ -18,6 +18,7 @@ from beyo_manager.domain.shopify.scopes import has_all_required_scopes
 from beyo_manager.domain.shopify.webhook_registry import (
     SHOPIFY_WEBHOOK_CALLBACK_PATH,
     SHOPIFY_WEBHOOK_REGISTRY,
+    webhook_definition_enabled,
 )
 from beyo_manager.errors.external_service import ShopifyGraphQLError
 from beyo_manager.errors.validation import ValidationError
@@ -102,7 +103,8 @@ async def sync_shopify_webhook_subscriptions_for_shop(ctx: ServiceContext) -> di
                 tuple(integration.granted_scopes or ()),
             )
 
-            if not definition.enabled:
+            # Disabled per entry, or every entry with SHOPIFY_WEBHOOKS_ENABLED=false.
+            if not webhook_definition_enabled(definition):
                 if local_row is not None and local_row.status == ShopifyWebhookSubscriptionStatusEnum.REMOVED:
                     continue
                 if owned_remote:
