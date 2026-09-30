@@ -293,6 +293,7 @@ async def test_kiosk_full_loop_from_floor_sign_in_to_clock_out(
         "state_entered_at": None,
         "pause_reason": None,
         "declared_state": None,
+        "stale_shift_closed_at": None,
     }
 
     # 4. Clock in on behalf of the confirmed worker.

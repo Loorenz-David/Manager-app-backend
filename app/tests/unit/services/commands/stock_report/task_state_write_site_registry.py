@@ -220,10 +220,10 @@ REGISTRY: dict[tuple[str, int], dict] = {
     ("beyo_manager/services/commands/cases/_case_created_step_pause.py", 133): {
         "classification": PAUSED_DRIVER,
     },
-    ("beyo_manager/services/commands/users/_clock_worker_shift.py", 204): {
+    ("beyo_manager/services/commands/users/_clock_worker_shift.py", 377): {
         "classification": PAUSED_DRIVER,
     },
-    ("beyo_manager/services/commands/users/declare_worker_state.py", 143): {
+    ("beyo_manager/services/commands/users/declare_worker_state.py", 142): {
         "classification": PAUSED_DRIVER,
     },
 }

@@ -6,6 +6,7 @@ from beyo_manager.errors.validation import ValidationError
 from beyo_manager.services.commands.users._clock_worker_shift import (
     clock_in_shift_for_user,
     clock_out_shift_for_user,
+    close_stale_open_shift,
     load_open_worker_shift_for_update,
 )
 from beyo_manager.services.commands.users._worker_shift_access import resolve_worker_shift_target
@@ -33,6 +34,11 @@ async def toggle_worker_shift(ctx: ServiceContext) -> dict:
 
     Direct callers receive the timestamp as part of the command contract. HTTP routes
     must pop it before serialization; it is intentionally not a client response field.
+
+    A shift that outlived its work day does not count as "clocked in": it is closed at its
+    own boundary and the toggle then clocks the worker in for the new day. That is what
+    `GET /current` already told the caller (``clocked_in: false``), so the tap does what
+    the screen offered — and yesterday's shift is never closed at the current time.
     """
     request = parse_toggle_worker_shift_request(ctx.incoming_data)
     now = datetime.now(timezone.utc)
@@ -43,6 +49,17 @@ async def toggle_worker_shift(ctx: ServiceContext) -> dict:
             ctx.workspace_id,
             user_id,
         )
+        stale = await close_stale_open_shift(
+            ctx.session,
+            ctx.workspace_id,
+            user_id,
+            current,
+            now,
+        )
+        stale_paused_step_ids: list[str] = []
+        if stale is not None:
+            stale_paused_step_ids = stale.paused_step_ids
+            current = None
         if current is None:
             await clock_in_shift_for_user(
                 ctx.session,
@@ -52,7 +69,7 @@ async def toggle_worker_shift(ctx: ServiceContext) -> dict:
                 ctx.user_id,
             )
             action = "clock_in"
-            paused_step_ids: list[str] = []
+            paused_step_ids: list[str] = list(stale_paused_step_ids)
         else:
             paused_step_ids = await clock_out_shift_for_user(
                 ctx.session,

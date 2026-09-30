@@ -30,7 +30,10 @@ from beyo_manager.services.commands.task_steps._settle_step_time import settle_s
 from beyo_manager.services.commands.users.reconcile_worker_shift_state import (
     reconcile_worker_shift_state,
 )
-from beyo_manager.services.infra.events.worker_shift_realtime import emit_worker_shift_state
+from beyo_manager.services.infra.events.worker_shift_realtime import (
+    emit_steps_paused,
+    emit_worker_shift_state,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +161,13 @@ async def handle_process_step_transition(raw: dict, task_id: str) -> None:
                 session,
                 payload.workspace_id,
                 payload.credited_user_id,
+            )
+        # A shift found past its work-day end was closed at that boundary during the
+        # reconcile, force-pausing its steps server-side; tell the devices rendering them.
+        if shift_reconcile is not None and shift_reconcile.paused_step_ids:
+            await emit_steps_paused(
+                payload.workspace_id,
+                list(shift_reconcile.paused_step_ids),
             )
 
 

@@ -7,7 +7,10 @@ from beyo_manager.services.commands.users._clock_worker_shift import clock_in_sh
 from beyo_manager.services.commands.users._worker_shift_access import resolve_worker_shift_target
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
-from beyo_manager.services.infra.events.worker_shift_realtime import emit_worker_shift_state
+from beyo_manager.services.infra.events.worker_shift_realtime import (
+    emit_steps_paused,
+    emit_worker_shift_state,
+)
 
 
 class ClockInWorkerShiftRequest(BaseModel):
@@ -25,7 +28,10 @@ async def clock_in_worker_shift(ctx: ServiceContext) -> dict:
     request = parse_clock_in_worker_shift_request(ctx.incoming_data)
     async with maybe_begin(ctx.session):
         user_id = await resolve_worker_shift_target(ctx, request.user_id)
-        await clock_in_shift_for_user(
+        # A shift left open past its work day is closed at its own boundary inside
+        # `clock_in_shift_for_user` (under the shift row lock) before the new one opens;
+        # the ids are the steps that closure paused.
+        paused_step_ids = await clock_in_shift_for_user(
             ctx.session,
             ctx.workspace_id,
             user_id,
@@ -35,4 +41,5 @@ async def clock_in_worker_shift(ctx: ServiceContext) -> dict:
     # After the block: `maybe_begin` has committed, so nothing is broadcast that a
     # rollback could take back.
     await emit_worker_shift_state(ctx.session, ctx.workspace_id, user_id)
+    await emit_steps_paused(ctx.workspace_id, paused_step_ids)
     return {"action": "clock_in", "user_id": user_id}

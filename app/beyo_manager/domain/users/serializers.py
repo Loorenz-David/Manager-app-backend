@@ -179,7 +179,15 @@ def serialize_current_worker_shift_state(
     pause_reason: PauseReason | None = None,
     declared_record: UserDeclaredStateRecord | None = None,
     declared_pause_reason: PauseReason | None = None,
+    stale_shift_closed_at: datetime | None = None,
 ) -> dict:
+    """The worker's live shift state.
+
+    ``stale_shift_closed_at`` (additive) is set only when the open shift has outlived its
+    work day: the worker is then reported as NOT clocked in, and the field carries the
+    boundary the shift is (or will be, on the next write) closed at. Pass ``current=None``
+    with it — a stale shift has no live state to show.
+    """
     if current is None:
         return {
             "user_id": user_id,
@@ -189,6 +197,9 @@ def serialize_current_worker_shift_state(
             "state_entered_at": None,
             "pause_reason": None,
             "declared_state": None,
+            "stale_shift_closed_at": (
+                stale_shift_closed_at.isoformat() if stale_shift_closed_at else None
+            ),
         }
 
     is_paused = current.state is UserShiftStateEnum.IN_PAUSE
@@ -222,6 +233,7 @@ def serialize_current_worker_shift_state(
             if declared_record is not None and declared_pause_reason is not None
             else None
         ),
+        "stale_shift_closed_at": None,
     }
     if (
         is_paused

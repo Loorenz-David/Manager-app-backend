@@ -8,6 +8,7 @@ from sqlalchemy import select
 from beyo_manager.domain.pause_reasons.enums import PauseTypeEnum
 from beyo_manager.domain.roles.enums import RoleNameEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
+from beyo_manager.domain.users.work_day import work_day_start
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.permissions import PermissionDenied
 from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
@@ -116,7 +117,10 @@ async def _seed_open_shift(
     state: UserShiftStateEnum,
     reason: str | None = None,
 ) -> tuple[datetime, datetime]:
-    shift_started_at = datetime.now(timezone.utc) - timedelta(hours=1)
+    now = datetime.now(timezone.utc)
+    # Never before today's UTC midnight: a shift from yesterday is stale and reported as
+    # not clocked in, which is not what these shape tests are about.
+    shift_started_at = max(now - timedelta(hours=1), work_day_start(now))
     state_entered_at = shift_started_at + timedelta(minutes=10)
     db_session.add_all(
         [
@@ -173,6 +177,7 @@ async def test_current_state_returns_clocked_out_shape_without_write_lock(
         "state_entered_at": None,
         "pause_reason": None,
         "declared_state": None,
+        "stale_shift_closed_at": None,
     }
     assert statements
     assert all(statement._for_update_arg is None for statement in statements)
@@ -230,6 +235,7 @@ async def test_current_state_serializes_idle_working_and_step_pause(
             else None
         ),
         "declared_state": None,
+        "stale_shift_closed_at": None,
     }
 
 
@@ -281,6 +287,7 @@ async def test_current_state_serializes_open_declared_state(db_session) -> None:
             "description": "Cleaning section B",
             "entered_at": state_entered_at.isoformat(),
         },
+        "stale_shift_closed_at": None,
     }
 
 
@@ -307,6 +314,7 @@ async def test_current_state_serializes_legacy_free_text_reason(db_session) -> N
         "state_entered_at": state_entered_at.isoformat(),
         "pause_reason": None,
         "declared_state": None,
+        "stale_shift_closed_at": None,
         "reason_text": "legacy meeting",
     }
 

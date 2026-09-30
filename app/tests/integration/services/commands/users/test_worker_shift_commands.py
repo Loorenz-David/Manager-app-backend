@@ -1370,12 +1370,14 @@ async def test_declare_pause_reason_eligibility_uses_target_worker_and_open_step
             {"pause_reason_id": reason_id},
         )
 
-    with pytest.raises(ValidationError, match="not available"):
-        await declare_worker_state(worker_ctx(wrong_user_reason.client_id))
-    with pytest.raises(ValidationError, match="not available"):
-        await declare_worker_state(worker_ctx(wrong_section_reason.client_id))
+    # Inside the shift's own work day: a declare on a shift past its work-day end is refused.
+    with freeze_time(base + timedelta(minutes=10)):
+        with pytest.raises(ValidationError, match="not available"):
+            await declare_worker_state(worker_ctx(wrong_user_reason.client_id))
+        with pytest.raises(ValidationError, match="not available"):
+            await declare_worker_state(worker_ctx(wrong_section_reason.client_id))
 
-    result = await declare_worker_state(worker_ctx(allowed_reason.client_id))
+        result = await declare_worker_state(worker_ctx(allowed_reason.client_id))
     await db_session.refresh(step)
     assert result["paused_steps"] == 1
     assert step.state is TaskStepStateEnum.PAUSED

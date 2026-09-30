@@ -241,6 +241,7 @@ async def test_clock_out_tells_the_workspace_the_shift_ended(db_session, emitted
         "state_entered_at": None,
         "pause_reason": None,
         "declared_state": None,
+        "stale_shift_closed_at": None,
     }
     assert emitted.workspace_payload(worker_shift_realtime.WORKER_SHIFT_ROSTER_CHANGED) == {
         "user_id": worker.client_id,

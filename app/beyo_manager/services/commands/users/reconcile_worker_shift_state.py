@@ -13,6 +13,7 @@ from beyo_manager.domain.users.shift_state_machine import (
     derive_target_state,
     is_valid_shift_state_transition,
 )
+from beyo_manager.domain.users.work_day import is_past_work_day_end
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.users.user_declared_state_record import (
@@ -20,6 +21,7 @@ from beyo_manager.models.tables.users.user_declared_state_record import (
 )
 from beyo_manager.models.tables.users.user_shift_state_record import UserShiftStateRecord
 from beyo_manager.services.commands.users._clock_worker_shift import (
+    close_stale_open_shift,
     load_open_worker_shift_for_update,
 )
 
@@ -32,6 +34,9 @@ class ShiftReconcileOutcome:
     changed: bool
     state: UserShiftStateEnum | None
     auto_clocked_in: bool = False
+    # Steps force-paused because a shift was closed at its work-day end during this
+    # reconcile. Callers that broadcast step changes after commit should include them.
+    paused_step_ids: tuple[str, ...] = ()
 
 
 def _credited_user_id():
@@ -88,7 +93,25 @@ async def _reconcile_once(
 
     auto_clocked_in = False
     shift_started_at: datetime | None = None
-    if current is None:
+    closed_stale = False
+    stale_paused_step_ids: list[str] = []
+    # A shift past its work-day end is closed at that boundary first; the work recorded
+    # after it belongs to the next day, whose shift the auto-clock-in below opens from the
+    # earliest still-open working step. If that step is itself from an earlier, already
+    # finished day, the shift it opens is stale too and is closed at *its* boundary on the
+    # next pass. Each pass pauses at least that earliest working step (it started before
+    # the boundary it is closed at), so the loop ends once no stale shift remains.
+    while True:
+        if current is not None:
+            stale = await close_stale_open_shift(session, workspace_id, user_id, current, now)
+            if stale is None:
+                break
+            closed_stale = True
+            stale_paused_step_ids.extend(stale.paused_step_ids)
+            current = None
+            auto_clocked_in = False
+            shift_started_at = None
+
         open_working = await _load_open_steps(
             session,
             workspace_id,
@@ -101,7 +124,11 @@ async def _reconcile_once(
                 workspace_id,
                 user_id,
             )
-            return ShiftReconcileOutcome(changed=False, state=None)
+            return ShiftReconcileOutcome(
+                changed=closed_stale,
+                state=None,
+                paused_step_ids=tuple(stale_paused_step_ids),
+            )
 
         latest_ended_at = await session.scalar(
             select(func.max(UserShiftStateRecord.entered_at)).where(
@@ -133,6 +160,22 @@ async def _reconcile_once(
             user_id,
             shift_started_at.isoformat(),
         )
+        if not is_past_work_day_end(shift_started_at, now):
+            break
+        # The shift just opened already ended at its own boundary. Give it the open row
+        # every shift has, so the ordinary stale closure on the next pass can end it.
+        current = UserShiftStateRecord(
+            workspace_id=workspace_id,
+            user_id=user_id,
+            state=UserShiftStateEnum.IDLE,
+            entered_at=shift_started_at,
+            exited_at=None,
+            changed_by_id=None,
+            reason=None,
+            manually_recorded=False,
+        )
+        session.add(current)
+        await session.flush()
 
     if shift_started_at is None:
         shift_started_at = await session.scalar(
@@ -232,7 +275,11 @@ async def _reconcile_once(
             )
         )
     ):
-        return ShiftReconcileOutcome(changed=declared_closed, state=current.state)
+        return ShiftReconcileOutcome(
+            changed=declared_closed,
+            state=current.state,
+            paused_step_ids=tuple(stale_paused_step_ids),
+        )
 
     transition_from = current.state if current is not None else UserShiftStateEnum.STARTED_SHIFT
     assert is_valid_shift_state_transition(transition_from, target)
@@ -264,6 +311,7 @@ async def _reconcile_once(
         changed=True,
         state=target,
         auto_clocked_in=auto_clocked_in,
+        paused_step_ids=tuple(stale_paused_step_ids),
     )
 
 

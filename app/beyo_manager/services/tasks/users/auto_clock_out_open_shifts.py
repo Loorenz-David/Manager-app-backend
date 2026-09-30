@@ -1,12 +1,19 @@
 import logging
-from datetime import datetime, time, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 
 from beyo_manager.domain.users.enums import UserShiftStateEnum
+from beyo_manager.domain.users.work_day import work_day_start
 from beyo_manager.models.database import get_db_session
 from beyo_manager.models.tables.users.user_shift_state_record import UserShiftStateRecord
-from beyo_manager.services.commands.users._clock_worker_shift import clock_out_shift_for_user
+from beyo_manager.services.commands.users._clock_worker_shift import (
+    close_stale_open_shift,
+    load_open_worker_shift_for_update,
+)
+from beyo_manager.services.commands.users.reconcile_worker_shift_state import (
+    reconcile_worker_shift_state,
+)
 from beyo_manager.services.infra.events.worker_shift_realtime import (
     emit_steps_paused,
     emit_worker_shift_state,
@@ -17,9 +24,23 @@ logger = logging.getLogger(__name__)
 
 
 async def handle_auto_clock_out_open_shifts(raw: dict, task_id: str) -> None:
+    """Close every open shift that has outlived its work day, each at its OWN boundary.
+
+    A shift started at ``t`` ends at ``work_day_end(t)`` (the next UTC midnight) — not at
+    "today's" midnight and not at the time this sweep happens to run. So a sweep that runs
+    late, after production slept, or after several missed days produces exactly the shifts
+    an on-time sweep would have: one run closes every stale shift at its own boundary.
+
+    Activity the worker recorded after that boundary is not folded into the old shift
+    (`close_stale_open_shift`); the reconcile then opens the new day's shift from any
+    still-open working step. Idempotent: a closed shift is no longer open, and a shift the
+    reconcile opens is inside its own work day unless it is itself stale, in which case
+    the reconcile closes it at its boundary too.
+    """
     del raw
     now = datetime.now(timezone.utc)
-    midnight = datetime.combine(now.date(), time.min, tzinfo=timezone.utc)
+    # `work_day_end(started_at) <= now`  <=>  `started_at < work_day_start(now)`.
+    today_start = work_day_start(now)
     latest_started = (
         select(
             UserShiftStateRecord.workspace_id.label("workspace_id"),
@@ -52,20 +73,33 @@ async def handle_auto_clock_out_open_shifts(raw: dict, task_id: str) -> None:
                     )
                     .where(
                         UserShiftStateRecord.exited_at.is_(None),
-                        latest_started.c.started_at < midnight,
+                        latest_started.c.started_at < today_start,
                     )
                     .with_for_update(of=UserShiftStateRecord)
                 )
             ).all()
             for row in rows:
-                paused_step_ids = await clock_out_shift_for_user(
-                    session,
-                    row.workspace_id,
-                    row.user_id,
-                    midnight,
-                    changed_by_id=None,
+                current = await load_open_worker_shift_for_update(
+                    session, row.workspace_id, row.user_id
                 )
-                closed_shifts.append((row.workspace_id, row.user_id, paused_step_ids))
+                closure = await close_stale_open_shift(
+                    session, row.workspace_id, row.user_id, current, now
+                )
+                if closure is None:
+                    continue
+                # Work recorded after the boundary belongs to the new day: the reconcile
+                # opens that day's shift from a still-open working step (and closes it at
+                # its own boundary as well if that step is from an earlier day).
+                reconcile = await reconcile_worker_shift_state(
+                    session, row.workspace_id, row.user_id, now
+                )
+                closed_shifts.append(
+                    (
+                        row.workspace_id,
+                        row.user_id,
+                        [*closure.paused_step_ids, *reconcile.paused_step_ids],
+                    )
+                )
                 clocked_out += 1
 
         for workspace_id, user_id, paused_step_ids in closed_shifts:
@@ -73,8 +107,8 @@ async def handle_auto_clock_out_open_shifts(raw: dict, task_id: str) -> None:
             await emit_steps_paused(workspace_id, paused_step_ids)
 
     logger.info(
-        "worker_shift.midnight_safeguard_completed | task_id=%s clocked_out=%d boundary=%s",
+        "worker_shift.midnight_safeguard_completed | task_id=%s clocked_out=%d today_start=%s",
         task_id,
         clocked_out,
-        midnight.isoformat(),
+        today_start.isoformat(),
     )

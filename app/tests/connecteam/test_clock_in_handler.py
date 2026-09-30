@@ -95,3 +95,27 @@ async def test_clock_in_uses_received_at_when_occurred_at_is_absent(
     await module.execute(session=object(), worker=connecteam_worker, event=event)
 
     assert captured["occurred_at"] == datetime(2026, 7, 20, 8, 0, 2, tzinfo=timezone.utc)
+
+
+async def test_clock_in_carries_steps_paused_by_a_stale_shift_closure(
+    connecteam_worker, connecteam_event, monkeypatch
+) -> None:
+    # A shift left open past its work day is closed at its own boundary inside the
+    # primitive before the new one opens; the steps that closure paused must reach the
+    # task entry point, which broadcasts them after commit.
+    async def clock_in_closing_stale(*args, **kwargs):
+        return ["stp_paused_at_midnight"]
+
+    monkeypatch.setattr(module, "clock_in_shift_for_user", clock_in_closing_stale)
+    monkeypatch.setattr(module, "log_event", lambda event_type, **extra: None)
+
+    result = await module.execute(
+        session=object(),
+        worker=connecteam_worker,
+        event=connecteam_event,
+    )
+
+    assert result.outcome == ConnecteamProcessingOutcomeEnum.CLOCK_IN_APPLIED.value
+    assert result.changed_shift_state is True
+    assert result.paused_step_ids == ("stp_paused_at_midnight",)
+    assert result.transitioned_steps == 1

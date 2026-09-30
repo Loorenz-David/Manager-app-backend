@@ -40,7 +40,9 @@ async def execute(
 ) -> ConnecteamHandlerResult:
     occurred_at = clock_event_timestamp(event)
     try:
-        await clock_in_shift_for_user(
+        # Non-empty only when a shift left open past its work day was first closed at its
+        # own boundary; those steps were paused server-side and must be broadcast.
+        paused_step_ids = await clock_in_shift_for_user(
             session,
             worker.workspace_id,
             worker.user_id,
@@ -84,5 +86,7 @@ async def execute(
         processing_status=ConnecteamProcessingOutcomeEnum.CLOCK_IN_APPLIED.value,
     )
     return ConnecteamHandlerResult(
-        outcome=ConnecteamProcessingOutcomeEnum.CLOCK_IN_APPLIED.value
+        outcome=ConnecteamProcessingOutcomeEnum.CLOCK_IN_APPLIED.value,
+        transitioned_steps=len(paused_step_ids or ()),
+        paused_step_ids=tuple(paused_step_ids or ()),
     )

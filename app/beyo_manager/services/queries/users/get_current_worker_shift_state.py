@@ -10,6 +10,7 @@ from beyo_manager.domain.users.serializers import (
     pause_reason_reference_is_unresolved,
     serialize_current_worker_shift_state,
 )
+from beyo_manager.domain.users.work_day import work_day_end
 from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.users.user_declared_state_record import (
     UserDeclaredStateRecord,
@@ -96,6 +97,17 @@ async def load_current_worker_shift_state(
         return serialize_current_worker_shift_state(user_id=user_id, current=None)
 
     current, pause_reason, declared_record, declared_reason, started_at = row
+    # Read-only on purpose: a shift that outlived its work day is reported as closed at its
+    # own boundary (the same rule and fallback `close_stale_open_shift` applies), and the
+    # next shift mutation or the nightly sweep writes that closure. Until then the worker
+    # is not clocked in for today — so a kiosk offers "clock in", never "clock out".
+    boundary = work_day_end(started_at or current.entered_at)
+    if boundary <= now:
+        return serialize_current_worker_shift_state(
+            user_id=user_id,
+            current=None,
+            stale_shift_closed_at=boundary,
+        )
     if pause_reason_reference_is_unresolved(current, pause_reason):
         logger.warning(
             "worker_shift.current_state_unresolved_pause_reason | "

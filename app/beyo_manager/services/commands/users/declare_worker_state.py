@@ -22,6 +22,7 @@ from beyo_manager.services.commands.task_steps._step_transition_core import (
 )
 from beyo_manager.services.commands.users._clock_worker_shift import (
     _load_open_working_step_rows,
+    close_stale_open_shift,
     load_open_worker_shift_for_update,
 )
 from beyo_manager.services.commands.users._worker_shift_access import (
@@ -40,6 +41,8 @@ from beyo_manager.services.pause_reasons.eligibility import assert_pause_reason_
 
 
 logger = logging.getLogger(__name__)
+
+_NOT_CLOCKED_IN = "Worker must be clocked in to declare a state."
 
 
 class DeclareWorkerStateRequest(BaseModel):
@@ -77,6 +80,113 @@ def parse_declare_worker_state_request(data: dict) -> DeclareWorkerStateRequest:
         raise ValidationError(str(exc)) from exc
 
 
+async def _declare_on_open_shift(
+    ctx: ServiceContext,
+    request: DeclareWorkerStateRequest,
+    user_id: str,
+    now: datetime,
+):
+    """Open the declaration on the worker's current (open, in-day) shift.
+
+    The caller holds the shift row lock and has already ruled out a stale shift.
+    """
+    pause_reason = (
+        await ctx.session.execute(
+            select(PauseReason).where(
+                PauseReason.workspace_id == ctx.workspace_id,
+                PauseReason.client_id == request.pause_reason_id,
+                PauseReason.is_deleted.is_(False),
+            )
+        )
+    ).scalar_one_or_none()
+    if pause_reason is None:
+        raise NotFound("Pause reason not found.")
+    if pause_reason.pause_type is not PauseTypeEnum.PERSONAL:
+        raise ValidationError("Only personal pause reasons can be declared.")
+    if pause_reason.requires_description and request.description is None:
+        raise ValidationError("Description is required for this pause reason.")
+
+    open_working_rows = await _load_open_working_step_rows(
+        ctx.session,
+        ctx.workspace_id,
+        user_id,
+    )
+    await assert_pause_reason_eligible(
+        ctx.session,
+        workspace_id=ctx.workspace_id,
+        pause_reason_id=pause_reason.client_id,
+        target_user_ids=[user_id],
+        target_working_section_ids={
+            step.working_section_id for _, step, _ in open_working_rows
+        },
+    )
+
+    open_declared = (
+        await ctx.session.execute(
+            select(UserDeclaredStateRecord)
+            .where(
+                UserDeclaredStateRecord.workspace_id == ctx.workspace_id,
+                UserDeclaredStateRecord.user_id == user_id,
+                UserDeclaredStateRecord.exited_at.is_(None),
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    switched_from_id = None
+    if open_declared is not None:
+        open_declared.exited_at = now
+        open_declared.closed_by_id = ctx.user_id
+        switched_from_id = open_declared.client_id
+
+    for closing_record, step, task in open_working_rows:
+        await _apply_step_transition(
+            ctx,
+            step,
+            task,
+            closing_record,
+            new_state=TaskStepStateEnum.PAUSED,
+            pause_reason_id=pause_reason.client_id,
+            description=None,
+            credited_user_id=user_id,
+            now=now,
+        )
+
+    declared_state = UserDeclaredStateRecord(
+        workspace_id=ctx.workspace_id,
+        user_id=user_id,
+        pause_reason_id=pause_reason.client_id,
+        description=request.description,
+        entered_at=now,
+        exited_at=None,
+        created_by_id=ctx.user_id,
+        closed_by_id=None,
+    )
+    ctx.session.add(declared_state)
+    await ctx.session.flush()
+
+    reconcile_outcome = await reconcile_worker_shift_state(
+        ctx.session,
+        ctx.workspace_id,
+        user_id,
+        now,
+    )
+    if reconcile_outcome.state is None:
+        raise RuntimeError("Declared state reconciliation requires an open shift.")
+
+    logger.info(
+        "worker_shift.declared_state_opened | "
+        "workspace_id=%s user_id=%s actor_id=%s declared_record_id=%s "
+        "switched_from_id=%s paused_steps=%s",
+        ctx.workspace_id,
+        user_id,
+        ctx.user_id,
+        declared_state.client_id,
+        switched_from_id,
+        len(open_working_rows),
+    )
+    return declared_state, pause_reason, open_working_rows, reconcile_outcome
+
+
 async def declare_worker_state(ctx: ServiceContext) -> dict:
     request = parse_declare_worker_state_request(ctx.incoming_data)
     now = datetime.now(timezone.utc)
@@ -88,103 +198,30 @@ async def declare_worker_state(ctx: ServiceContext) -> dict:
             ctx.workspace_id,
             user_id,
         )
-        if current_shift is None:
-            raise ConflictError("Worker must be clocked in to declare a state.")
-
-        pause_reason = (
-            await ctx.session.execute(
-                select(PauseReason).where(
-                    PauseReason.workspace_id == ctx.workspace_id,
-                    PauseReason.client_id == request.pause_reason_id,
-                    PauseReason.is_deleted.is_(False),
-                )
-            )
-        ).scalar_one_or_none()
-        if pause_reason is None:
-            raise NotFound("Pause reason not found.")
-        if pause_reason.pause_type is not PauseTypeEnum.PERSONAL:
-            raise ValidationError("Only personal pause reasons can be declared.")
-        if pause_reason.requires_description and request.description is None:
-            raise ValidationError("Description is required for this pause reason.")
-
-        open_working_rows = await _load_open_working_step_rows(
+        stale = await close_stale_open_shift(
             ctx.session,
             ctx.workspace_id,
             user_id,
-        )
-        await assert_pause_reason_eligible(
-            ctx.session,
-            workspace_id=ctx.workspace_id,
-            pause_reason_id=pause_reason.client_id,
-            target_user_ids=[user_id],
-            target_working_section_ids={
-                step.working_section_id for _, step, _ in open_working_rows
-            },
-        )
-
-        open_declared = (
-            await ctx.session.execute(
-                select(UserDeclaredStateRecord)
-                .where(
-                    UserDeclaredStateRecord.workspace_id == ctx.workspace_id,
-                    UserDeclaredStateRecord.user_id == user_id,
-                    UserDeclaredStateRecord.exited_at.is_(None),
-                )
-                .with_for_update()
-            )
-        ).scalar_one_or_none()
-        switched_from_id = None
-        if open_declared is not None:
-            open_declared.exited_at = now
-            open_declared.closed_by_id = ctx.user_id
-            switched_from_id = open_declared.client_id
-
-        for closing_record, step, task in open_working_rows:
-            await _apply_step_transition(
-                ctx,
-                step,
-                task,
-                closing_record,
-                new_state=TaskStepStateEnum.PAUSED,
-                pause_reason_id=pause_reason.client_id,
-                description=None,
-                credited_user_id=user_id,
-                now=now,
-            )
-
-        declared_state = UserDeclaredStateRecord(
-            workspace_id=ctx.workspace_id,
-            user_id=user_id,
-            pause_reason_id=pause_reason.client_id,
-            description=request.description,
-            entered_at=now,
-            exited_at=None,
-            created_by_id=ctx.user_id,
-            closed_by_id=None,
-        )
-        ctx.session.add(declared_state)
-        await ctx.session.flush()
-
-        reconcile_outcome = await reconcile_worker_shift_state(
-            ctx.session,
-            ctx.workspace_id,
-            user_id,
+            current_shift,
             now,
         )
-        if reconcile_outcome.state is None:
-            raise RuntimeError("Declared state reconciliation requires an open shift.")
+        if stale is None:
+            if current_shift is None:
+                raise ConflictError(_NOT_CLOCKED_IN)
+            (
+                declared_state,
+                pause_reason,
+                open_working_rows,
+                reconcile_outcome,
+            ) = await _declare_on_open_shift(ctx, request, user_id, now)
 
-        logger.info(
-            "worker_shift.declared_state_opened | "
-            "workspace_id=%s user_id=%s actor_id=%s declared_record_id=%s "
-            "switched_from_id=%s paused_steps=%s",
-            ctx.workspace_id,
-            user_id,
-            ctx.user_id,
-            declared_state.client_id,
-            switched_from_id,
-            len(open_working_rows),
-        )
+    if stale is not None:
+        # The shift outlived its work day: the closure above is committed (it is the
+        # deterministic end of that shift whoever triggers it), and the worker is not
+        # clocked in for today — exactly what `GET /current` reports — so refuse.
+        await emit_worker_shift_state(ctx.session, ctx.workspace_id, user_id)
+        await emit_steps_paused(ctx.workspace_id, stale.paused_step_ids)
+        raise ConflictError(_NOT_CLOCKED_IN)
 
     await emit_worker_shift_state(ctx.session, ctx.workspace_id, user_id)
     # A manager can declare on a worker's behalf, and declaring auto-pauses their steps.
