@@ -1,4 +1,4 @@
-"""An in-memory stand-in for the shared async Redis client (hash + string commands).
+"""An in-memory stand-in for the shared async Redis client (hash, string, list length).
 
 Loop-agnostic, unlike the real shared client, so it works both under pytest-asyncio
 and inside TestClient's own event loop. ``fail`` makes every command raise, as
@@ -14,6 +14,7 @@ class FakeAsyncRedis:
     def __init__(self) -> None:
         self.hashes: dict[str, dict[str, str]] = {}
         self.values: dict[str, str] = {}
+        self.lists: dict[str, list[str]] = {}
         self.expirations: dict[str, int | None] = {}
         self.hset_calls: list[tuple[str, dict[str, str]]] = []
         self.set_calls: list[tuple[str, str, int | None]] = []
@@ -47,6 +48,10 @@ class FakeAsyncRedis:
     async def get(self, key: str) -> str | None:
         await self._io()
         return self.values.get(key)
+
+    async def llen(self, key: str) -> int:
+        await self._io()
+        return len(self.lists.get(key, []))
 
     async def ttl(self, key: str) -> int:
         if key not in self.values and key not in self.hashes:
