@@ -6,9 +6,17 @@ from sqlalchemy import select
 
 from beyo_manager.domain.execution.enums import EventTaskOriginSourceEnum, TaskType
 from beyo_manager.domain.schedulers.enums import (
-    RecurringSchedulerIntervalValueEnum,
     RecurringSchedulerTypeEnum,
     SchedulerStateEnum,
+)
+# Re-exported: the grid is the scheduling rule, and callers (an eligibility CLI, tests)
+# import it from here or from the domain module without starting the runner.
+from beyo_manager.domain.schedulers.recurring_grid import (  # noqa: F401
+    INTERVAL_UNIT_TO_SECONDS,
+    grid_point,
+    recurring_grid_point,
+    recurring_is_due,
+    recurring_next_run_at,
 )
 from beyo_manager.models.database import get_db_session
 from beyo_manager.models.tables.schedulers.recurring_scheduler import RecurringScheduler
@@ -27,13 +35,6 @@ RECURRING_TYPE_TO_TASK_TYPE: dict[RecurringSchedulerTypeEnum, TaskType] = {
     RecurringSchedulerTypeEnum.REMINDER:    TaskType.RECURRING_REMINDER,
     RecurringSchedulerTypeEnum.PIN_TASK:    TaskType.RECURRING_PIN_TASK,
     RecurringSchedulerTypeEnum.AUTO_CLOCK_OUT_OPEN_SHIFTS: TaskType.AUTO_CLOCK_OUT_OPEN_SHIFTS,
-}
-
-INTERVAL_UNIT_TO_SECONDS: dict[RecurringSchedulerIntervalValueEnum, int] = {
-    RecurringSchedulerIntervalValueEnum.SECONDS: 1,
-    RecurringSchedulerIntervalValueEnum.MINUTES: 60,
-    RecurringSchedulerIntervalValueEnum.DAYS:    86_400,
-    RecurringSchedulerIntervalValueEnum.MONTHS:  2_592_000,
 }
 
 
@@ -79,7 +80,17 @@ async def _fire_due_recurring_schedulers() -> None:
         fired = errors = 0
 
         for scheduler in candidates:
-            if not _is_due(scheduler, now):
+            try:
+                due = _is_due(scheduler, now)
+            except ValueError as exc:
+                # A non-positive interval has no grid. Record it on the row and skip it,
+                # rather than let one bad row stop every other scheduler from firing.
+                message = str(exc)[:1024]
+                if scheduler.last_error != message:  # record once, not every poll
+                    scheduler.last_error = message
+                    errors += 1
+                continue
+            if not due:
                 continue
             try:
                 await create_execution_task(
@@ -91,7 +102,9 @@ async def _fire_due_recurring_schedulers() -> None:
                     scheduled_at=now,
                     event_client_id=scheduler.event_client_id,
                 )
-                scheduler.last_interval = now
+                # The grid slot this fire serves, not the wall time: a late fire must not
+                # re-anchor the schedule, and missed slots collapse into this one fire.
+                scheduler.last_interval = recurring_grid_point(scheduler, now)
                 ActivityTracker.touch()
                 fired += 1
             except Exception as exc:
@@ -109,6 +122,7 @@ async def _fire_due_recurring_schedulers() -> None:
 
 async def _get_next_run_at() -> datetime | None:
     """Compute earliest next fire time across all ACTIVE recurring schedulers."""
+    now = datetime.now(timezone.utc)
     async for session in get_db_session():
         result = await session.execute(
             select(RecurringScheduler)
@@ -116,19 +130,14 @@ async def _get_next_run_at() -> datetime | None:
             .limit(BATCH_SIZE)
         )
         schedulers = result.scalars().all()
-        if not schedulers:
-            return None
         next_times = []
         for s in schedulers:
-            unit_seconds     = INTERVAL_UNIT_TO_SECONDS[s.interval_value]
-            interval_seconds = s.interval * unit_seconds
-            reference        = s.last_interval or s.created_at
-            next_times.append(reference + timedelta(seconds=interval_seconds))
-        return min(next_times)
+            try:
+                next_times.append(recurring_next_run_at(s, now))
+            except ValueError:
+                continue
+        return min(next_times) if next_times else None
 
 
 def _is_due(scheduler: RecurringScheduler, now: datetime) -> bool:
-    unit_seconds     = INTERVAL_UNIT_TO_SECONDS[scheduler.interval_value]
-    interval_seconds = scheduler.interval * unit_seconds
-    reference        = scheduler.last_interval or scheduler.created_at
-    return (now - reference).total_seconds() >= interval_seconds
+    return recurring_is_due(scheduler, now)
