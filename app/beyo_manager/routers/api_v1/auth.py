@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.background import BackgroundTask
 
 from beyo_manager.config import settings
 from beyo_manager.errors.availability import AuthUnavailableError
@@ -18,6 +19,12 @@ from beyo_manager.services.commands.auth.refresh_token import refresh_token
 from beyo_manager.services.commands.auth.sign_in_user import sign_in_user
 from beyo_manager.services.commands.users.register_user import register_user
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.infra.activity.human_activity import (
+    ACTIVITY_HEADER,
+    SOURCE_REFRESH,
+    counts_as_human,
+    record_human_activity,
+)
 from beyo_manager.services.run_service import run_service
 
 router = APIRouter()
@@ -137,7 +144,19 @@ async def refresh_route(
             },
             status_code=outcome.error.http_status,
         )
-    return build_ok(outcome.data) if outcome.success else build_err(outcome.error)
+    if not outcome.success:
+        return build_err(outcome.error)
+    json_response = build_ok(outcome.data)
+    # A successful refresh is a human event (this route does not pass through
+    # get_jwt_claims, so ActivityMiddleware cannot see it) — unless the client marked
+    # it background. It is a POST, so an unmarked refresh counts. The scope is the
+    # refreshed token's own: refresh_token only succeeds when they match. Recorded
+    # after the response is sent; the recorder never raises.
+    if counts_as_human(request.method, request.headers.get(ACTIVITY_HEADER)):
+        json_response.background = BackgroundTask(
+            record_human_activity, app_scope=scope, source=SOURCE_REFRESH
+        )
+    return json_response
 
 
 @router.post("/register")

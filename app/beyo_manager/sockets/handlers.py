@@ -11,6 +11,10 @@ from beyo_manager.errors.availability import (
     AUTH_UNAVAILABLE_RETRY_AFTER_SECONDS,
 )
 from beyo_manager.models.database import get_db_session
+from beyo_manager.services.infra.activity.human_activity import (
+    SOURCE_SOCKET,
+    record_human_activity,
+)
 from beyo_manager.services.infra.execution.task_factory import create_instant_task
 from beyo_manager.services.infra.auth import is_token_blocklisted
 from beyo_manager.services.infra.presence import mark_left, mark_viewing
@@ -61,6 +65,7 @@ async def _handle_connect(sid: str, environ: dict, auth: dict | None = None):
             user_id=user_id,
             workspace_id=claims.get("workspace_id", ""),
             username=claims.get("username", ""),
+            app_scope=claims.get("app_scope", "") or "",
         ),
     )
     try:
@@ -92,6 +97,7 @@ async def _handle_view_entity(sid: str, data: dict):
     entity_client_id = str(data.get("entity_client_id", ""))
     if not entity_client_id:
         return
+    await _record_socket_activity(meta)
     mark_viewing(entity_type.value, entity_client_id, meta.user_id)
     meta.entity_views.add((entity_type.value, entity_client_id))
     if entity_type == EntityType.CONVERSATION:
@@ -116,6 +122,7 @@ async def _handle_leave_entity(sid: str, data: dict):
     entity_client_id = str(data.get("entity_client_id", ""))
     if not entity_client_id:
         return
+    await _record_socket_activity(meta)
     mark_left(entity_type.value, entity_client_id, meta.user_id)
     meta.entity_views.discard((entity_type.value, entity_client_id))
     if entity_type == EntityType.CONVERSATION:
@@ -127,6 +134,18 @@ async def _handle_leave_entity(sid: str, data: dict):
             payload={"user_id": meta.user_id, "entity_type": entity_type.value, "entity_client_id": entity_client_id},
         )
         await session.commit()
+
+
+async def _record_socket_activity(meta: ConnectionMeta) -> None:
+    # Opening or leaving an entity is a person navigating — a human event. Connect,
+    # disconnect and transport pings are not. Throttled, bounded and never raising
+    # (see human_activity); the guard is belt and braces so presence always proceeds.
+    try:
+        await record_human_activity(
+            app_scope=meta.app_scope, source=SOURCE_SOCKET, user_id=meta.user_id
+        )
+    except Exception:
+        logger.debug("socket human-activity recording raised", exc_info=True)
 
 
 async def _cleanup_presence(meta: ConnectionMeta) -> None:

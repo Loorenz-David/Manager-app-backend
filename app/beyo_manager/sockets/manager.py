@@ -61,6 +61,10 @@ class ConnectionManager:
     def is_user_connected(self, user_id: str) -> bool:
         return any(meta.user_id == user_id for meta in self._connections.values())
 
+    def connection_counts(self) -> tuple[int, int]:
+        """(live socket connections, distinct users among them) held by this process."""
+        return len(self._connections), len({meta.user_id for meta in self._connections.values()})
+
     @staticmethod
     def user_room(user_id: str) -> str:
         return user_room(user_id)

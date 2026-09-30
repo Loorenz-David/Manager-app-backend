@@ -3,7 +3,7 @@ import threading
 
 import jwt
 from cachetools import TTLCache
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from beyo_manager.config import settings
@@ -21,12 +21,17 @@ _cache_lock = threading.Lock()
 
 async def get_jwt_claims(
     credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+    # FastAPI injects the Request by annotation (the default is ignored for routes);
+    # the default keeps direct calls — get_jwt_claims(credentials) — working.
+    request: Request = None,  # type: ignore[assignment]
 ) -> dict:
     token = credentials.credentials
 
     with _cache_lock:
-        if token in _claim_cache:
-            return _claim_cache[token]
+        cached = _claim_cache.get(token)
+    if cached is not None:
+        _stamp_identity(request, cached)
+        return cached
 
     try:
         claims = jwt.decode(token, settings.jwt_secret_key, algorithms=["HS256"])
@@ -40,7 +45,22 @@ async def get_jwt_claims(
     with _cache_lock:
         _claim_cache[token] = claims
 
+    _stamp_identity(request, claims)
     return claims
+
+
+def _stamp_identity(request: Request | None, claims: dict) -> None:
+    """Mark the request as made by a validated identity, for ActivityMiddleware.
+
+    Only ever called after validation succeeded, so anonymous, invalid, revoked and
+    unverifiable (503) requests are never stamped. No I/O.
+    """
+    if request is None:
+        return
+    request.state.beyo_identity = {
+        "user_id": claims.get("user_id"),
+        "app_scope": claims.get("app_scope"),
+    }
 
 
 def require_roles(allowed_roles: list[str]):

@@ -3,6 +3,10 @@
 Before: every request, health checks included, touched the sleep tracker in Redis.
 A monitor polling /health kept the system awake forever, and with Redis down the
 middleware raised first, so /health answered 500 instead of reporting the outage.
+
+ActivityMiddleware replaced SleepMiddleware. The legacy touch survives only with
+SLEEP_MODE_ENABLED=true (still every non-health request, anonymous included); human
+activity is a separate, authenticated-only signal — see test_activity_middleware.py.
 """
 
 from __future__ import annotations
@@ -16,15 +20,15 @@ from fastapi.testclient import TestClient
 
 from beyo_manager.config import settings
 from beyo_manager.routers.api_v1 import health
-from beyo_manager.routers.middleware import sleep as sleep_middleware
-from beyo_manager.routers.middleware.sleep import SleepMiddleware
+from beyo_manager.routers.middleware import activity as activity_middleware
+from beyo_manager.routers.middleware.activity import ActivityMiddleware
 
 pytestmark = pytest.mark.unit
 
 
 def _app() -> FastAPI:
     app = FastAPI()
-    app.add_middleware(SleepMiddleware)
+    app.add_middleware(ActivityMiddleware)
     app.include_router(health.router, prefix="/health")
 
     @app.get("/api/v1/anything")
@@ -37,7 +41,19 @@ def _app() -> FastAPI:
 @pytest.fixture
 def touches(monkeypatch):
     calls = []
-    monkeypatch.setattr(sleep_middleware.ActivityTracker, "touch", lambda: calls.append(1))
+    monkeypatch.setattr(activity_middleware.ActivityTracker, "touch", lambda: calls.append(1))
+    return calls
+
+
+@pytest.fixture
+def records(monkeypatch):
+    calls = []
+
+    async def _record(**kwargs):
+        calls.append(kwargs)
+        return True
+
+    monkeypatch.setattr(activity_middleware, "record_human_activity", _record)
     return calls
 
 
@@ -49,7 +65,8 @@ def db_ok(monkeypatch):
     monkeypatch.setattr(health, "_check_db", _ok)
 
 
-def test_health_checks_do_not_count_as_activity(touches, db_ok, monkeypatch):
+def test_health_checks_do_not_count_as_activity(touches, records, db_ok, monkeypatch):
+    monkeypatch.setattr(settings, "sleep_mode_enabled", True)
     monkeypatch.setattr(health, "_check_redis", lambda: None)
     client = TestClient(_app())
 
@@ -57,8 +74,25 @@ def test_health_checks_do_not_count_as_activity(touches, db_ok, monkeypatch):
     assert client.get("/health").status_code == 200
     assert touches == []
 
+    # Legacy (flag on): an anonymous API request still touches the sleep tracker...
     client.get("/api/v1/anything")
     assert touches == [1]
+    # ...but it is not human activity: nothing validated an identity.
+    assert records == []
+
+
+def test_anonymous_requests_neither_touch_nor_record_with_sleep_mode_off(
+    touches, records, db_ok, monkeypatch
+):
+    monkeypatch.setattr(settings, "sleep_mode_enabled", False)
+    monkeypatch.setattr(health, "_check_redis", lambda: None)
+    client = TestClient(_app())
+
+    client.get("/api/v1/anything", headers={"X-Beyo-Activity": "user"})
+    client.get("/health")
+
+    assert touches == []
+    assert records == []
 
 
 def test_liveness_checks_no_dependency(touches, monkeypatch):
