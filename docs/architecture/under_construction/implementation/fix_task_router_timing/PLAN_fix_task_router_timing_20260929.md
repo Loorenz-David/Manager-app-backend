@@ -131,12 +131,12 @@ Arrange, act and assert:
 - Create one internal task, e.g. `TaskType.CREATE_NOTIFICATIONS`, which maps to `queue:notifications`. Leave it `OPEN` and commit.
 - Set `settings.outbound_integrations_enabled` to `True` with `monkeypatch` so the switch cannot affect it.
 - Drive `_route_open_tasks(redis)` until `("queue:notifications", task_id)` is in `redis.pushed`, at most 20 times.
-- Assert `redis.state_at_push[task_id] == ExecutionTaskStateEnum.PENDING.name`.
+- Assert `redis.state_at_push[task_id] == ExecutionTaskStateEnum.PENDING.value`.
 
 Notes:
-- `SAEnum(PythonEnum)` stores the member **name** (`'PENDING'`), not the value. Confirm this once with `SELECT enum_range(NULL::execution_task_state_enum)` against the test database. If it stores values, compare with `.value`.
+- **Corrected 2026-09-29:** the migrated database stores the enum **values** (lowercase: `'pending'`, `'open'`), not the member names. This was observed on a freshly migrated database. So compare with `.value`. If in doubt, run `SELECT enum_range(NULL::execution_task_state_enum)` against the test database.
 - Also confirm the column is `client_id` in `execution_tasks`.
-- On the current code this test must fail with `'OPEN' != 'PENDING'`. That is the race, made deterministic.
+- On the current code this test must fail with `'open' != 'pending'`. That is the race, made deterministic.
 - There is no deadlock risk. Before the commit, the router holds no lock on the row. After the commit, it holds none either.
 
 **Test B — `test_a_push_that_fails_after_the_commit_is_recovered_by_stuck_pending`**
@@ -293,6 +293,7 @@ Do not commit.
 ## Review log
 
 - `2026-09-29` containerization track: plan written from the Step 15 finding. Code facts verified against the working tree the same day.
+- `2026-09-29` containerization track: corrected the enum label note (values, not names). The race reproduced a second time in the D30 acceptance rerun: a worker dropped a scheduled reminder 0.8 ms before the router's commit.
 
 ## Lifecycle transition
 
