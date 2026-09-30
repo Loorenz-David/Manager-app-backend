@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.config import settings
+from beyo_manager.errors.availability import AuthUnavailableError
 from beyo_manager.errors.permissions import RefreshTokenRejected
 from beyo_manager.models.database import get_db
 from beyo_manager.routers.http.response import build_err, build_ok
@@ -90,6 +91,12 @@ async def logout_route(
     ctx = ServiceContext(identity=claims, incoming_data={"refresh_token": request.cookies.get(cookie_name)}, session=session)
     outcome = await run_service(logout_user, ctx)
     json_response = build_ok(outcome.data) if outcome.success else build_err(outcome.error)
+    if not outcome.success and isinstance(outcome.error, AuthUnavailableError):
+        # The tokens could not be revoked, so they are still valid server-side. Keep
+        # the refresh cookie: deleting it would look like a logout to the browser
+        # while a live refresh token survives, and would leave the client nothing
+        # to retry the logout with.
+        return json_response
     for name in (cookie_name, _LEGACY_REFRESH_COOKIE):
         json_response.delete_cookie(
             name,
@@ -117,6 +124,9 @@ async def refresh_route(
         session=session,
     )
     outcome = await run_service(refresh_token, ctx)
+    # A blocklist outage is an AuthUnavailableError, not a RefreshTokenRejected: it
+    # falls through to build_err → 503 {"code": "auth_unavailable", "reason":
+    # "refresh_blocklist_unavailable"} + Retry-After, so the client keeps its session.
     if not outcome.success and isinstance(outcome.error, RefreshTokenRejected):
         return JSONResponse(
             content={

@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 
 from beyo_manager.config import settings
+from beyo_manager.errors.availability import AuthUnavailableError
 from beyo_manager.routers.utils import jwt_dep
 from beyo_manager.services.commands.auth import logout_user as logout_module
 from beyo_manager.services.context import ServiceContext
@@ -124,8 +125,83 @@ async def test_jwt_claims_fail_closed_when_blocklist_is_unavailable(monkeypatch)
             HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
         )
 
-    assert exc_info.value.status_code == 401
-    assert exc_info.value.detail == "Auth blocklist unavailable."
+    # Cannot validate is a 503 auth_unavailable (retry), not a 401 (sign out).
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail["code"] == "auth_unavailable"
+    assert exc_info.value.detail["ok"] is False
+    assert exc_info.value.headers == {"Retry-After": "5"}
+
+
+class _FailingRedis:
+    """Redis that is down: every write raises, as redis-py does on a lost connection."""
+
+    def __init__(self, *, fail_on_jti: str | None = None) -> None:
+        self.fail_on_jti = fail_on_jti
+        self.values: dict[str, str] = {}
+
+    async def set(self, key: str, value: str, *, ex: int | None = None) -> None:
+        if self.fail_on_jti is None or key.endswith(f":{self.fail_on_jti}"):
+            raise ConnectionError("redis unavailable")
+        self.values[key] = value
+
+
+@pytest.mark.unit
+async def test_logout_is_refused_503_when_the_blocklist_write_fails(monkeypatch) -> None:
+    monkeypatch.setattr(async_client, "get_async_redis", lambda: _FailingRedis())
+    ctx = ServiceContext(
+        identity={"jti": "access-jti", "exp": 2_000_000_000},
+        incoming_data={"refresh_token": None},
+        session=None,  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(AuthUnavailableError) as exc_info:
+        await logout_module.logout_user(ctx)
+
+    assert exc_info.value.http_status == 503
+    assert exc_info.value.code == "auth_unavailable"
+    assert exc_info.value.reason == "logout_blocklist_unavailable"
+
+
+@pytest.mark.unit
+async def test_logout_is_refused_when_only_the_refresh_blocklist_write_fails(
+    monkeypatch,
+) -> None:
+    """The refresh write used to be swallowed: the logout reported success while
+    the refresh token stayed valid server-side. It is written first, so its failure
+    leaves the access token unrevoked and the logout retryable."""
+    redis = _FailingRedis(fail_on_jti="refresh-jti")
+    monkeypatch.setattr(async_client, "get_async_redis", lambda: redis)
+    refresh = jwt.encode(
+        {"jti": "refresh-jti", "exp": datetime.now(timezone.utc) + timedelta(days=1)},
+        settings.jwt_secret_key,
+        algorithm="HS256",
+    )
+    ctx = ServiceContext(
+        identity={"jti": "access-jti", "exp": 2_000_000_000},
+        incoming_data={"refresh_token": refresh},
+        session=None,  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(AuthUnavailableError):
+        await logout_module.logout_user(ctx)
+
+    assert redis.values == {}  # access token not revoked either: retry works
+
+
+@pytest.mark.unit
+async def test_logout_ignores_an_undecodable_refresh_cookie(
+    fake_redis: _FakeRedis,
+) -> None:
+    ctx = ServiceContext(
+        identity={"jti": "access-jti", "exp": 2_000_000_000},
+        incoming_data={"refresh_token": "not-a-jwt"},
+        session=None,  # type: ignore[arg-type]
+    )
+
+    assert await logout_module.logout_user(ctx) == {"logged_out": True}
+    assert list(fake_redis.values) == [
+        f"{settings.redis_key_prefix}:auth:blocklist:access-jti"
+    ]
 
 
 @pytest.mark.unit

@@ -4,6 +4,7 @@ from uuid import uuid4
 import jwt
 
 from beyo_manager.config import settings
+from beyo_manager.errors.availability import AuthUnavailableError
 from beyo_manager.errors.permissions import RefreshTokenRejected
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.auth import is_token_blocklisted
@@ -47,8 +48,10 @@ async def refresh_token(ctx: ServiceContext) -> dict:
     try:
         revoked = await is_token_blocklisted(jti)
     except Exception as exc:
-        raise RefreshTokenRejected(
-            "Refresh token verification unavailable.",
+        # Cannot tell whether the token is revoked: refuse, but as a retryable 503,
+        # not a 401 — the refresh token may be perfectly valid.
+        raise AuthUnavailableError(
+            "Refresh token verification is temporarily unavailable. Please retry.",
             reason="refresh_blocklist_unavailable",
         ) from exc
     if revoked:

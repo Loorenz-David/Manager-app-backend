@@ -1,10 +1,15 @@
 import logging
 
 import jwt
+from socketio import exceptions as socketio_exceptions
 
 from beyo_manager.config import settings
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.presence.enums import EntityType
+from beyo_manager.errors.availability import (
+    AUTH_UNAVAILABLE_CODE,
+    AUTH_UNAVAILABLE_RETRY_AFTER_SECONDS,
+)
 from beyo_manager.models.database import get_db_session
 from beyo_manager.services.infra.execution.task_factory import create_instant_task
 from beyo_manager.services.infra.auth import is_token_blocklisted
@@ -28,9 +33,24 @@ async def _handle_connect(sid: str, environ: dict, auth: dict | None = None):
     jti = claims.get("jti")
     if jti:
         try:
-            if await is_token_blocklisted(jti):
-                return False
-        except Exception:
+            revoked = await is_token_blocklisted(jti)
+        except Exception as exc:
+            # Still refused, but say why: the token may be valid, so the client
+            # should retry, not sign out. python-socketio sends this to the client's
+            # connect_error as {"message": "auth_unavailable", "data": {...}}.
+            logger.warning(
+                "auth.blocklist_unavailable | where=socket_connect exc_type=%s",
+                type(exc).__name__,
+                extra={"event_type": "auth.blocklist_unavailable", "service": "auth"},
+            )
+            raise socketio_exceptions.ConnectionRefusedError(
+                AUTH_UNAVAILABLE_CODE,
+                {
+                    "code": AUTH_UNAVAILABLE_CODE,
+                    "retry_after_seconds": AUTH_UNAVAILABLE_RETRY_AFTER_SECONDS,
+                },
+            ) from exc
+        if revoked:
             return False
     user_id = claims.get("user_id", "")
     if not user_id:

@@ -1,3 +1,4 @@
+import logging
 import threading
 
 import jwt
@@ -6,7 +7,11 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from beyo_manager.config import settings
+from beyo_manager.errors.availability import AuthUnavailableError
+from beyo_manager.routers.http.response import auth_unavailable_http_exception
 from beyo_manager.services.infra import auth
+
+logger = logging.getLogger(__name__)
 
 _bearer = HTTPBearer()
 
@@ -61,7 +66,19 @@ def require_app_scope(required_scope: str | list[str]):
 
 
 async def _is_blocklisted(jti: str) -> bool:
+    # Unable to *check* revocation is not proof the token is bad: fail closed, but as
+    # a 503 auth_unavailable (retry) — never a 401, which tells the client to sign out.
     try:
         return await auth.is_token_blocklisted(jti)
     except Exception as exc:
-        raise HTTPException(status_code=401, detail="Auth blocklist unavailable.") from exc
+        logger.warning(
+            "auth.blocklist_unavailable | where=jwt_dep exc_type=%s",
+            type(exc).__name__,
+            extra={"event_type": "auth.blocklist_unavailable", "service": "auth"},
+        )
+        raise auth_unavailable_http_exception(
+            AuthUnavailableError(
+                "Token verification is temporarily unavailable. Please retry.",
+                reason="token_blocklist_unavailable",
+            )
+        ) from exc

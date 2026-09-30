@@ -1,5 +1,6 @@
 import jwt
 import pytest
+from socketio import exceptions as socketio_exceptions
 
 from beyo_manager.config import settings
 from beyo_manager.sockets import handlers
@@ -58,10 +59,17 @@ async def test_socket_auth_fails_closed_when_blocklist_is_unavailable(
     )
     monkeypatch.setattr(handlers.manager, "connect", _unexpected_connect)
 
-    accepted = await handlers._handle_connect(
-        "sid-no-redis",
-        {},
-        {"token": _access_token(jti="socket-jti")},
-    )
+    # Still refused — but with a reason: python-socketio turns this exception into a
+    # CONNECT_ERROR carrying `error_args`, so the client can tell "retry" from
+    # "signed out".
+    with pytest.raises(socketio_exceptions.ConnectionRefusedError) as exc_info:
+        await handlers._handle_connect(
+            "sid-no-redis",
+            {},
+            {"token": _access_token(jti="socket-jti")},
+        )
 
-    assert accepted is False
+    assert exc_info.value.error_args == {
+        "message": "auth_unavailable",
+        "data": {"code": "auth_unavailable", "retry_after_seconds": 5},
+    }

@@ -7,8 +7,10 @@ from starlette.requests import Request
 
 import beyo_manager.services.commands.auth.refresh_token as refresh_module
 from beyo_manager.config import settings
+from beyo_manager.errors.availability import AuthUnavailableError
 from beyo_manager.errors.permissions import RefreshTokenRejected
 from beyo_manager.routers.api_v1 import auth as auth_router
+from beyo_manager.services.infra.redis import async_client
 
 
 def _request_with_cookies(cookies: dict[str, str]) -> Request:
@@ -241,3 +243,110 @@ async def test_refresh_route_rejects_floor_scope_cookie_before_reading_the_block
     assert body["ok"] is False
     assert body["reason"] == "floor_scope_not_refreshable"
     assert "access_token" not in body
+
+
+@pytest.mark.unit
+async def test_refresh_route_answers_503_auth_unavailable_when_blocklist_is_down(
+    monkeypatch,
+) -> None:
+    """Through the real service and run_service: not a 401, and the body carries the
+    top-level code the client detects, plus Retry-After."""
+
+    async def _blocklist_unavailable(_jti: str) -> bool:
+        raise ConnectionError("redis unavailable")
+
+    monkeypatch.setattr(refresh_module, "is_token_blocklisted", _blocklist_unavailable)
+    refresh = jwt.encode(
+        {
+            "user_id": "usr_manager",
+            "workspace_id": "ws_test",
+            "app_scope": "manager",
+            "jti": "refresh-jti",
+            "token_type": "refresh",
+            "exp": 4_000_000_000,
+        },
+        settings.jwt_secret_key,
+        algorithm="HS256",
+    )
+
+    response = await auth_router.refresh_route(
+        request=_request_with_cookies({"manager_refresh_token": refresh}),
+        scope="manager",
+        session=object(),
+    )
+
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "5"
+    assert json.loads(response.body) == {
+        "error": "Refresh token verification is temporarily unavailable. Please retry.",
+        "ok": False,
+        "code": "auth_unavailable",
+        "reason": "refresh_blocklist_unavailable",
+    }
+
+
+class _DownRedis:
+    async def set(self, *_args, **_kwargs) -> None:
+        raise ConnectionError("redis unavailable")
+
+
+@pytest.mark.unit
+async def test_logout_route_answers_503_and_keeps_cookies_when_blocklist_is_down(
+    monkeypatch,
+) -> None:
+    """The tokens were not revoked, so this is not a logout: 503, and the refresh
+    cookie is kept so the client can retry (deleting it would hide a still-valid
+    refresh token from the only party able to revoke it)."""
+    monkeypatch.setattr(async_client, "get_async_redis", lambda: _DownRedis())
+    refresh = jwt.encode(
+        {"jti": "refresh-jti", "exp": 4_000_000_000},
+        settings.jwt_secret_key,
+        algorithm="HS256",
+    )
+
+    response = await auth_router.logout_route(
+        request=_request_with_cookies({"manager_refresh_token": refresh}),
+        claims={"app_scope": "manager", "jti": "access-jti", "exp": 4_000_000_000},
+        session=object(),
+    )
+
+    body = json.loads(response.body)
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "5"
+    assert body["code"] == "auth_unavailable"
+    assert body["ok"] is False
+    assert body["reason"] == "logout_blocklist_unavailable"
+    assert "data" not in body
+    assert not any(name == b"set-cookie" for name, _value in response.raw_headers)
+
+
+@pytest.mark.unit
+async def test_logout_route_still_deletes_cookies_on_other_failures(monkeypatch) -> None:
+    async def _fake_run_service(command, ctx):
+        return SimpleNamespace(success=False, data=None, error=RefreshTokenRejected("x", reason="y"))
+
+    monkeypatch.setattr(auth_router, "run_service", _fake_run_service)
+
+    response = await auth_router.logout_route(
+        request=_request_with_cookies({"manager_refresh_token": "refresh-value"}),
+        claims={"app_scope": "manager"},
+        session=object(),
+    )
+
+    set_cookie_headers = [value.decode() for name, value in response.raw_headers if name == b"set-cookie"]
+    assert any(header.startswith("manager_refresh_token=") and "Max-Age=0" in header for header in set_cookie_headers)
+
+
+@pytest.mark.unit
+def test_build_err_renders_auth_unavailable_with_code_and_retry_after() -> None:
+    from beyo_manager.routers.http.response import build_err
+
+    response = build_err(AuthUnavailableError())
+
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "5"
+    assert json.loads(response.body) == {
+        "error": "Authentication is temporarily unavailable. Please retry.",
+        "ok": False,
+        "code": "auth_unavailable",
+    }

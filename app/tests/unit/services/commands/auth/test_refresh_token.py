@@ -5,6 +5,7 @@ import pytest
 
 import beyo_manager.services.commands.auth.refresh_token as refresh_module
 from beyo_manager.config import settings
+from beyo_manager.errors.availability import AuthUnavailableError
 from beyo_manager.errors.permissions import RefreshTokenRejected
 from beyo_manager.services.commands.auth.refresh_token import refresh_token
 from beyo_manager.services.context import ServiceContext
@@ -318,7 +319,12 @@ async def test_refresh_fails_closed_when_blocklist_is_unavailable(monkeypatch) -
         session=None,  # type: ignore[arg-type]
     )
 
-    with pytest.raises(RefreshTokenRejected) as exc_info:
+    # Fails closed, but as a retryable 503 auth_unavailable — not a 401 rejection,
+    # which would make the client drop a possibly valid session.
+    with pytest.raises(AuthUnavailableError) as exc_info:
         await refresh_token(ctx)
 
+    assert not isinstance(exc_info.value, RefreshTokenRejected)
+    assert exc_info.value.http_status == 503
+    assert exc_info.value.code == "auth_unavailable"
     assert exc_info.value.reason == "refresh_blocklist_unavailable"
