@@ -97,7 +97,11 @@ async def _handle_view_entity(sid: str, data: dict):
     entity_client_id = str(data.get("entity_client_id", ""))
     if not entity_client_id:
         return
-    await _record_socket_activity(meta)
+    # A view the client re-sends after a reconnect (`resumed: true`) restores presence
+    # but is no new human event: an idle tab reconnecting after a wake must not count
+    # as someone using the application.
+    if data.get("resumed") is not True:
+        await _record_socket_activity(meta)
     mark_viewing(entity_type.value, entity_client_id, meta.user_id)
     meta.entity_views.add((entity_type.value, entity_client_id))
     if entity_type == EntityType.CONVERSATION:

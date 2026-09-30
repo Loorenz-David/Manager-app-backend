@@ -64,6 +64,19 @@ async def test_view_entity_records_socket_activity_in_the_connection_scope(recor
     assert "viewing" in side_effects
 
 
+async def test_a_view_resumed_after_a_reconnect_is_not_human_activity(records, side_effects, connected):
+    await handlers._handle_view_entity("sid-1", _TASK | {"resumed": True})
+
+    assert records == []
+    assert "viewing" in side_effects  # presence is still restored
+
+
+async def test_only_a_literal_true_resumed_flag_skips_recording(records, side_effects, connected):
+    await handlers._handle_view_entity("sid-1", _TASK | {"resumed": "yes"})
+
+    assert records == [{"app_scope": "floor", "source": "socket", "user_id": "usr_1"}]
+
+
 async def test_leave_entity_records_socket_activity(records, side_effects, connected):
     await handlers._handle_leave_entity("sid-1", _TASK)
 
