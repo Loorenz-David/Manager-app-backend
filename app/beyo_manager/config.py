@@ -100,6 +100,9 @@ class Settings(BaseSettings):
     # Background processes touch this file every few seconds when set; the container
     # health check reads its age (beyo_manager/workers/heartbeat.py).
     worker_heartbeat_file: str | None = Field(default=None, alias="WORKER_HEARTBEAT_FILE")
+    # The task router and both schedulers touch this file after each loop iteration
+    # whose database work succeeded; a readiness check reads its age. Unset: off.
+    worker_progress_file: str | None = Field(default=None, alias="WORKER_PROGRESS_FILE")
 
     # Email IDLE watcher
     email_idle_enabled: bool = Field(default=False, alias="EMAIL_IDLE_ENABLED")

@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 
 import asyncpg
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from beyo_manager.config import settings
 from beyo_manager.domain.execution.enums import ExecutionTaskStateEnum, TaskType
@@ -12,6 +12,12 @@ from beyo_manager.models.tables.execution.execution_task import ExecutionTask
 from beyo_manager.services.infra.execution.outbound import cancel_outbound_task, outbound_blocked
 from beyo_manager.services.infra.redis import get_redis_client
 from beyo_manager.services.infra.sleep.activity_tracker import ActivityTracker
+from beyo_manager.workers.heartbeat import (
+    PROGRESS_MAX_IDLE_SECONDS,
+    error_backoff_seconds,
+    progress_enabled,
+    touch_progress,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -93,24 +99,42 @@ async def run_task_router() -> None:
     asyncio.create_task(_listen_for_task_events())
     asyncio.create_task(_sleep_monitor())
 
+    consecutive_errors = 0
     while True:
-        if ActivityTracker.is_sleeping():
-            await asyncio.sleep(30)
-            continue
-
+        # Everything that can fail is inside the try: a transient Redis or database
+        # error is logged and retried after a backoff instead of ending the process.
+        # Progress is touched only after the iteration's database work returned.
         try:
-            await asyncio.wait_for(_notify_event.wait(), timeout=FALLBACK_POLL_SECONDS)
-        except asyncio.TimeoutError:
-            pass
-        _notify_event.clear()
+            if ActivityTracker.is_sleeping():
+                if not progress_enabled():
+                    await asyncio.sleep(30)
+                    continue
+                await asyncio.sleep(PROGRESS_MAX_IDLE_SECONDS)
+                await _ping_database()
+            else:
+                try:
+                    await asyncio.wait_for(_notify_event.wait(), timeout=FALLBACK_POLL_SECONDS)
+                except asyncio.TimeoutError:
+                    pass
+                _notify_event.clear()
 
-        try:
-            await _route_open_tasks(redis)
-            await _requeue_retry_scheduled_tasks()
-            await _cleanup_stale_tasks()
-            await _recover_stuck_pending_tasks()
+                await _route_open_tasks(redis)
+                await _requeue_retry_scheduled_tasks()
+                await _cleanup_stale_tasks()
+                await _recover_stuck_pending_tasks()
         except Exception:
-            logger.exception("task_router: poll error")
+            consecutive_errors += 1
+            logger.exception("task_router: poll error | consecutive_errors=%d", consecutive_errors)
+            await asyncio.sleep(error_backoff_seconds(consecutive_errors))
+            continue
+        consecutive_errors = 0
+        touch_progress()
+
+
+async def _ping_database() -> None:
+    """One trivial query: while in-app sleeping, proves the database still answers."""
+    async for session in get_db_session():
+        await session.execute(text("SELECT 1"))
 
 
 async def _route_open_tasks(redis) -> None:
