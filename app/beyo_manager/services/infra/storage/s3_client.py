@@ -12,6 +12,16 @@ logger = logging.getLogger(__name__)
 _SIGN_ATTEMPTS = 3
 
 
+def _is_aws_endpoint(endpoint_url: str | None) -> bool:
+    """True for AWS's own S3 endpoints (or none), where virtual-hosted addressing works."""
+    if not endpoint_url:
+        return True
+    from urllib.parse import urlparse
+
+    host = (urlparse(endpoint_url).hostname or "").lower()
+    return host.endswith(".amazonaws.com")
+
+
 class S3Client(StorageClient):
     def __init__(
         self,
@@ -36,17 +46,24 @@ class S3Client(StorageClient):
             aws_secret_access_key=secret_key,
             region_name=region,
         )
+        # Virtual-hosted addressing (<bucket>.s3.<region>.amazonaws.com): with an explicit
+        # endpoint_url botocore otherwise uses path style (s3.<region>.amazonaws.com/<bucket>),
+        # which needs the generic regional host. Staging's egress allow-list admits only the
+        # bucket's own host (infrastructure P4a, 2026-10-01); the public item-photo URLs above
+        # are already virtual-hosted. Custom endpoints (localstack, STORAGE_ENDPOINT_URL) keep
+        # path style, which they need.
+        s3_style = {"addressing_style": "virtual"} if _is_aws_endpoint(endpoint_url) else {}
         # Pinned explicitly: without it botocore falls back to the deprecated SigV2 in
         # us-east-1 (a no-op for regions that are SigV4-only, such as eu-north-1).
         self._client = session.client(
-            "s3", endpoint_url=endpoint_url, config=Config(signature_version="s3v4")
+            "s3", endpoint_url=endpoint_url, config=Config(signature_version="s3v4", s3=s3_style)
         )
         # Separate client so quantised signing applies to GET only — backdating an
         # upload PUT URL would hand out an already-expired URL.
         self._stable_get_client = session.client(
             "s3",
             endpoint_url=endpoint_url,
-            config=Config(signature_version=stable_presign.SIGNATURE_VERSION),
+            config=Config(signature_version=stable_presign.SIGNATURE_VERSION, s3=s3_style),
         )
         # The object both clients sign with. With no keys configured it is the default
         # chain's, on EC2 the instance role's: temporary, refreshed by botocore.
