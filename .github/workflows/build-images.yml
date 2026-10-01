@@ -1,0 +1,63 @@
+# build-images.yml for Loorenz-David/Manager-app-backend (P1). Copy unchanged to .github/workflows/build-images.yml
+# in that repository: the AWS role mb-ci-build-backend trusts ONLY this file, on refs/heads/main, of this repository
+# (immutable repository/owner IDs). A run on any other branch is refused by AWS by design.
+name: build-images
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      immutability_test:
+        description: "P1 acceptance: push two different images to one throw-away tag and require ECR to refuse the second"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: build-images-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-north-1
+  REGISTRY: 307946675015.dkr.ecr.eu-north-1.amazonaws.com
+  IMAGE: managerbeyo-backend
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::307946675015:role/mb-ci-build-backend
+          role-session-name: gh-build-backend-${{ github.run_id }}
+          aws-region: eu-north-1
+      - uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+      - name: Build and push (linux/amd64, tag = commit SHA, never latest)
+        run: |
+          set -euo pipefail
+          REF="$REGISTRY/$IMAGE:$GITHUB_SHA"
+          if aws ecr describe-images --repository-name "$IMAGE" --image-ids imageTag="$GITHUB_SHA" >/dev/null 2>&1; then
+            echo "$REF already exists (tags are immutable); not rebuilding."
+          else
+            docker build --platform linux/amd64 \
+              --build-arg GIT_COMMIT="$GITHUB_SHA" --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              -t "$REF" app
+            docker push "$REF"
+          fi
+          DIGEST=$(aws ecr describe-images --repository-name "$IMAGE" --image-ids imageTag="$GITHUB_SHA" --query 'imageDetails[0].imageDigest' --output text)
+          echo "DIGEST=$DIGEST" >> "$GITHUB_ENV"
+          { echo "### $IMAGE"; echo "- tag: \`$GITHUB_SHA\`"; echo "- digest: \`$DIGEST\`"; } >> "$GITHUB_STEP_SUMMARY"
+      - name: P1 acceptance - tag overwrite must be refused (throw-away tag, real tags untouched)
+        if: ${{ inputs.immutability_test }}
+        run: |
+          set -uo pipefail
+          T="$REGISTRY/$IMAGE:immutability-test-$GITHUB_RUN_ID"
+          docker pull public.ecr.aws/docker/library/busybox:stable && docker tag public.ecr.aws/docker/library/busybox:stable "$T" && docker push "$T" || { echo "setup push failed"; exit 1; }
+          docker pull public.ecr.aws/docker/library/alpine:latest && docker tag public.ecr.aws/docker/library/alpine:latest "$T"
+          if docker push "$T"; then echo "FAIL: ECR accepted an overwrite of $T"; exit 1; fi
+          echo "PASS: ECR refused to overwrite $T" | tee -a "$GITHUB_STEP_SUMMARY"
