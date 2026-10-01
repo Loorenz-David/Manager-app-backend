@@ -55,9 +55,19 @@ jobs:
       - name: P1 acceptance - tag overwrite must be refused (throw-away tag, real tags untouched)
         if: ${{ inputs.immutability_test }}
         run: |
-          set -uo pipefail
-          T="$REGISTRY/$IMAGE:immutability-test-$GITHUB_RUN_ID"
-          docker pull public.ecr.aws/docker/library/busybox:stable && docker tag public.ecr.aws/docker/library/busybox:stable "$T" && docker push "$T" || { echo "setup push failed"; exit 1; }
-          docker pull public.ecr.aws/docker/library/alpine:latest && docker tag public.ecr.aws/docker/library/alpine:latest "$T"
-          if docker push "$T"; then echo "FAIL: ECR accepted an overwrite of $T"; exit 1; fi
-          echo "PASS: ECR refused to overwrite $T" | tee -a "$GITHUB_STEP_SUMMARY"
+          set -euo pipefail
+          TAG="immutability-test-$GITHUB_RUN_ID"
+          T="$REGISTRY/$IMAGE:$TAG"
+          BASE=public.ecr.aws/docker/library/busybox:stable
+          docker pull "$BASE"
+          # Two images that differ only by a label (one pull, no rate-limit exposure), same tag.
+          printf 'FROM %s\nLABEL mb.variant=a\n' "$BASE" | docker build -q -t "$T" -
+          docker push "$T"
+          FIRST=$(aws ecr describe-images --repository-name "$IMAGE" --image-ids imageTag="$TAG" --query 'imageDetails[0].imageDigest' --output text)
+          printf 'FROM %s\nLABEL mb.variant=b\n' "$BASE" | docker build -q -t "$T" -
+          SECOND_LOCAL=$(docker inspect --format '{{.Id}}' "$T")
+          echo "first pushed digest: $FIRST; second local image: $SECOND_LOCAL"
+          if docker push "$T"; then echo "FAIL: ECR accepted a different image for $TAG"; exit 1; fi
+          AFTER=$(aws ecr describe-images --repository-name "$IMAGE" --image-ids imageTag="$TAG" --query 'imageDetails[0].imageDigest' --output text)
+          [ "$AFTER" = "$FIRST" ] || { echo "FAIL: $TAG now points to $AFTER"; exit 1; }
+          echo "PASS: ECR refused a different image for $TAG; it still points to $FIRST" | tee -a "$GITHUB_STEP_SUMMARY"
