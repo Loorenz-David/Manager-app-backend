@@ -38,6 +38,7 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
     offset = int(ctx.query_params.get("offset", 0))
     q = ctx.query_params.get("q")
     task_types = _split_csv(ctx.query_params.get("task_types"))
+    item_categories = ctx.query_params.get("item_categories")
     upholstery_search = str(ctx.query_params.get("upholstery_search", "false")).lower() == "true"
     group_by_upholstery = str(ctx.query_params.get("group_by_upholstery", "false")).lower() == "true"
     record_step_states = parse_step_state_filter(ctx.query_params.get("record_step_state"))
@@ -132,6 +133,29 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
 
     if task_types:
         stmt = stmt.where(Task.task_type.in_(task_types))
+
+    if item_categories is not None:
+        stmt = stmt.where(
+            exists(
+                select(1)
+                .select_from(TaskItem)
+                .join(
+                    Item,
+                    and_(
+                        Item.client_id == TaskItem.item_id,
+                        Item.workspace_id == ctx.workspace_id,
+                        Item.is_deleted.is_(False),
+                    ),
+                )
+                .where(
+                    TaskItem.task_id == TaskStep.task_id,
+                    TaskItem.workspace_id == ctx.workspace_id,
+                    TaskItem.removed_at.is_(None),
+                    TaskItem.role == TaskItemRoleEnum.PRIMARY,
+                    Item.item_category_id.in_(item_categories),
+                )
+            )
+        )
 
     if item_major_category_snapshots:
         stmt = stmt.where(

@@ -1607,7 +1607,16 @@ nodes:
     origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-12T10:36:35.957Z
+    updatedAt: 2026-10-02T08:23:38.699Z
+    sourceLinks:
+      - path: app/beyo_manager/routers/api_v1/working_sections.py
+        symbol: list_working_section_steps_route
+        contentHash: 335533b7a3c8b0870d535f53ac5d8c1a71048232f9f3c466001d34961135923f
+        linkedAt: 2026-10-02T08:23:38.699Z
+      - path: app/beyo_manager/services/queries/working_sections/list_working_section_steps.py
+        symbol: list_working_section_steps
+        contentHash: ef2201407d685984d4587aae5c870afccdb3f62e851b565bf79b8b5597c07218
+        linkedAt: 2026-10-02T08:23:38.699Z
   - id: command-transition-step-state
     type: command
     name: transition_step_state
@@ -14940,8 +14949,8 @@ edges:
     confidence: 0.3
     createdAt: 2026-09-21T00:52:45.640Z
     updatedAt: 2026-09-22T09:12:47.798Z
-    description: "MISCATEGORISED - the relationship should be depends_on, not calls; edge
-      type cannot be edited in place, so this edge is left pending for that
+    description: "MISCATEGORISED - the relationship should be depends_on, not calls;
+      edge type cannot be edited in place, so this edge is left pending for that
       reason. Shares the consistency module's per-row recompute helper rather
       than calling the workspace-wide check: move_assignment's inline self-heal
       reaches recompute_row_counters through its private _apply_counter_delta,
@@ -15049,8 +15058,8 @@ edges:
     confidence: 0.3
     createdAt: 2026-09-21T00:52:45.640Z
     updatedAt: 2026-09-22T09:12:47.798Z
-    description: "MISCATEGORISED - the relationship should be depends_on, not calls; edge
-      type cannot be edited in place, so this edge is left pending for that
+    description: "MISCATEGORISED - the relationship should be depends_on, not calls;
+      edge type cannot be edited in place, so this edge is left pending for that
       reason. Shares the consistency module's goal recompute helper rather than
       calling the workspace-wide check: apply_goal_effect's downward self-heal
       reaches recompute_goal_total through its private _uncredit, and never

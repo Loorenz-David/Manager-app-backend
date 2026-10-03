@@ -192,6 +192,7 @@ async def list_working_section_steps_route(
 	session: AsyncSession = Depends(get_db),
 	q: str | None = Query(None),
 	task_types: str | None = Query(None),
+	item_categories: list[str] | None = Query(None),
 	item_major_category: str | None = Query(None),
 	major_category: str | None = Query(None),
 	upholstery_search: bool = Query(False),
@@ -208,6 +209,7 @@ async def list_working_section_steps_route(
 		query_params={
 			"q": q,
 			"task_types": task_types,
+			"item_categories": item_categories,
 			"item_major_category": item_major_category,
 			"major_category": major_category,
 			"upholstery_search": str(upholstery_search).lower(),

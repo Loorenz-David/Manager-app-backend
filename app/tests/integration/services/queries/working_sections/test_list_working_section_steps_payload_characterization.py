@@ -4,11 +4,12 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import select
 
-from beyo_manager.domain.items.enums import ItemUpholsterySourceEnum
+from beyo_manager.domain.items.enums import ItemMajorCategoryEnum, ItemUpholsterySourceEnum
 from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum, TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum, TaskTypeEnum
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.items.item import Item
+from beyo_manager.models.tables.items.item_category import ItemCategory
 from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
@@ -427,3 +428,86 @@ async def test_stock_assignment_steps_rank_first_on_a_shared_due_date(db_session
     other_task.is_stock_assignment = True
     await db_session.flush()
     assert (await ordered_ids()) == [other_step.client_id, seeded_step.client_id]
+
+
+@pytest.mark.integration
+async def test_list_working_section_steps_filters_primary_item_category_before_pagination(db_session):
+    workspace, user, section, _ = await _seed_step(db_session)
+    first_step = (
+        await db_session.execute(select(TaskStep).where(TaskStep.working_section_id == section.client_id))
+    ).scalar_one()
+    first_item = (
+        await db_session.execute(select(Item).where(Item.workspace_id == workspace.client_id))
+    ).scalar_one()
+    suffix = uuid4().hex[:8]
+    first_category = ItemCategory(
+        client_id=f"itc_a_{suffix}",
+        workspace_id=workspace.client_id,
+        name=f"First {suffix}",
+        major_category=ItemMajorCategoryEnum.WOOD,
+    )
+    second_category = ItemCategory(
+        client_id=f"itc_b_{suffix}",
+        workspace_id=workspace.client_id,
+        name=f"Second {suffix}",
+        major_category=ItemMajorCategoryEnum.SEAT,
+    )
+    db_session.add_all([first_category, second_category])
+    await db_session.flush()
+    first_item.item_category_id = first_category.client_id
+
+    second_task = Task(
+        client_id=f"tsk_{suffix}",
+        workspace_id=workspace.client_id,
+        task_scalar_id=2,
+        task_type=TaskTypeEnum.INTERNAL,
+        state=TaskStateEnum.ASSIGNED,
+        created_by_id=user.client_id,
+    )
+    second_item = Item(
+        client_id=f"itm_{suffix}",
+        workspace_id=workspace.client_id,
+        item_category_id=second_category.client_id,
+        created_by_id=user.client_id,
+    )
+    second_step = TaskStep(
+        client_id=f"tsp_{suffix}",
+        workspace_id=workspace.client_id,
+        task_id=second_task.client_id,
+        working_section_id=section.client_id,
+        working_section_name_snapshot=section.name,
+        state=TaskStepStateEnum.PENDING,
+        readiness_status=TaskStepReadinessStatusEnum.READY,
+        total_dependencies=0,
+        completed_dependencies=0,
+        created_by_id=user.client_id,
+    )
+    second_task_item = TaskItem(
+        client_id=f"tim_{suffix}",
+        workspace_id=workspace.client_id,
+        task_id=second_task.client_id,
+        item_id=second_item.client_id,
+        role=TaskItemRoleEnum.PRIMARY,
+        created_by_id=user.client_id,
+    )
+    db_session.add_all([second_task, second_item, second_step, second_task_item])
+    await db_session.flush()
+
+    async def listed_ids(categories=None, *, limit=50):
+        ctx = _ctx(
+            db_session,
+            workspace_id=workspace.client_id,
+            user_id=user.client_id,
+            working_section_id=section.client_id,
+            group_by_upholstery=False,
+        )
+        ctx.query_params.update({"item_categories": categories, "limit": limit})
+        page = (await list_working_section_steps(ctx))["steps_pagination"]
+        return [step["client_id"] for step in page["items"]], page["has_more"]
+
+    assert set((await listed_ids())[0]) == {first_step.client_id, second_step.client_id}
+    assert await listed_ids([first_category.client_id], limit=1) == ([first_step.client_id], False)
+    both_ids, has_more = await listed_ids([first_category.client_id, second_category.client_id])
+    assert set(both_ids) == {first_step.client_id, second_step.client_id}
+    assert has_more is False
+    assert await listed_ids(["itc_missing"]) == ([], False)
