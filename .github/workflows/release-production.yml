@@ -71,17 +71,28 @@ jobs:
       - name: Deploy to production and wait for the result
         run: |
           set -euo pipefail
-          CMD=$(aws ssm send-command --document-name "$DOCUMENT" --instance-ids "$INSTANCE" \
-            --comment "$GITHUB_REPOSITORY run $GITHUB_RUN_ID" \
-            --parameters "BackendTag=$SHA" --query Command.CommandId --output text)
-          echo "command: $CMD"
-          STATUS=Pending
-          for i in $(seq 1 180); do
-            sleep 10
-            STATUS=$(aws ssm get-command-invocation --command-id "$CMD" --instance-id "$INSTANCE" --query Status --output text 2>/dev/null || echo Pending)
-            case "$STATUS" in Pending|InProgress|Delayed) ;; *) break ;; esac
+          # Both repositories deploy to the same server, one at a time (the server's deploy lock). If the other one is
+          # deploying right now, wait and try again instead of failing.
+          for attempt in 1 2 3 4 5 6 7 8; do
+            CMD=$(aws ssm send-command --document-name "$DOCUMENT" --instance-ids "$INSTANCE" \
+              --comment "$GITHUB_REPOSITORY run $GITHUB_RUN_ID" \
+              --parameters "BackendTag=$SHA" --query Command.CommandId --output text)
+            echo "command: $CMD (attempt $attempt)"
+            STATUS=Pending
+            for i in $(seq 1 180); do
+              sleep 10
+              STATUS=$(aws ssm get-command-invocation --command-id "$CMD" --instance-id "$INSTANCE" --query Status --output text 2>/dev/null || echo Pending)
+              case "$STATUS" in Pending|InProgress|Delayed) ;; *) break ;; esac
+            done
+            OUT=$(aws ssm get-command-invocation --command-id "$CMD" --instance-id "$INSTANCE" \
+              --query '[StandardOutputContent,StandardErrorContent]' --output text)
+            if [ "$STATUS" != Success ] && grep -q 'another deploy, rollback, start or drain is running' <<<"$OUT"; then
+              echo "The server is busy with another deploy; trying again in 45 seconds."
+              sleep 45
+              continue
+            fi
+            break
           done
-          aws ssm get-command-invocation --command-id "$CMD" --instance-id "$INSTANCE" \
-            --query '[StandardOutputContent,StandardErrorContent]' --output text | tail -n 40
+          tail -n 40 <<<"$OUT"
           { echo "### $TITLE"; echo "- commit: \`$SHA\`"; echo "- result: **$STATUS**"; } >> "$GITHUB_STEP_SUMMARY"
           [ "$STATUS" = Success ] || { echo "The deploy did not succeed ($STATUS). The previous version keeps running unless the log above says otherwise."; exit 1; }
