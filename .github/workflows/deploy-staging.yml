@@ -1,0 +1,69 @@
+# deploy-staging.yml for Loorenz-David/Manager-app-backend. Copy unchanged to .github/workflows/deploy-staging.yml in that
+# repository: the AWS role mb-staging-deploy-backend trusts ONLY this file, on refs/heads/main, of this repository.
+#
+# Runs by itself after every successful build-images run on main and deploys THAT commit's image to staging
+# (SSM document MB-Deploy-Staging: pull, configuration check, migrations, restart, readiness). The other
+# application's image is left as it is. It can also be started by hand for any built commit (e.g. to go back).
+name: deploy-staging
+
+on:
+  workflow_run:
+    workflows: [build-images]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit SHA (40 hex) to deploy to staging. Empty = the latest commit on main."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-north-1
+  DOCUMENT: MB-Deploy-Staging
+  INSTANCE: i-0d3cf48c079d79f9f
+  TITLE: "Staging: backend"
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Which commit
+        env:
+          INPUT_SHA: ${{ inputs.sha }}
+          BUILT_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          SHA="${INPUT_SHA:-${BUILT_SHA:-$GITHUB_SHA}}"
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "sha must be 40 hex characters"; exit 1; }
+          echo "SHA=$SHA" >> "$GITHUB_ENV"
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::307946675015:role/mb-staging-deploy-backend
+          role-session-name: gh-deploy-staging-${{ github.run_id }}
+          aws-region: eu-north-1
+      - name: Deploy to staging and wait for the result
+        run: |
+          set -euo pipefail
+          CMD=$(aws ssm send-command --document-name "$DOCUMENT" --instance-ids "$INSTANCE" \
+            --comment "$GITHUB_REPOSITORY run $GITHUB_RUN_ID" \
+            --parameters "BackendTag=$SHA" --query Command.CommandId --output text)
+          echo "command: $CMD"
+          STATUS=Pending
+          for i in $(seq 1 180); do
+            sleep 10
+            STATUS=$(aws ssm get-command-invocation --command-id "$CMD" --instance-id "$INSTANCE" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Pending|InProgress|Delayed) ;; *) break ;; esac
+          done
+          aws ssm get-command-invocation --command-id "$CMD" --instance-id "$INSTANCE" \
+            --query '[StandardOutputContent,StandardErrorContent]' --output text | tail -n 40
+          { echo "### $TITLE"; echo "- commit: \`$SHA\`"; echo "- result: **$STATUS**"; } >> "$GITHUB_STEP_SUMMARY"
+          [ "$STATUS" = Success ] || { echo "The deploy did not succeed ($STATUS). The previous version keeps running unless the log above says otherwise."; exit 1; }
