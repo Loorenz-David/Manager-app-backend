@@ -16,6 +16,8 @@ from beyo_manager.services.infra.shopify.graphql_client import (
 
 IdentityType = str
 _VARIANTS_FIRST = 10
+# Shopify's metafieldsSet input limit, owned by this API adapter.
+_METAFIELDS_SET_BATCH_SIZE = 25
 
 # Batched barcode pricing lookup: one search request covers many barcodes.
 BARCODE_LOOKUP_PAGE_SIZE = 250
@@ -455,33 +457,37 @@ async def set_shopify_product_metafields(
     shopify_product_id: str,
     metafields: list[dict],
 ) -> None:
-    if not metafields:
-        return
+    """Set all metafields in ordered batches, stopping at the first failure.
 
-    data = await execute_shopify_graphql(
-        shop_domain=shop_domain,
-        access_token_encrypted=access_token_encrypted,
-        query=SET_METAFIELDS_MUTATION,
-        variables={
-            "metafields": [
-                {
-                    "ownerId": shopify_product_id,
-                    "namespace": "custom",
-                    "key": metafield["key"],
-                    "type": metafield["type"],
-                    "value": metafield["value"],
-                }
-                for metafield in metafields
-            ]
-        },
-        operation_name="set_shopify_product_metafields",
-    )
-    response = data.get("metafieldsSet") or {}
-    raise_for_graphql_user_errors(
-        user_errors=response.get("userErrors"),
-        operation_name="set_shopify_product_metafields",
-        shop_domain=shop_domain,
-    )
+    Each batch is atomic in Shopify; earlier batches can persist if a later one
+    fails. Replaying the same set values is safe under the existing sync retry.
+    """
+    for start in range(0, len(metafields), _METAFIELDS_SET_BATCH_SIZE):
+        batch = metafields[start : start + _METAFIELDS_SET_BATCH_SIZE]
+        data = await execute_shopify_graphql(
+            shop_domain=shop_domain,
+            access_token_encrypted=access_token_encrypted,
+            query=SET_METAFIELDS_MUTATION,
+            variables={
+                "metafields": [
+                    {
+                        "ownerId": shopify_product_id,
+                        "namespace": "custom",
+                        "key": metafield["key"],
+                        "type": metafield["type"],
+                        "value": metafield["value"],
+                    }
+                    for metafield in batch
+                ]
+            },
+            operation_name="set_shopify_product_metafields",
+        )
+        response = data.get("metafieldsSet") or {}
+        raise_for_graphql_user_errors(
+            user_errors=response.get("userErrors"),
+            operation_name="set_shopify_product_metafields",
+            shop_domain=shop_domain,
+        )
 
 
 async def _search_product_variants_by_identity(

@@ -248,7 +248,7 @@ async def test_execute_shopify_graphql_classifies_graphql_throttling_as_retryabl
 
 
 @pytest.mark.unit
-def test_raise_for_graphql_user_errors_retains_only_sanitized_detail() -> None:
+def test_raise_for_graphql_user_errors_retains_only_sanitized_detail(caplog) -> None:
     long_message = "x" * 350
     raw_response_secret = "raw-response-secret"
     request_variable_secret = "customer@example.com"
@@ -299,6 +299,16 @@ def test_raise_for_graphql_user_errors_retains_only_sanitized_detail() -> None:
     retained_detail = repr(error.user_errors)
     assert raw_response_secret not in retained_detail
     assert request_variable_secret not in retained_detail
+    warning = next(
+        record for record in caplog.records
+        if "Shopify GraphQL userErrors returned" in record.getMessage()
+    )
+    assert warning.shopify_user_errors == error.user_errors
+    assert "Inventory item cannot be updated." in warning.getMessage()
+    assert "INVALID_QUANTITY" in warning.getMessage()
+    assert "quantities" in warning.getMessage()
+    assert raw_response_secret not in caplog.text
+    assert request_variable_secret not in caplog.text
 
 
 @pytest.mark.unit

@@ -5,6 +5,7 @@ import pytest
 from beyo_manager.errors.external_service import (
     ShopifyGraphQLNonRetryableError,
     ShopifyGraphQLRetryableError,
+    ShopifyGraphQLUserErrorsError,
 )
 from beyo_manager.services.infra.shopify import product_sync_client
 
@@ -269,6 +270,85 @@ async def test_set_shopify_product_metafields_uses_metafields_set(monkeypatch) -
             "value": "warehouse",
         }
     ]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("count, batch_sizes", [(0, []), (1, [1]), (25, [25]), (26, [25, 1]), (50, [25, 25]), (51, [25, 25, 1])])
+async def test_set_shopify_product_metafields_batches_without_losing_or_mutating_inputs(
+    monkeypatch, count, batch_sizes,
+) -> None:
+    calls: list[dict] = []
+
+    async def fake_execute(**kwargs):
+        calls.append(kwargs)
+        return {"metafieldsSet": {"userErrors": []}}
+
+    monkeypatch.setattr(product_sync_client, "execute_shopify_graphql", fake_execute)
+    metafields = [
+        {"key": f"field_{index}", "type": "single_line_text_field", "value": str(index)}
+        for index in range(count)
+    ]
+    original = [dict(field) for field in metafields]
+    await product_sync_client.set_shopify_product_metafields(
+        shop_domain="shop.myshopify.com",
+        access_token_encrypted="encrypted-token",
+        shopify_product_id="gid://shopify/Product/1",
+        metafields=metafields,
+    )
+
+    assert [len(call["variables"]["metafields"]) for call in calls] == batch_sizes
+    assert [field for call in calls for field in call["variables"]["metafields"]] == [
+        {"ownerId": "gid://shopify/Product/1", "namespace": "custom", **field}
+        for field in original
+    ]
+    assert metafields == original
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("retryable", [False, True])
+async def test_set_shopify_product_metafields_stops_on_later_batch_failure_and_can_replay(
+    monkeypatch, retryable,
+) -> None:
+    calls: list[list[dict]] = []
+    transport_error = ShopifyGraphQLRetryableError("Rate limited.", error_code="rate_limited")
+
+    async def fake_execute(**kwargs):
+        calls.append(kwargs["variables"]["metafields"])
+        if len(calls) == 2:
+            if retryable:
+                raise transport_error
+            return {"metafieldsSet": {"userErrors": [
+                {"field": ["metafields", "0", "value"], "message": "Invalid value.", "code": "INVALID_VALUE"},
+            ]}}
+        return {"metafieldsSet": {"userErrors": []}}
+
+    monkeypatch.setattr(product_sync_client, "execute_shopify_graphql", fake_execute)
+    metafields = [
+        {"key": f"field_{index}", "type": "single_line_text_field", "value": str(index)}
+        for index in range(76)
+    ]
+    arguments = dict(
+        shop_domain="shop.myshopify.com",
+        access_token_encrypted="encrypted-token",
+        shopify_product_id="gid://shopify/Product/1",
+        metafields=metafields,
+    )
+    expected_error = ShopifyGraphQLRetryableError if retryable else ShopifyGraphQLUserErrorsError
+    with pytest.raises(expected_error) as exc_info:
+        await product_sync_client.set_shopify_product_metafields(**arguments)
+    assert len(calls) == 2  # No later batch can run after the rejected one.
+    if retryable:
+        assert exc_info.value is transport_error
+    else:
+        assert exc_info.value.user_errors[0]["code"] == "INVALID_VALUE"
+
+    # A caller retry replays the earlier sets and finishes the remaining batches.
+    await product_sync_client.set_shopify_product_metafields(**arguments)
+    assert [len(batch) for batch in calls[2:]] == [25, 25, 25, 1]
+    assert calls[2] == calls[0]
+    assert calls[3] == calls[1]
 
 
 @pytest.mark.unit

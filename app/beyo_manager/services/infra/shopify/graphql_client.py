@@ -240,16 +240,19 @@ def raise_for_graphql_user_errors(
     if not user_errors:
         return
 
+    normalized_errors = _normalize_graphql_user_errors(user_errors)
     logger.warning(
-        "Shopify GraphQL userErrors returned | operation=%s shop_domain=%s error_count=%s",
+        "Shopify GraphQL userErrors returned | operation=%s shop_domain=%s error_count=%s user_errors=%s",
         operation_name,
         normalize_shop_domain(shop_domain),
         len(user_errors),
+        normalized_errors,
+        extra={"shopify_user_errors": normalized_errors},
     )
     raise ShopifyGraphQLUserErrorsError(
         "Shopify GraphQL mutation returned user errors.",
         error_code=error_code,
-        user_errors=_normalize_graphql_user_errors(user_errors),
+        user_errors=normalized_errors,
     )
 
 
