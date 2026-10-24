@@ -49,6 +49,14 @@ def build_delete_message(
     return f"{actor} deleted {qualifier} {target} from {major_target}"
 
 
+def build_restore_message(username: str | None, target: str) -> str:
+    """Build a human-readable description for bringing back a soft-deleted entity.
+
+    "David restored task #29"
+    """
+    return f"{_actor(username)} restored {target}"
+
+
 def build_state_change_message(
     username: str | None,
     entity: str,

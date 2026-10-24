@@ -31,6 +31,7 @@ from beyo_manager.services.commands.tasks.fail_task import fail_task
 from beyo_manager.services.commands.tasks.force_task_ready import force_task_ready
 from beyo_manager.services.commands.tasks.remove_item_from_task import remove_item_from_task
 from beyo_manager.services.commands.tasks.resolve_task import resolve_task
+from beyo_manager.services.commands.tasks.restore_task import restore_task
 from beyo_manager.services.commands.tasks.send_customer_coordination_email_batch import (
     send_customer_coordination_email_batch,
 )
@@ -546,9 +547,11 @@ async def route_get_task(
     task_id: str,
     claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
     session: AsyncSession = Depends(get_db),
+    include_deleted: bool = Query(False),
 ):
     ctx = ServiceContext(
         incoming_data={"client_id": task_id},
+        query_params={"include_deleted": include_deleted},
         identity=claims,
         session=session,
     )
@@ -733,6 +736,23 @@ async def route_delete_task(
         session=session,
     )
     outcome = await run_service(delete_task, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.post("/{task_id}/restore")
+async def route_restore_task(
+    task_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={"client_id": task_id},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(restore_task, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)
