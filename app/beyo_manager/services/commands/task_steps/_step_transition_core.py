@@ -6,6 +6,7 @@ DRIVERS (the canonical list — add here, not in each caller's docstring):
   - `declare_worker_state`             :132
   - `_case_created_step_pause`         :133
   - `force_task_ready`                 :154
+  - `_pause_task_working_steps`        :67   (delete_task, restore_task)
 
 DRIFT NOTE: the per-step transition sub-processes here MIRROR two hand-maintained
 copies of the same body — `transition_step_state.transition_step_state` (the

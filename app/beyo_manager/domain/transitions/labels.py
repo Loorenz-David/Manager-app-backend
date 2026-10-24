@@ -130,6 +130,18 @@ _TRANSITION_REASONS: dict[str, dict] = {
         "requires_description": True,
         "is_system_managed": False,
     },
+    # Written by `delete_task` to the PAUSED record of every step that was working. No
+    # catalog row was ever retired into it, so `image_url` is genuinely None and `slug` is
+    # the member's own value, as for `forced_ready`. BLOCKER: the work stopped for a reason
+    # outside the worker.
+    TransitionReasonEnum.TASK_DELETED.value: {
+        "name": "Task deleted",
+        "image_url": None,
+        "pause_type": PauseTypeEnum.BLOCKER.value,
+        "slug": TransitionReasonEnum.TASK_DELETED.value,
+        "requires_description": False,
+        "is_system_managed": False,
+    },
 }
 
 # The lookup-entry shape, kept explicit so adding a field above cannot silently widen the

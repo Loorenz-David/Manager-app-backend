@@ -27,12 +27,16 @@ from beyo_manager.services.commands.stock_report._locks import (
 from beyo_manager.services.commands.stock_report._remove_assignment import (
     remove_assignment,
 )
+from beyo_manager.services.commands.task_steps._pause_task_working_steps import (
+    pause_task_working_steps_in_session,
+)
 from beyo_manager.services.commands.tasks.requests import parse_terminal_task_request
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.build_event import build_workspace_event
 from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
+from beyo_manager.services.infra.events.worker_shift_realtime import emit_steps_paused
 
 
 async def delete_task(ctx: ServiceContext) -> dict:
@@ -136,6 +140,12 @@ async def delete_task(ctx: ServiceContext) -> dict:
                 )
             )
 
+        # Nothing may touch a deleted task's steps (clock-out included), so a step left
+        # WORKING here would accrue work time for as long as the task stays deleted.
+        paused_step_ids = await pause_task_working_steps_in_session(
+            ctx, task, paused_at=now
+        )
+
         task.is_deleted = True
         task.deleted_at = now
         task.deleted_by_id = ctx.user_id
@@ -169,4 +179,6 @@ async def delete_task(ctx: ServiceContext) -> dict:
     )
     events.extend(stock_events)
     await event_bus.dispatch(events)
+    # The worker whose step just stopped still has it cached as working.
+    await emit_steps_paused(ctx.workspace_id, paused_step_ids)
     return {"client_id": task.client_id}

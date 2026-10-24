@@ -36,3 +36,8 @@ class TransitionReasonEnum(enum.Enum):
     # `labels.py` entry, because the step serializer resolves through that map for any
     # record without a catalog row; see the note there.
     FORCED_READY = "forced_ready"
+    # The task was deleted, so the system paused its working steps (`delete_task`).
+    # Without it the open WORKING record keeps accruing time for as long as the task stays
+    # deleted, because nothing else may touch a deleted task's steps. A restore leaves the
+    # step paused: the worker resumes it, exactly as after a case pause.
+    TASK_DELETED = "task_deleted"

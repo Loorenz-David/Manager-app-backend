@@ -101,8 +101,8 @@ REGISTRY: dict[tuple[str, int], dict] = {
     ("beyo_manager/services/commands/task_steps/transition_step_state.py", 305): {"classification": NOT_TASK, "model": "TaskStep"},
     ("beyo_manager/services/commands/task_steps/transition_step_state.py", 388): {"classification": NOT_TASK, "model": "TaskStep"},
     ("beyo_manager/services/commands/task_steps/remove_task_step.py", 135): {"classification": NOT_TASK, "model": "TaskStep"},
-    ("beyo_manager/services/commands/task_steps/_step_transition_core.py", 156): {"classification": NOT_TASK, "model": "TaskStep"},
-    ("beyo_manager/services/commands/task_steps/_step_transition_core.py", 231): {"classification": NOT_TASK, "model": "TaskStep"},
+    ("beyo_manager/services/commands/task_steps/_step_transition_core.py", 157): {"classification": NOT_TASK, "model": "TaskStep"},
+    ("beyo_manager/services/commands/task_steps/_step_transition_core.py", 232): {"classification": NOT_TASK, "model": "TaskStep"},
     ("beyo_manager/services/commands/task_post_handling/_sync_post_handling_state_in_session.py", 54): {"classification": NOT_TASK, "model": "TaskPostHandling"},
     ("beyo_manager/services/commands/task_post_handling/complete_task_post_handling.py", 134): {"classification": NOT_TASK, "model": "TaskPostHandling"},
     ("beyo_manager/services/commands/cases/update_case_state.py", 29): {"classification": NOT_TASK, "model": "Case"},
@@ -189,15 +189,15 @@ REGISTRY: dict[tuple[str, int], dict] = {
         "sync_functions": ["remove_task_step", "remove_task_steps"],
         "note": "S8 (maybe_evaluate_task_ready call inside the shared helper)",
     },
-    ("beyo_manager/services/commands/task_steps/_step_transition_core.py", 255): {
+    ("beyo_manager/services/commands/task_steps/_step_transition_core.py", 256): {
         "classification": TASK_WRITE,
         "sync_functions": ["force_task_ready", "transition_step_state_batch"],
         "note": "the shared core's maybe_advance_task_to_working call — covered by "
-        "its two non-paused callers' own sync calls (S3, S2); the three "
+        "its two non-paused callers' own sync calls (S3, S2); the four "
         "paused-driver callers never reach this branch (new_state=PAUSED is "
         "neither WORKING nor terminal)",
     },
-    ("beyo_manager/services/commands/task_steps/_step_transition_core.py", 260): {
+    ("beyo_manager/services/commands/task_steps/_step_transition_core.py", 261): {
         "classification": TASK_WRITE,
         "sync_functions": ["force_task_ready", "transition_step_state_batch"],
         "note": "the shared core's maybe_evaluate_task_ready call — same as above",
@@ -218,6 +218,9 @@ REGISTRY: dict[tuple[str, int], dict] = {
         "note": "S9 (maybe_evaluate_task_ready call)",
     },
     ("beyo_manager/services/commands/cases/_case_created_step_pause.py", 133): {
+        "classification": PAUSED_DRIVER,
+    },
+    ("beyo_manager/services/commands/task_steps/_pause_task_working_steps.py", 67): {
         "classification": PAUSED_DRIVER,
     },
     ("beyo_manager/services/commands/users/_clock_worker_shift.py", 377): {

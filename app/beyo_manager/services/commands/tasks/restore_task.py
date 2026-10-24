@@ -23,12 +23,16 @@ from beyo_manager.services.commands.items.cancel_upholstery_requirements import 
 from beyo_manager.services.commands.items.create_item_upholstery import (
     ensure_item_upholstery_in_session,
 )
+from beyo_manager.services.commands.task_steps._pause_task_working_steps import (
+    pause_task_working_steps_in_session,
+)
 from beyo_manager.services.commands.tasks.requests import parse_terminal_task_request
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.build_event import build_workspace_event
 from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
+from beyo_manager.services.infra.events.worker_shift_realtime import emit_steps_paused
 
 
 async def restore_task(ctx: ServiceContext) -> dict:
@@ -41,10 +45,15 @@ async def restore_task(ctx: ServiceContext) -> dict:
     context whose requirement is re-checked against today's stock (`available` or
     `needs_ordering`). An item whose upholstery moved on since the deletion is left alone.
 
+    A task deleted before `delete_task` paused working steps may still hold a step whose
+    WORKING record never closed; it is paused as of the deletion, so the deleted period
+    does not count as work. Steps are not resumed — the worker does that.
+
     Stock-report assignments and pins removed by the deletion are not restored.
     """
     request = parse_terminal_task_request(ctx.incoming_data)
     item_events: list[WorkspaceEvent] = []
+    paused_step_ids: list[str] = []
 
     async with maybe_begin(ctx.session):
         task = (
@@ -119,6 +128,9 @@ async def restore_task(ctx: ServiceContext) -> dict:
         )
 
         if deleted_at is not None:
+            paused_step_ids = await pause_task_working_steps_in_session(
+                ctx, task, paused_at=deleted_at
+            )
             for item_id in revivable_item_ids:
                 item_events.extend(
                     await _revive_upholstery_need(ctx, item_id=item_id, deleted_at=deleted_at)
@@ -126,6 +138,7 @@ async def restore_task(ctx: ServiceContext) -> dict:
 
     # `task:updated` already refreshes the detail and every task list in all apps.
     await event_bus.dispatch([build_workspace_event(task, "task:updated"), *item_events])
+    await emit_steps_paused(ctx.workspace_id, paused_step_ids)
     return {"client_id": task.client_id}
 
 
