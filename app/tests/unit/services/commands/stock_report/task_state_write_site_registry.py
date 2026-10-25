@@ -140,7 +140,7 @@ REGISTRY: dict[tuple[str, int], dict] = {
     ("beyo_manager/services/commands/emails/update_email_connection.py", 44): {"classification": NOT_TASK, "model": "EmailConnection"},
     ("beyo_manager/services/commands/items/_allocation_algorithm.py", 50): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
     ("beyo_manager/services/commands/items/find_or_create_item.py", 127): {"classification": NOT_TASK, "model": "Item"},
-    ("beyo_manager/services/commands/items/update_item.py", 99): {"classification": NOT_TASK, "model": "Item"},
+    ("beyo_manager/services/commands/items/update_item.py", 122): {"classification": NOT_TASK, "model": "Item"},
     ("beyo_manager/services/commands/pause_reasons/update_pause_reason.py", 81): {"classification": NOT_TASK, "model": "PauseReason"},
     ("beyo_manager/services/commands/sku_templates/update_sku_template.py", 40): {"classification": NOT_TASK, "model": "SkuTemplate"},
     ("beyo_manager/services/commands/task_steps/_settle_step_time.py", 142): {"classification": NOT_TASK, "model": "TaskStep"},

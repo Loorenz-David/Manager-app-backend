@@ -7,6 +7,7 @@ from sqlalchemy import select
 from beyo_manager.domain.history.enums import HistoryRecordChangeTypeEnum, HistoryRecordEntityTypeEnum
 from beyo_manager.domain.items.location_push import has_zone_changed
 from beyo_manager.errors.not_found import NotFound
+from beyo_manager.errors.validation import ConflictError
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.items.item_category import ItemCategory
 from beyo_manager.services.commands.history._create_history_record_in_session import (
@@ -43,6 +44,8 @@ _DIRECT_FIELDS = {
     "external_order_id",
     "can_have_upholstery",
 }
+
+_UNIQUE_FIELDS = {"article_number": "Article number", "sku": "SKU"}
 
 
 async def _update_item_in_session(
@@ -91,6 +94,26 @@ async def _update_item_in_session(
                     current_category_id=item.item_category_id,
                     incoming_category_id=incoming_category_id,
                 )
+
+    # Partial unique indexes uix_items_workspace_{article_number,sku}: refuse here, or the
+    # write reaches the index at flush and surfaces as a generic 500.
+    for field_name, label in _UNIQUE_FIELDS.items():
+        incoming = getattr(request, field_name)
+        if field_name not in request.model_fields_set or incoming is None:
+            continue
+        if incoming == getattr(item, field_name):
+            continue
+        column = getattr(Item, field_name)
+        taken = await session.scalar(
+            select(Item.client_id).where(
+                Item.workspace_id == workspace_id,
+                column == incoming,
+                Item.client_id != item.client_id,
+                Item.is_deleted.is_(False),
+            )
+        )
+        if taken is not None:
+            raise ConflictError(f"{label} '{incoming}' is already used by another item.")
 
     zone_before_update = item.item_zone
 
