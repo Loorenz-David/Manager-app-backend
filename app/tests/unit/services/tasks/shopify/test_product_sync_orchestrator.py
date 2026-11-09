@@ -27,6 +27,11 @@ class _FakeSession:
 def _sync_item(**overrides) -> SimpleNamespace:
     base = dict(
         client_id="shpsi_1",
+        workspace_id="ws_1",
+        frontend_client_id="item_1",
+        sync_origin="standard_product_sync",
+        source_entity_type=None,
+        source_entity_id=None,
         normalized_payload_json={
             "product": {"title": "Chair"},
             "variant": {"barcode": "BAR-1", "inventoryItem": {"sku": "SKU-1"}},
@@ -86,6 +91,11 @@ def test_legacy_persisted_adjustments_are_converted_to_absolute_quantities(
 
 @pytest.fixture(autouse=True)
 def _default_stage_dependencies(monkeypatch):
+    async def _no_known_product(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(module, "resolve_known_item_product", _no_known_product)
+
     async def _configure_variant(**kwargs):
         return {
             "shopify_variant_id": kwargs["shopify_variant_id"],
@@ -533,3 +543,210 @@ async def test_preorder_keeps_metafield_quantity_separate_from_absolute_inventor
             }
         ]
     }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_known_item_product_updates_without_barcode_lookup(monkeypatch) -> None:
+    # An item with no article number, synced before: update the stored product
+    # instead of creating a duplicate.
+    sync_item = _sync_item(
+        source_entity_type="item",
+        source_entity_id="item_42",
+        normalized_payload_json={
+            "product": {"title": "Chair"},
+            "variant": {"inventoryItem": {"sku": "SKU-1"}},
+            "metafields": [],
+        },
+    )
+    session = _FakeSession()
+    resolve_calls: list[dict] = []
+    update_calls: list[dict] = []
+
+    async def _known(_session, **kwargs):
+        resolve_calls.append(kwargs)
+        return {
+            "shopify_product_id": "gid://shopify/Product/known",
+            "shopify_variant_id": "gid://shopify/ProductVariant/known",
+            "shopify_inventory_item_id": "gid://shopify/InventoryItem/known",
+        }
+
+    async def _unexpected(**_kwargs):
+        raise AssertionError("a known product must not be looked up or created")
+
+    async def _update(**kwargs):
+        update_calls.append(kwargs)
+        return {
+            "shopify_product_id": kwargs["shopify_product_id"],
+            "shopify_variant_id": kwargs["shopify_variant_id"],
+        }
+
+    monkeypatch.setattr(module, "resolve_known_item_product", _known)
+    monkeypatch.setattr(module, "find_product_variant_by_identity", _unexpected)
+    monkeypatch.setattr(module, "create_shopify_product", _unexpected)
+    monkeypatch.setattr(module, "update_shopify_product", _update)
+
+    await module.sync_one_product_sync_item(session, sync_item=sync_item, shop=_shop())
+
+    assert resolve_calls[0]["item_client_id"] == "item_42"
+    assert resolve_calls[0]["exclude_sync_item_id"] == "shpsi_1"
+    assert sync_item.status == ShopifyProductSyncItemStatusEnum.SUCCEEDED
+    assert sync_item.requested_operation == ShopifyProductSyncOperationEnum.UPDATE
+    assert sync_item.shopify_product_id == "gid://shopify/Product/known"
+    assert update_calls[0]["fallback_inventory_item_id"] == "gid://shopify/InventoryItem/known"
+    # No status/tags in the payload, so the update leaves them untouched.
+    assert "status" not in update_calls[0]["normalized_payload"]["product"]
+    assert "tags" not in update_calls[0]["normalized_payload"]["product"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_deleted_known_product_falls_back_to_barcode_then_create(monkeypatch) -> None:
+    sync_item = _sync_item(source_entity_type="item", source_entity_id="item_42")
+    session = _FakeSession()
+    calls: list[str] = []
+
+    async def _gone(_session, **_kwargs):
+        calls.append("resolve")
+        return None  # earlier product deleted from Shopify
+
+    async def _find(**_kwargs):
+        calls.append("find")
+        return []
+
+    async def _create(**_kwargs):
+        calls.append("create")
+        return {
+            "shopify_product_id": "gid://shopify/Product/new",
+            "shopify_variant_id": "gid://shopify/ProductVariant/new",
+        }
+
+    async def _set_metafields(**_kwargs):
+        return None
+
+    monkeypatch.setattr(module, "resolve_known_item_product", _gone)
+    monkeypatch.setattr(module, "find_product_variant_by_identity", _find)
+    monkeypatch.setattr(module, "create_shopify_product", _create)
+    monkeypatch.setattr(module, "set_shopify_product_metafields", _set_metafields)
+
+    await module.sync_one_product_sync_item(session, sync_item=sync_item, shop=_shop())
+
+    assert calls == ["resolve", "find", "create"]
+    assert sync_item.requested_operation == ShopifyProductSyncOperationEnum.CREATE
+    assert sync_item.shopify_product_id == "gid://shopify/Product/new"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_non_item_sync_rows_skip_known_product_resolution(monkeypatch) -> None:
+    sync_item = _sync_item(
+        sync_origin="preorder_task",
+        source_entity_type="task",
+        source_entity_id="task_1",
+    )
+    session = _FakeSession()
+
+    async def _unexpected(*_args, **_kwargs):
+        raise AssertionError("pre-order rows are not linked to an item")
+
+    async def _find(**_kwargs):
+        return []
+
+    async def _create(**_kwargs):
+        return {
+            "shopify_product_id": "gid://shopify/Product/new",
+            "shopify_variant_id": "gid://shopify/ProductVariant/new",
+        }
+
+    async def _set_metafields(**_kwargs):
+        return None
+
+    monkeypatch.setattr(module, "resolve_known_item_product", _unexpected)
+    monkeypatch.setattr(module, "find_product_variant_by_identity", _find)
+    monkeypatch.setattr(module, "create_shopify_product", _create)
+    monkeypatch.setattr(module, "set_shopify_product_metafields", _set_metafields)
+
+    await module.sync_one_product_sync_item(session, sync_item=sync_item, shop=_shop())
+
+    assert sync_item.status == ShopifyProductSyncItemStatusEnum.SUCCEEDED
+
+
+def _delete_payload() -> dict:
+    return {
+        "product": {"title": "Chair"},
+        "variant": {"barcode": "BAR-1"},
+        "metafields": [{"key": "origin", "type": "single_line_text_field", "value": "x"}],
+        "metafields_delete": [{"namespace": "custom", "key": "material"}],
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_metafields_delete_runs_on_update(monkeypatch) -> None:
+    sync_item = _sync_item(normalized_payload_json=_delete_payload())
+    session = _FakeSession()
+    order: list[str] = []
+
+    async def _find(**_kwargs):
+        return [
+            {
+                "id": "gid://shopify/ProductVariant/1",
+                "barcode": "BAR-1",
+                "product": {"id": "gid://shopify/Product/X"},
+            }
+        ]
+
+    async def _update(**_kwargs):
+        return {
+            "shopify_product_id": "gid://shopify/Product/X",
+            "shopify_variant_id": "gid://shopify/ProductVariant/1",
+        }
+
+    async def _set_metafields(**_kwargs):
+        order.append("set")
+
+    async def _delete_metafields(**kwargs):
+        order.append("delete")
+        assert kwargs["shopify_product_id"] == "gid://shopify/Product/X"
+        assert kwargs["identifiers"] == [{"namespace": "custom", "key": "material"}]
+
+    monkeypatch.setattr(module, "find_product_variant_by_identity", _find)
+    monkeypatch.setattr(module, "update_shopify_product", _update)
+    monkeypatch.setattr(module, "set_shopify_product_metafields", _set_metafields)
+    monkeypatch.setattr(module, "delete_shopify_product_metafields", _delete_metafields)
+
+    await module.sync_one_product_sync_item(session, sync_item=sync_item, shop=_shop())
+
+    assert order == ["set", "delete"]
+    assert sync_item.status == ShopifyProductSyncItemStatusEnum.SUCCEEDED
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_metafields_delete_is_skipped_on_create(monkeypatch) -> None:
+    sync_item = _sync_item(normalized_payload_json=_delete_payload())
+    session = _FakeSession()
+
+    async def _find(**_kwargs):
+        return []
+
+    async def _create(**_kwargs):
+        return {
+            "shopify_product_id": "gid://shopify/Product/new",
+            "shopify_variant_id": "gid://shopify/ProductVariant/new",
+        }
+
+    async def _set_metafields(**_kwargs):
+        return None
+
+    async def _unexpected_delete(**_kwargs):
+        raise AssertionError("a new product has nothing to delete")
+
+    monkeypatch.setattr(module, "find_product_variant_by_identity", _find)
+    monkeypatch.setattr(module, "create_shopify_product", _create)
+    monkeypatch.setattr(module, "set_shopify_product_metafields", _set_metafields)
+    monkeypatch.setattr(module, "delete_shopify_product_metafields", _unexpected_delete)
+
+    await module.sync_one_product_sync_item(session, sync_item=sync_item, shop=_shop())
+
+    assert sync_item.status == ShopifyProductSyncItemStatusEnum.SUCCEEDED

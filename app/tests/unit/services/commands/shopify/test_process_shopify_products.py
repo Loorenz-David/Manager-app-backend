@@ -355,3 +355,44 @@ async def test_image_limits_are_checked_before_enqueue(image, message) -> None:
 
     with pytest.raises(ValidationError, match=message):
         await module._validate_image_limits(ctx, request)
+
+
+@pytest.mark.unit
+def test_parse_request_rejects_metafield_both_set_and_deleted() -> None:
+    with pytest.raises(ValidationError, match="metafields_to_delete cannot contain keys"):
+        parse_process_shopify_products_request(
+            {
+                "items": [
+                    {
+                        "client_id": "itm_1",
+                        "item_client_id": "itm_1",
+                        "title": "Chair",
+                        "sku": "SKU-1",
+                        "metafields": {"material": "oak"},
+                        "metafields_to_delete": ["material"],
+                    }
+                ]
+            }
+        )
+
+
+@pytest.mark.unit
+def test_parse_request_keeps_tags_unset_and_dedupes_delete_keys() -> None:
+    request = parse_process_shopify_products_request(
+        {
+            "items": [
+                {
+                    "client_id": "itm_1",
+                    "item_client_id": " itm_1 ",
+                    "title": "Chair",
+                    "sku": "SKU-1",
+                    "metafields_to_delete": [" material ", "material", ""],
+                }
+            ]
+        }
+    )
+
+    item = request.items[0]
+    assert item.tags is None
+    assert item.item_client_id == "itm_1"
+    assert item.metafields_to_delete == ["material"]

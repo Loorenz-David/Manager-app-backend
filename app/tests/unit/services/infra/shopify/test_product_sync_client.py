@@ -516,3 +516,208 @@ async def test_single_barcode_lookup_delegates_to_the_batched_path(monkeypatch) 
     )
 
     assert [node["id"] for node in result] == ["v1"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_shopify_product_defaults_status_to_draft_when_not_given(monkeypatch) -> None:
+    calls: list[dict] = []
+
+    async def _fake(**kwargs):
+        calls.append(kwargs)
+        return {
+            "productCreate": {
+                "product": {
+                    "id": "gid://shopify/Product/1",
+                    "variants": {"edges": [{"node": {"id": "gid://shopify/ProductVariant/1"}}]},
+                },
+                "userErrors": [],
+            }
+        }
+
+    monkeypatch.setattr(product_sync_client, "execute_shopify_graphql", _fake)
+
+    await product_sync_client.create_shopify_product(
+        shop_domain="shop.myshopify.com",
+        access_token_encrypted="encrypted-token",
+        normalized_payload={"product": {"title": "Chair"}, "variant": {}, "metafields": []},
+    )
+
+    assert calls[0]["variables"]["product"] == {"status": "DRAFT", "title": "Chair"}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_shopify_product_snapshot_maps_fields_inventory_and_metafields(monkeypatch) -> None:
+    calls: list[dict] = []
+
+    async def _fake(**kwargs):
+        calls.append(kwargs)
+        return {
+            "product": {
+                "id": "gid://shopify/Product/1",
+                "title": "Chair",
+                "descriptionHtml": "<p>Soft</p>",
+                "status": "ACTIVE",
+                "variants": {
+                    "nodes": [
+                        {
+                            "id": "gid://shopify/ProductVariant/1",
+                            "sku": "SKU-1",
+                            "barcode": "",
+                            "inventoryItem": {
+                                "id": "gid://shopify/InventoryItem/1",
+                                "inventoryLevels": {
+                                    "nodes": [
+                                        {
+                                            "location": {"id": "gid://shopify/Location/1"},
+                                            "quantities": [{"name": "available", "quantity": 3}],
+                                        },
+                                        {"location": {"id": "gid://shopify/Location/2"}, "quantities": []},
+                                        {
+                                            "location": {"id": "gid://shopify/Location/3", "isActive": False},
+                                            "quantities": [{"name": "available", "quantity": 1}],
+                                        },
+                                        {
+                                            "location": {
+                                                "id": "gid://shopify/Location/4",
+                                                "isActive": True,
+                                                "isFulfillmentService": True,
+                                            },
+                                            "quantities": [{"name": "available", "quantity": 1}],
+                                        },
+                                    ]
+                                },
+                            },
+                        }
+                    ]
+                },
+                "metafields": {
+                    "nodes": [
+                        {
+                            "key": "material",
+                            "type": "single_line_text_field",
+                            "value": "oak",
+                            "definition": {"id": "gid://shopify/MetafieldDefinition/9"},
+                        },
+                        {"key": "", "type": "single_line_text_field", "value": "ignored"},
+                    ]
+                },
+            }
+        }
+
+    monkeypatch.setattr(product_sync_client, "execute_shopify_graphql", _fake)
+
+    snapshot = await product_sync_client.get_shopify_product_snapshot(
+        shop_domain="shop.myshopify.com",
+        access_token_encrypted="encrypted-token",
+        shopify_product_id="gid://shopify/Product/1",
+    )
+
+    assert calls[0]["variables"]["namespace"] == "custom"
+    assert snapshot == {
+        "shopify_product_id": "gid://shopify/Product/1",
+        "title": "Chair",
+        "description_html": "<p>Soft</p>",
+        "status": "ACTIVE",
+        "sku": "SKU-1",
+        "barcode": None,
+        "metafields": [
+            {
+                "key": "material",
+                "type": "single_line_text_field",
+                "value": "oak",
+                "definition_id": "gid://shopify/MetafieldDefinition/9",
+            }
+        ],
+        "inventory": [{"location_id": "gid://shopify/Location/1", "quantity": 3}],
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_product_reads_return_none_when_product_was_deleted(monkeypatch) -> None:
+    async def _fake(**_kwargs):
+        return {"product": None}
+
+    monkeypatch.setattr(product_sync_client, "execute_shopify_graphql", _fake)
+    kwargs = dict(
+        shop_domain="shop.myshopify.com",
+        access_token_encrypted="encrypted-token",
+        shopify_product_id="gid://shopify/Product/gone",
+    )
+
+    assert await product_sync_client.get_shopify_product_snapshot(**kwargs) is None
+    assert await product_sync_client.get_shopify_product_core(**kwargs) is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_shopify_product_core_returns_first_variant_ids(monkeypatch) -> None:
+    async def _fake(**_kwargs):
+        return {
+            "product": {
+                "id": "gid://shopify/Product/1",
+                "variants": {
+                    "nodes": [
+                        {"id": "gid://shopify/ProductVariant/1", "inventoryItem": {"id": "gid://shopify/InventoryItem/1"}}
+                    ]
+                },
+            }
+        }
+
+    monkeypatch.setattr(product_sync_client, "execute_shopify_graphql", _fake)
+
+    core = await product_sync_client.get_shopify_product_core(
+        shop_domain="shop.myshopify.com",
+        access_token_encrypted="encrypted-token",
+        shopify_product_id="gid://shopify/Product/1",
+    )
+
+    assert core == {
+        "shopify_product_id": "gid://shopify/Product/1",
+        "shopify_variant_id": "gid://shopify/ProductVariant/1",
+        "shopify_inventory_item_id": "gid://shopify/InventoryItem/1",
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_shopify_product_metafields_batches_by_25_and_raises_user_errors(monkeypatch) -> None:
+    from beyo_manager.errors.external_service import ShopifyGraphQLUserErrorsError
+
+    calls: list[dict] = []
+
+    async def _fake(**kwargs):
+        calls.append(kwargs)
+        return {"metafieldsDelete": {"deletedMetafields": [], "userErrors": []}}
+
+    monkeypatch.setattr(product_sync_client, "execute_shopify_graphql", _fake)
+    identifiers = [{"namespace": "custom", "key": f"k{i}"} for i in range(30)]
+
+    await product_sync_client.delete_shopify_product_metafields(
+        shop_domain="shop.myshopify.com",
+        access_token_encrypted="encrypted-token",
+        shopify_product_id="gid://shopify/Product/1",
+        identifiers=identifiers,
+    )
+
+    assert [len(call["variables"]["metafields"]) for call in calls] == [25, 5]
+    assert calls[0]["variables"]["metafields"][0] == {
+        "ownerId": "gid://shopify/Product/1",
+        "namespace": "custom",
+        "key": "k0",
+    }
+    assert "metafieldsDelete" in calls[0]["query"]
+
+    async def _fake_error(**_kwargs):
+        return {"metafieldsDelete": {"userErrors": [{"field": ["key"], "message": "bad"}]}}
+
+    monkeypatch.setattr(product_sync_client, "execute_shopify_graphql", _fake_error)
+    with pytest.raises(ShopifyGraphQLUserErrorsError):
+        await product_sync_client.delete_shopify_product_metafields(
+            shop_domain="shop.myshopify.com",
+            access_token_encrypted="encrypted-token",
+            shopify_product_id="gid://shopify/Product/1",
+            identifiers=identifiers[:1],
+        )

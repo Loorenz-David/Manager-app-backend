@@ -4,6 +4,10 @@ import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
+from beyo_manager.domain.shopify.product_sync_payloads import (
+    DEFAULT_CREATE_PRODUCT_STATUS,
+    METAFIELD_NAMESPACE,
+)
 from beyo_manager.errors.external_service import (
     ShopifyGraphQLNonRetryableError,
     ShopifyGraphQLRetryableError,
@@ -18,6 +22,8 @@ IdentityType = str
 _VARIANTS_FIRST = 10
 # Shopify's metafieldsSet input limit, owned by this API adapter.
 _METAFIELDS_SET_BATCH_SIZE = 25
+_SNAPSHOT_METAFIELDS_FIRST = 100
+_SNAPSHOT_INVENTORY_LEVELS_FIRST = 50
 
 # Batched barcode pricing lookup: one search request covers many barcodes.
 BARCODE_LOOKUP_PAGE_SIZE = 250
@@ -192,6 +198,82 @@ mutation SetMetafields($metafields: [MetafieldsSetInput!]!) {
 }
 """
 
+GET_PRODUCT_CORE_QUERY = """
+query GetProductCore($id: ID!) {
+  product(id: $id) {
+    id
+    variants(first: 1) {
+      nodes {
+        id
+        inventoryItem {
+          id
+        }
+      }
+    }
+  }
+}
+"""
+
+GET_PRODUCT_SNAPSHOT_QUERY = """
+query GetProductSnapshot($id: ID!, $namespace: String!, $metafieldsFirst: Int!, $levelsFirst: Int!) {
+  product(id: $id) {
+    id
+    title
+    descriptionHtml
+    status
+    variants(first: 1) {
+      nodes {
+        id
+        sku
+        barcode
+        inventoryItem {
+          id
+          inventoryLevels(first: $levelsFirst) {
+            nodes {
+              location {
+                id
+                isActive
+                isFulfillmentService
+              }
+              quantities(names: ["available"]) {
+                name
+                quantity
+              }
+            }
+          }
+        }
+      }
+    }
+    metafields(first: $metafieldsFirst, namespace: $namespace) {
+      nodes {
+        key
+        type
+        value
+        definition {
+          id
+        }
+      }
+    }
+  }
+}
+"""
+
+DELETE_METAFIELDS_MUTATION = """
+mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
+  metafieldsDelete(metafields: $metafields) {
+    deletedMetafields {
+      key
+      namespace
+      ownerId
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}
+"""
+
 
 async def find_product_variant_by_identity(
     *,
@@ -351,7 +433,10 @@ async def create_shopify_product(
     media: list[dict] | None = None,
 ) -> dict:
     variables = {
-        "product": normalized_payload["product"],
+        "product": {
+            "status": DEFAULT_CREATE_PRODUCT_STATUS,
+            **normalized_payload["product"],
+        },
     }
     query = CREATE_PRODUCT_MUTATION
     if media:
@@ -472,7 +557,7 @@ async def set_shopify_product_metafields(
                 "metafields": [
                     {
                         "ownerId": shopify_product_id,
-                        "namespace": "custom",
+                        "namespace": METAFIELD_NAMESPACE,
                         "key": metafield["key"],
                         "type": metafield["type"],
                         "value": metafield["value"],
@@ -486,6 +571,151 @@ async def set_shopify_product_metafields(
         raise_for_graphql_user_errors(
             user_errors=response.get("userErrors"),
             operation_name="set_shopify_product_metafields",
+            shop_domain=shop_domain,
+        )
+
+
+async def get_shopify_product_core(
+    *,
+    shop_domain: str,
+    access_token_encrypted: str,
+    shopify_product_id: str,
+) -> dict | None:
+    """Return the product's id, first variant id and inventory item id.
+
+    Returns None when the product no longer exists in Shopify (deleted by a
+    merchant), so callers can fall back to identity lookup or creation.
+    """
+    data = await execute_shopify_graphql(
+        shop_domain=shop_domain,
+        access_token_encrypted=access_token_encrypted,
+        query=GET_PRODUCT_CORE_QUERY,
+        variables={"id": shopify_product_id},
+        operation_name="get_shopify_product_core",
+    )
+    product = data.get("product")
+    if not product:
+        return None
+    product_id = _clean_str(product.get("id"))
+    variant_nodes = (product.get("variants") or {}).get("nodes") or []
+    variant = (variant_nodes[0] or {}) if variant_nodes else {}
+    variant_id = _clean_str(variant.get("id"))
+    if product_id is None or variant_id is None:
+        return None
+    return {
+        "shopify_product_id": product_id,
+        "shopify_variant_id": variant_id,
+        "shopify_inventory_item_id": _clean_str((variant.get("inventoryItem") or {}).get("id")),
+    }
+
+
+async def get_shopify_product_snapshot(
+    *,
+    shop_domain: str,
+    access_token_encrypted: str,
+    shopify_product_id: str,
+) -> dict | None:
+    """Read the fields the product sync form edits, live from Shopify.
+
+    Returns None when the product no longer exists.
+    """
+    data = await execute_shopify_graphql(
+        shop_domain=shop_domain,
+        access_token_encrypted=access_token_encrypted,
+        query=GET_PRODUCT_SNAPSHOT_QUERY,
+        variables={
+            "id": shopify_product_id,
+            "namespace": METAFIELD_NAMESPACE,
+            "metafieldsFirst": _SNAPSHOT_METAFIELDS_FIRST,
+            "levelsFirst": _SNAPSHOT_INVENTORY_LEVELS_FIRST,
+        },
+        operation_name="get_shopify_product_snapshot",
+    )
+    product = data.get("product")
+    if not product:
+        return None
+    variant_nodes = (product.get("variants") or {}).get("nodes") or []
+    variant = (variant_nodes[0] or {}) if variant_nodes else {}
+    inventory_item = variant.get("inventoryItem") or {}
+    inventory: list[dict] = []
+    for level in (inventory_item.get("inventoryLevels") or {}).get("nodes") or []:
+        location = (level or {}).get("location") or {}
+        location_id = _clean_str(location.get("id"))
+        # Only locations the inventory writer accepts (_sync_absolute_inventory),
+        # so resubmitting the prefilled form cannot fail on an unusable location.
+        if (
+            location_id is None
+            or location.get("isActive") is False
+            or location.get("isFulfillmentService") is True
+        ):
+            continue
+        available = next(
+            (
+                quantity.get("quantity")
+                for quantity in (level.get("quantities") or [])
+                if (quantity or {}).get("name") == "available"
+            ),
+            None,
+        )
+        if isinstance(available, int):
+            inventory.append({"location_id": location_id, "quantity": available})
+    metafields = [
+        {
+            "key": node.get("key"),
+            "type": node.get("type"),
+            "value": node.get("value"),
+            # The form identifies a metafield field by its definition id.
+            "definition_id": _clean_str((node.get("definition") or {}).get("id")),
+        }
+        for node in (product.get("metafields") or {}).get("nodes") or []
+        if _clean_str((node or {}).get("key")) is not None
+    ]
+    return {
+        "shopify_product_id": _clean_str(product.get("id")) or shopify_product_id,
+        "title": product.get("title"),
+        "description_html": product.get("descriptionHtml"),
+        "status": product.get("status"),
+        "sku": _clean_str(variant.get("sku")),
+        "barcode": _clean_str(variant.get("barcode")),
+        "metafields": metafields,
+        "inventory": inventory,
+    }
+
+
+async def delete_shopify_product_metafields(
+    *,
+    shop_domain: str,
+    access_token_encrypted: str,
+    shopify_product_id: str,
+    identifiers: list[dict],
+) -> None:
+    """Delete product metafields by namespace/key in ordered batches.
+
+    Deleting a metafield that does not exist is a no-op in Shopify, so replays
+    under the sync retry are safe.
+    """
+    for start in range(0, len(identifiers), _METAFIELDS_SET_BATCH_SIZE):
+        batch = identifiers[start : start + _METAFIELDS_SET_BATCH_SIZE]
+        data = await execute_shopify_graphql(
+            shop_domain=shop_domain,
+            access_token_encrypted=access_token_encrypted,
+            query=DELETE_METAFIELDS_MUTATION,
+            variables={
+                "metafields": [
+                    {
+                        "ownerId": shopify_product_id,
+                        "namespace": identifier["namespace"],
+                        "key": identifier["key"],
+                    }
+                    for identifier in batch
+                ]
+            },
+            operation_name="delete_shopify_product_metafields",
+        )
+        response = data.get("metafieldsDelete") or {}
+        raise_for_graphql_user_errors(
+            user_errors=response.get("userErrors"),
+            operation_name="delete_shopify_product_metafields",
             shop_domain=shop_domain,
         )
 

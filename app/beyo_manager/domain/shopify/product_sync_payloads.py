@@ -4,6 +4,10 @@ from collections.abc import Mapping
 import json
 
 
+# Product sync reads and writes product metafields in this namespace only.
+METAFIELD_NAMESPACE = "custom"
+DEFAULT_CREATE_PRODUCT_STATUS = "DRAFT"
+
 _WEIGHT_UNIT_MAP = {
     "kg": "KILOGRAMS",
     "g": "GRAMS",
@@ -26,6 +30,9 @@ def build_normalized_product_sync_payload(
     product = {
         "title": _required_str(item.get("title")),
         "descriptionHtml": _clean_str(item.get("description")),
+        # Status and tags are only sent when the caller provided them, so an
+        # update never resets an existing product's status or wipes its tags.
+        # New products default to DRAFT in create_shopify_product.
         "status": _normalize_status(item.get("status")),
         "tags": _normalize_tags(item.get("tags")),
         "productType": _clean_str(item.get("product_category")),
@@ -64,11 +71,23 @@ def build_normalized_product_sync_payload(
             }
         )
 
+    metafield_keys = {metafield["key"] for metafield in metafields}
+    metafields_delete = []
+    for key in item.get("metafields_to_delete") or []:
+        cleaned_key = _clean_str(key)
+        if cleaned_key is None or cleaned_key in metafield_keys:
+            continue
+        identifier = {"namespace": METAFIELD_NAMESPACE, "key": cleaned_key}
+        if identifier not in metafields_delete:
+            metafields_delete.append(identifier)
+
     payload = {
         "product": _drop_none(product),
         "variant": _drop_none(variant),
         "metafields": metafields,
     }
+    if metafields_delete:
+        payload["metafields_delete"] = metafields_delete
     image_id = _clean_str(item.get("image_id"))
     image_url = _clean_str(item.get("image_url"))
     if image_id is not None:
@@ -102,16 +121,16 @@ def build_normalized_product_sync_payload(
     return payload
 
 
-def _normalize_status(value: object) -> str:
+def _normalize_status(value: object) -> str | None:
     status = _clean_str(value)
     if status is None:
-        return "DRAFT"
+        return None
     return status.upper()
 
 
-def _normalize_tags(value: object) -> list[str]:
+def _normalize_tags(value: object) -> list[str] | None:
     if not isinstance(value, list):
-        return []
+        return None
     normalized: list[str] = []
     for tag in value:
         cleaned = _clean_str(tag)

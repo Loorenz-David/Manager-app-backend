@@ -210,7 +210,8 @@ async def test_process_shopify_products_fans_out_to_all_active_workspace_shops_a
     assert captured["task_type"] == TaskType.SHOPIFY_PROCESS_PRODUCTS
     assert captured["payload"]["workspace_id"] == workspace.client_id
     assert captured["payload"]["requested_by_user_id"] == user.client_id
-    assert captured["payload"]["sync_item_client_ids"] == [row.client_id for row in rows]
+    # Unordered for the same reason as above: `rows` comes from a query with no ORDER BY.
+    assert sorted(captured["payload"]["sync_item_client_ids"]) == sorted(row.client_id for row in rows)
     assert captured["event_client_id"] in {event.client_id for event in events}
     assert graphql_calls["count"] == 0
 
@@ -317,3 +318,167 @@ async def test_process_shopify_products_dedupes_duplicate_target_shop_integratio
 
     assert len(rows) == 1
     assert result["target_count"] == 1
+
+
+# --- Worker product form: item link + SKU fill -------------------------------------------
+
+
+async def _seed_item(db_session, *, workspace_id: str, user_id: str, sku: str | None = None):
+    from beyo_manager.models.tables.items.item import Item
+
+    item = Item(
+        client_id=f"itm_{uuid4().hex[:10]}",
+        workspace_id=workspace_id,
+        created_by_id=user_id,
+        sku=sku,
+    )
+    db_session.add(item)
+    await db_session.flush()
+    return item
+
+
+def _patch_task_factory(monkeypatch) -> dict:
+    captured: dict = {"calls": 0}
+
+    async def _fake_create_instant_task(**kwargs):
+        captured["calls"] += 1
+        captured.update(kwargs)
+        return SimpleNamespace(client_id="task_shopify_products_item")
+
+    monkeypatch.setattr(
+        "beyo_manager.services.commands.shopify.process_shopify_products.create_instant_task",
+        _fake_create_instant_task,
+    )
+    return captured
+
+
+async def _seed_item_scenario(db_session, *, item_sku: str | None):
+    workspace, _other, user = await _seed_workspace_and_user(db_session)
+    shop = await _seed_integration(
+        db_session,
+        workspace_id=workspace.client_id,
+        user_id=user.client_id,
+        status=ShopifyIntegrationStatusEnum.ACTIVE,
+    )
+    item = await _seed_item(
+        db_session, workspace_id=workspace.client_id, user_id=user.client_id, sku=item_sku
+    )
+    await db_session.commit()
+    return workspace, user, shop, item
+
+
+def _item_request(item_client_id: str, *, sku: str | None) -> dict:
+    return {
+        "items": [
+            {
+                "client_id": item_client_id,
+                "item_client_id": item_client_id,
+                "title": "Chair",
+                "sku": sku,
+                "item_article_number": "ART-1",
+            }
+        ]
+    }
+
+
+@pytest.mark.integration
+async def test_process_fills_empty_item_sku_and_links_sync_rows_to_item(db_session, monkeypatch) -> None:
+    from beyo_manager.models.tables.items.item import Item
+
+    workspace, user, shop, item = await _seed_item_scenario(db_session, item_sku=None)
+    captured = _patch_task_factory(monkeypatch)
+
+    await process_shopify_products(
+        _ctx(
+            db_session,
+            workspace_id=workspace.client_id,
+            user_id=user.client_id,
+            incoming_data=_item_request(item.client_id, sku="SKU-NEW"),
+        )
+    )
+
+    refreshed = (
+        await db_session.execute(select(Item).where(Item.client_id == item.client_id))
+    ).scalar_one()
+    await db_session.refresh(refreshed)
+    assert refreshed.sku == "SKU-NEW"
+    rows = (
+        await db_session.execute(
+            select(ShopifyProductSyncItem).where(ShopifyProductSyncItem.workspace_id == workspace.client_id)
+        )
+    ).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].source_entity_type == "item"
+    assert rows[0].source_entity_id == item.client_id
+    assert rows[0].shop_integration_id == shop.client_id
+    assert captured["calls"] == 1
+
+
+@pytest.mark.integration
+async def test_process_never_overwrites_existing_item_sku(db_session, monkeypatch) -> None:
+    from beyo_manager.models.tables.items.item import Item
+
+    workspace, user, _shop, item = await _seed_item_scenario(db_session, item_sku="SKU-OLD")
+    captured = _patch_task_factory(monkeypatch)
+
+    await process_shopify_products(
+        _ctx(
+            db_session,
+            workspace_id=workspace.client_id,
+            user_id=user.client_id,
+            incoming_data=_item_request(item.client_id, sku="SKU-OTHER"),
+        )
+    )
+
+    refreshed = (
+        await db_session.execute(select(Item).where(Item.client_id == item.client_id))
+    ).scalar_one()
+    await db_session.refresh(refreshed)
+    assert refreshed.sku == "SKU-OLD"
+    assert captured["calls"] == 1
+
+
+@pytest.mark.integration
+async def test_process_refuses_sku_used_by_another_item_and_queues_nothing(db_session, monkeypatch) -> None:
+    from beyo_manager.errors.validation import ConflictError
+
+    workspace, user, _shop, item = await _seed_item_scenario(db_session, item_sku=None)
+    workspace_id, user_id, item_client_id = workspace.client_id, user.client_id, item.client_id
+    await _seed_item(db_session, workspace_id=workspace_id, user_id=user_id, sku="SKU-TAKEN")
+    await db_session.commit()
+    captured = _patch_task_factory(monkeypatch)
+
+    with pytest.raises(ConflictError, match="SKU-TAKEN"):
+        await process_shopify_products(
+            _ctx(
+                db_session,
+                workspace_id=workspace_id,
+                user_id=user_id,
+                incoming_data=_item_request(item_client_id, sku="SKU-TAKEN"),
+            )
+        )
+
+    assert captured["calls"] == 0
+    rows = (
+        await db_session.execute(
+            select(ShopifyProductSyncItem).where(ShopifyProductSyncItem.workspace_id == workspace_id)
+        )
+    ).scalars().all()
+    assert rows == []
+
+
+@pytest.mark.integration
+async def test_process_rejects_unknown_item(db_session, monkeypatch) -> None:
+    workspace, user, _shop, _item = await _seed_item_scenario(db_session, item_sku=None)
+    captured = _patch_task_factory(monkeypatch)
+
+    with pytest.raises(NotFound, match="Item not found"):
+        await process_shopify_products(
+            _ctx(
+                db_session,
+                workspace_id=workspace.client_id,
+                user_id=user.client_id,
+                incoming_data=_item_request("itm_missing", sku="SKU-1"),
+            )
+        )
+    assert captured["calls"] == 0

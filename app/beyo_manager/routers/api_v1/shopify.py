@@ -47,6 +47,7 @@ from beyo_manager.services.queries.shopify.lookup_shopify_customers_by_product_i
 )
 from beyo_manager.services.queries.shopify.get_shopify_metafield_preferences import get_shopify_metafield_preferences
 from beyo_manager.services.queries.shopify.get_shopify_locations import get_shopify_locations
+from beyo_manager.services.queries.shopify.get_item_shopify_product import get_item_shopify_product
 from beyo_manager.services.run_service import run_service
 
 logger = logging.getLogger(__name__)
@@ -95,7 +96,7 @@ class ShopifyProductSyncItemBody(BaseModel):
     title: str
     description: str | None = None
     status: str | None = None
-    tags: list[str] = Field(default_factory=list)
+    tags: list[str] | None = None
     product_category: str | None = None
     price: str | None = None
     weight: ShopifyProductSyncWeightBody | None = None
@@ -106,6 +107,8 @@ class ShopifyProductSyncItemBody(BaseModel):
     image_url: str | None = None
     image_alt_text: str | None = None
     metafields: dict[str, object] = Field(default_factory=dict)
+    metafields_to_delete: list[str] = Field(default_factory=list)
+    item_client_id: str | None = None
     inventory_quantities: list[ShopifyInventoryQuantityBody] = Field(default_factory=list)
     inventory_adjustments: list[ShopifyLegacyInventoryAdjustmentBody] = Field(
         default_factory=list,
@@ -383,6 +386,25 @@ async def update_shopify_metafield_preference_sequence_order_route(
                 "client_id": preference_client_id,
                 **body.model_dump(),
             },
+            session=session,
+        ),
+    )
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/products/by-item/{item_client_id}")
+async def get_item_shopify_product_route(
+    item_client_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+):
+    outcome = await run_service(
+        get_item_shopify_product,
+        ServiceContext(
+            identity=claims,
+            incoming_data={"item_client_id": item_client_id},
             session=session,
         ),
     )

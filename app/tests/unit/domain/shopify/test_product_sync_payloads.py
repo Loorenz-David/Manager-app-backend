@@ -26,7 +26,6 @@ def test_build_normalized_product_sync_payload_applies_defaults_and_nested_varia
     assert payload["product"] == {
         "title": "Chair",
         "descriptionHtml": "Soft chair",
-        "status": "DRAFT",
         "tags": ["living", "sale"],
         "productType": "Seating",
     }
@@ -149,3 +148,43 @@ def test_build_normalized_product_sync_payload_routes_inventory_to_one_shop() ->
             {"location_id": "gid://shopify/Location/2", "quantity": 0}
         ]
     }
+
+
+@pytest.mark.unit
+def test_build_normalized_product_sync_payload_omits_status_and_tags_when_not_provided() -> None:
+    # An update must not reset an existing product's status or wipe its tags;
+    # create_shopify_product applies the DRAFT default for new products.
+    payload = build_normalized_product_sync_payload(
+        {"title": "Chair", "sku": "SKU-1", "tags": None}
+    )
+
+    assert "status" not in payload["product"]
+    assert "tags" not in payload["product"]
+
+
+@pytest.mark.unit
+def test_build_normalized_product_sync_payload_keeps_explicit_empty_tags() -> None:
+    payload = build_normalized_product_sync_payload({"title": "Chair", "tags": []})
+
+    assert payload["product"]["tags"] == []
+
+
+@pytest.mark.unit
+def test_build_normalized_product_sync_payload_normalizes_metafields_to_delete() -> None:
+    payload = build_normalized_product_sync_payload(
+        {
+            "title": "Chair",
+            "metafields": {"color": "red"},
+            "metafields_to_delete": [" material ", "color", "material", ""],
+        }
+    )
+
+    # Keys also being set are never deleted; duplicates collapse.
+    assert payload["metafields_delete"] == [{"namespace": "custom", "key": "material"}]
+
+
+@pytest.mark.unit
+def test_build_normalized_product_sync_payload_has_no_delete_key_by_default() -> None:
+    payload = build_normalized_product_sync_payload({"title": "Chair"})
+
+    assert "metafields_delete" not in payload

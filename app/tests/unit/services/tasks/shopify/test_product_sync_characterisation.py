@@ -509,11 +509,20 @@ async def _assert_exact_graphql(
     monkeypatch.setattr(product_sync_client, "execute_shopify_graphql", _record_graphql)
     monkeypatch.setattr(inventory_client, "execute_shopify_graphql", _record_graphql)
 
+    async def _no_earlier_item_sync(*_args, **_kwargs):
+        # No earlier sync row for this item, so the GraphQL is the first-sync path.
+        return None
+
+    monkeypatch.setattr(orchestrator, "resolve_known_item_product", _no_earlier_item_sync)
+
     sync_item = SimpleNamespace(
         client_id="shpsi_characterisation",
         workspace_id="ws_characterisation",
         shop_integration_id="shsi_characterisation",
         frontend_client_id="frontend-characterisation",
+        sync_origin="standard_product_sync",
+        source_entity_type=None,
+        source_entity_id=None,
         created_by_id="usr_characterisation",
         normalized_payload_json=deepcopy(case.payload),
         status=ShopifyProductSyncItemStatusEnum.PENDING,

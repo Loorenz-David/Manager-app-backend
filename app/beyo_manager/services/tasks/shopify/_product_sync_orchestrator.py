@@ -11,6 +11,7 @@ from beyo_manager.domain.shopify.enums import (
     ShopifyProductSyncStageEnum,
 )
 from beyo_manager.domain.shopify.product_sync_identity import (
+    ProductSyncMatchResult,
     select_exact_variant_match,
 )
 from beyo_manager.domain.shopify.product_sync_stages import should_run_stage
@@ -25,6 +26,7 @@ from beyo_manager.models.tables.shopify.shopify_shop_integration import ShopifyS
 from beyo_manager.services.infra.shopify.product_sync_client import (
     configure_shopify_product_variant,
     create_shopify_product,
+    delete_shopify_product_metafields,
     find_product_variant_by_identity,
     set_shopify_product_metafields,
     update_shopify_product,
@@ -35,6 +37,10 @@ from beyo_manager.services.infra.shopify.inventory_client import (
     fetch_inventory_set_locations,
     resolve_inventory_item_state,
     set_inventory_quantities,
+)
+from beyo_manager.services.queries.shopify._resolve_item_shopify_product import (
+    item_client_id_for_sync_row,
+    resolve_known_item_product,
 )
 from beyo_manager.services.tasks.shopify._product_media_resolver import resolve_product_media
 
@@ -82,7 +88,26 @@ async def sync_one_product_sync_item(
             ShopifyProductSyncStageEnum.PRODUCT_CREATED,
         ):
             media = await resolve_product_media(session, normalized_payload=payload)
-            if barcode is not None:
+            # 1) A product this item was already synced to wins, so items with
+            #    no article number update instead of duplicating.
+            item_client_id = item_client_id_for_sync_row(sync_item)
+            if item_client_id is not None:
+                known = await resolve_known_item_product(
+                    session,
+                    workspace_id=sync_item.workspace_id,
+                    item_client_id=item_client_id,
+                    shop=shop,
+                    exclude_sync_item_id=sync_item.client_id,
+                )
+                if known is not None:
+                    match = ProductSyncMatchResult(
+                        found=True,
+                        shopify_product_id=known["shopify_product_id"],
+                        shopify_variant_id=known["shopify_variant_id"],
+                        shopify_inventory_item_id=known.get("shopify_inventory_item_id"),
+                    )
+            # 2) Otherwise an exact barcode (article number) match; 3) else create.
+            if match is None and barcode is not None:
                 barcode_nodes = await find_product_variant_by_identity(
                     shop_domain=shop.shop_domain,
                     access_token_encrypted=shop.access_token_encrypted,
@@ -193,6 +218,17 @@ async def sync_one_product_sync_item(
                 access_token_encrypted=shop.access_token_encrypted,
                 shopify_product_id=result["shopify_product_id"],
                 metafields=payload["metafields"],
+            )
+
+        if (
+            payload.get("metafields_delete")
+            and sync_item.requested_operation == ShopifyProductSyncOperationEnum.UPDATE
+        ):
+            await delete_shopify_product_metafields(
+                shop_domain=shop.shop_domain,
+                access_token_encrypted=shop.access_token_encrypted,
+                shopify_product_id=result["shopify_product_id"],
+                identifiers=payload["metafields_delete"],
             )
 
         sync_item.status = ShopifyProductSyncItemStatusEnum.SUCCEEDED

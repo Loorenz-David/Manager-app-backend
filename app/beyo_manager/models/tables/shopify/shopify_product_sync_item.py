@@ -30,6 +30,13 @@ class ShopifyProductSyncItem(IdentityMixin, Base):
         Index("ix_shopify_product_sync_items_workspace_status", "workspace_id", "status"),
         Index("ix_shopify_product_sync_items_shop_integration_status", "shop_integration_id", "status"),
         Index("ix_shopify_product_sync_items_workspace_origin", "workspace_id", "sync_origin"),
+        Index(
+            "ix_shopify_product_sync_items_source_entity_shop",
+            "workspace_id",
+            "source_entity_type",
+            "source_entity_id",
+            "shop_integration_id",
+        ),
     )
 
     workspace_id: Mapped[str] = mapped_column(

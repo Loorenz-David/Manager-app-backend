@@ -84,7 +84,8 @@ class ProcessShopifyProductItemRequest(BaseModel):
     title: str
     description: str | None = None
     status: str | None = None
-    tags: list[str] = Field(default_factory=list)
+    # None means "not provided": updates then leave the product's tags as they are.
+    tags: list[str] | None = None
     product_category: str | None = None
     price: str | None = None
     weight: WeightRequest | None = None
@@ -95,11 +96,17 @@ class ProcessShopifyProductItemRequest(BaseModel):
     image_url: str | None = None
     image_alt_text: str | None = None
     metafields: dict[str, object] = Field(default_factory=dict)
+    # Keys of metafields to remove from an existing product (update only).
+    metafields_to_delete: list[str] = Field(default_factory=list)
+    # ManagerBeyo item this product belongs to. Links sync rows to the item so
+    # later syncs update the same Shopify product, and fills an empty item SKU.
+    item_client_id: str | None = None
     inventory_quantities: list[InventoryQuantityRequest] = Field(default_factory=list)
     inventory_adjustments: list[LegacyInventoryAdjustmentRequest] = Field(default_factory=list)
 
     @field_validator(
         "client_id",
+        "item_client_id",
         "title",
         "description",
         "status",
@@ -124,9 +131,9 @@ class ProcessShopifyProductItemRequest(BaseModel):
 
     @field_validator("tags", mode="before")
     @classmethod
-    def _normalize_tags(cls, value: object) -> list[str]:
+    def _normalize_tags(cls, value: object) -> list[str] | None:
         if value is None:
-            return []
+            return None
         if not isinstance(value, list):
             raise ValueError("Input should be a valid list")
         normalized: list[str] = []
@@ -135,6 +142,22 @@ class ProcessShopifyProductItemRequest(BaseModel):
                 raise ValueError("tags entries must be strings")
             stripped = tag.strip()
             if stripped:
+                normalized.append(stripped)
+        return normalized
+
+    @field_validator("metafields_to_delete", mode="before")
+    @classmethod
+    def _normalize_metafields_to_delete(cls, value: object) -> list[str]:
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValueError("Input should be a valid list")
+        normalized: list[str] = []
+        for key in value:
+            if not isinstance(key, str):
+                raise ValueError("metafields_to_delete entries must be strings")
+            stripped = key.strip()
+            if stripped and stripped not in normalized:
                 normalized.append(stripped)
         return normalized
 
@@ -165,6 +188,11 @@ class ProcessShopifyProductItemRequest(BaseModel):
         ):
             raise ValueError(
                 "article_number and item_article_number must match when both are provided."
+            )
+        overlapping_keys = set(self.metafields_to_delete) & set(self.metafields)
+        if overlapping_keys:
+            raise ValueError(
+                "metafields_to_delete cannot contain keys that are also being set."
             )
         if self.target_shop_integration_ids == []:
             raise ValueError("target_shop_integration_ids cannot be empty when provided.")

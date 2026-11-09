@@ -16,6 +16,7 @@ from beyo_manager.domain.shopify.enums import (
 )
 from beyo_manager.models.tables.shopify.shopify_product_sync_item import ShopifyProductSyncItem
 from beyo_manager.models.tables.images.image import Image
+from beyo_manager.models.tables.items.item import Item
 from beyo_manager.services.commands.shopify._events import create_shopify_integration_event
 from beyo_manager.services.commands.shopify._product_sync_normalizer import resolve_and_normalize_sync_targets
 from beyo_manager.services.commands.shopify.requests.process_shopify_products_request import (
@@ -23,10 +24,13 @@ from beyo_manager.services.commands.shopify.requests.process_shopify_products_re
     parse_process_shopify_products_request,
 )
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.shopify._resolve_item_shopify_product import (
+    ITEM_SOURCE_ENTITY_TYPE,
+)
 from beyo_manager.services.infra.execution.task_factory import create_instant_task
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.errors.not_found import NotFound
-from beyo_manager.errors.validation import ValidationError
+from beyo_manager.errors.validation import ConflictError, ValidationError
 
 
 _MAX_SHOPIFY_IMAGE_BYTES = 20 * 1024 * 1024
@@ -47,11 +51,64 @@ async def process_shopify_products(ctx: ServiceContext) -> dict:
             legacy_item_count,
         )
     request = parse_process_shopify_products_request(ctx.incoming_data)
-    return await enqueue_shopify_product_sync(
-        ctx,
-        request=request,
-        sync_origin=ShopifyProductSyncOriginEnum.STANDARD_PRODUCT_SYNC,
-    )
+    async with maybe_begin(ctx.session):
+        # Same transaction as the enqueue: a SKU conflict queues nothing, and a
+        # failed enqueue leaves the item's SKU untouched.
+        await _fill_empty_item_skus(ctx, request)
+        return await enqueue_shopify_product_sync(
+            ctx,
+            request=request,
+            sync_origin=ShopifyProductSyncOriginEnum.STANDARD_PRODUCT_SYNC,
+        )
+
+
+async def _fill_empty_item_skus(
+    ctx: ServiceContext,
+    request: ProcessShopifyProductsRequest,
+) -> None:
+    """Copy the form SKU onto linked items that have no SKU yet.
+
+    An item that already has a SKU is never overwritten. The SKU must be unique
+    among the workspace's live items (partial index uix_items_workspace_sku), so
+    a clash is refused here rather than surfacing as a 500 at flush.
+    """
+    sku_by_item: dict[str, str | None] = {}
+    for item_request in request.items:
+        if item_request.item_client_id is None:
+            continue
+        previous = sku_by_item.get(item_request.item_client_id)
+        if previous is not None and item_request.sku not in (None, previous):
+            raise ValidationError("All entries for one item must use the same SKU.")
+        sku_by_item[item_request.item_client_id] = previous or item_request.sku
+
+    for item_client_id, sku in sku_by_item.items():
+        item = (
+            await ctx.session.execute(
+                select(Item)
+                .where(
+                    Item.workspace_id == ctx.workspace_id,
+                    Item.client_id == item_client_id,
+                    Item.is_deleted.is_(False),
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if item is None:
+            raise NotFound("Item not found.")
+        if sku is None or item.sku is not None:
+            continue
+        taken = await ctx.session.scalar(
+            select(Item.client_id).where(
+                Item.workspace_id == ctx.workspace_id,
+                Item.sku == sku,
+                Item.client_id != item.client_id,
+                Item.is_deleted.is_(False),
+            )
+        )
+        if taken is not None:
+            raise ConflictError(f"SKU '{sku}' is already used by another item.")
+        item.sku = sku
+    await ctx.session.flush()
 
 
 async def enqueue_shopify_product_sync(
@@ -78,8 +135,12 @@ async def enqueue_shopify_product_sync(
                 frontend_client_id=item.client_id,
                 status=ShopifyProductSyncItemStatusEnum.PENDING,
                 sync_origin=sync_origin.value,
-                source_entity_type=source_entity_type,
-                source_entity_id=source_entity_id,
+                # A request item linked to a ManagerBeyo item records that link,
+                # so later syncs and the by-item read find the same product.
+                source_entity_type=(
+                    ITEM_SOURCE_ENTITY_TYPE if item.item_client_id else source_entity_type
+                ),
+                source_entity_id=item.item_client_id or source_entity_id,
                 # Retained for one compatibility release. Runtime execution is
                 # absolute regardless of this legacy column.
                 inventory_mode=ShopifyInventoryModeEnum.SET,

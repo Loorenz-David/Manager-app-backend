@@ -1,6 +1,6 @@
 """API routes that use stored credentials respect OUTBOUND_INTEGRATIONS_ENABLED.
 
-The five services behind these routes sign in to a stored mailbox or call a Shopify
+The six services behind these routes sign in to a stored mailbox or call a Shopify
 shop with its stored token, from the request path rather than a task. With outbound
 integrations disabled (staging, local) they refuse before touching the database, the
 credentials or the network. Enabled (production), they behave exactly as before.
@@ -26,6 +26,7 @@ from beyo_manager.services.commands.emails.test_email_connection import (
 from beyo_manager.services.commands.shopify.create_shopify_metafield_preferences import (
     create_shopify_metafield_preferences,
 )
+from beyo_manager.services.queries.shopify.get_item_shopify_product import get_item_shopify_product
 from beyo_manager.services.queries.shopify.get_shopify_locations import get_shopify_locations
 from beyo_manager.services.queries.shopify.get_shopify_metafield_preferences import (
     get_shopify_metafield_preferences,
@@ -42,6 +43,7 @@ GUARDED = {
     "GET /api/v1/integrations/shopify/metafield-preferences": get_shopify_metafield_preferences,
     "POST /api/v1/integrations/shopify/metafield-preferences": create_shopify_metafield_preferences,
     "POST /api/v1/integrations/shopify/customers/by-product-identity": lookup_shopify_customers_by_product_identity,
+    "GET /api/v1/integrations/shopify/products/by-item/{item_client_id}": get_item_shopify_product,
 }
 
 
@@ -106,6 +108,7 @@ def _enabled_ctx(**overrides) -> SimpleNamespace:
         ("GET /api/v1/integrations/shopify/metafield-preferences", {}, ValidationError),
         ("POST /api/v1/integrations/shopify/metafield-preferences", {}, ValidationError),
         ("POST /api/v1/integrations/shopify/customers/by-product-identity", {}, ValidationError),
+        ("GET /api/v1/integrations/shopify/products/by-item/{item_client_id}", {}, ValidationError),
     ],
 )
 async def test_enabled_keeps_the_existing_behaviour(route, ctx_overrides, existing_refusal, outbound_enabled):
