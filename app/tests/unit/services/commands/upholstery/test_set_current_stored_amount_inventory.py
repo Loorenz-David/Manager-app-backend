@@ -22,6 +22,7 @@ from beyo_manager.services.context import ServiceContext
 
 def _requirement(item_upholstery_id: str, amount: str, *, created_at: datetime) -> SimpleNamespace:
     return SimpleNamespace(
+        client_id=f"iur_{item_upholstery_id}",
         item_upholstery_id=item_upholstery_id,
         amount_meters=Decimal(amount),
         state=ItemUpholsteryRequirementStateEnum.AVAILABLE,
@@ -52,6 +53,7 @@ class _Session:
         self.inventory = inventory
         self.flush_calls = 0
         self.execute_calls = 0
+        self.info: dict = {}
 
     def begin(self):
         return _Begin()
@@ -62,6 +64,29 @@ class _Session:
 
     async def flush(self):
         self.flush_calls += 1
+
+
+@pytest.fixture(autouse=True)
+def _stub_inventory_ledger(monkeypatch):
+    """The ledger writes need a real session; its behaviour is covered by
+    tests/integration/services/commands/upholstery/test_inventory_history_integration.py.
+    Here the stored-amount write keeps its real arithmetic and condition evaluation."""
+    from types import SimpleNamespace
+
+    from beyo_manager.services.commands.upholstery import _inventory_mutations
+
+    module = "beyo_manager.services.commands.upholstery.set_current_stored_amount_inventory"
+
+    async def _set_stored_amount(_session, inv, new_amount, *, movement):
+        inv.current_stored_amount_meters = new_amount
+        _inventory_mutations._reevaluate_condition(inv)
+        return SimpleNamespace(details=None)
+
+    async def _record_transitions(*_args, **_kwargs):
+        return []
+
+    monkeypatch.setattr(f"{module}.set_stored_amount", _set_stored_amount)
+    monkeypatch.setattr(f"{module}.record_requirement_transitions", _record_transitions)
 
 
 def _ctx(session: _Session, *, stored: str) -> ServiceContext:

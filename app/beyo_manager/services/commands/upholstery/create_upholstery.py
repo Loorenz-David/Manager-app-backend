@@ -3,6 +3,11 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
+from beyo_manager.services.commands.upholstery._inventory_history import (
+    InventoryMovementContext,
+    record_inventory_created,
+)
 from beyo_manager.domain.upholstery.condition_evaluation import evaluate_inventory_condition
 from beyo_manager.domain.upholstery.serializers import serialize_upholstery
 from beyo_manager.errors.not_found import NotFound
@@ -251,6 +256,13 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
             created_by_id=ctx.user_id,
         )
         ctx.session.add(inventory)
+        await record_inventory_created(
+            ctx.session,
+            inventory,
+            movement=InventoryMovementContext.from_service(
+                ctx, InventoryMovementTriggerEnum.UPHOLSTERY_CREATED
+            ),
+        )
 
         if request.supplier_name is not None:
             supplier_result = await ctx.session.execute(

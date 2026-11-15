@@ -35,6 +35,8 @@ from beyo_manager.models.tables.workspaces.workspace import Workspace
 from beyo_manager.services.commands.items.cancel_upholstery_requirements import (
     cancel_unfinished_item_requirements_in_session,
 )
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
+from beyo_manager.services.commands.upholstery._inventory_history import InventoryMovementContext
 from beyo_manager.services.commands.items.update_and_delete_item_upholstery import (
     update_item_upholstery,
 )
@@ -515,6 +517,9 @@ async def test_cancellation_service_handles_all_unfinished_states(
         workspace_id=workspace.client_id,
         item_ids=[graph[1].client_id for graph in graphs.values()],
         actor_id=user.client_id,
+        movement=InventoryMovementContext.system(
+            db_session, InventoryMovementTriggerEnum.MAINTENANCE_SCRIPT, actor_id=user.client_id
+        ),
     )
 
     assert {row.previous_state for row in cancelled} == {

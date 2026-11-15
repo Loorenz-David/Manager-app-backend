@@ -17,6 +17,8 @@ from beyo_manager.services.commands.items.requests import parse_mark_completed_r
 from beyo_manager.services.commands.items.update_and_delete_item_upholstery import (
     ensure_requirement_actions_are_available,
 )
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
+from beyo_manager.services.commands.upholstery._inventory_history import InventoryMovementContext
 from beyo_manager.services.commands.upholstery._inventory_mutations import (
     complete_available_direct,
     finish_in_use,
@@ -64,7 +66,13 @@ async def mark_requirements_completed(ctx: ServiceContext) -> dict:
             )
 
         now = datetime.now(timezone.utc)
+        movement = InventoryMovementContext.from_service(
+            ctx, InventoryMovementTriggerEnum.REQUIREMENT_MARKED_COMPLETED
+        )
         for req in requirements:
+            req_movement = movement.for_requirement(
+                req, to_state=ItemUpholsteryRequirementStateEnum.COMPLETED
+            )
             if req.state == ItemUpholsteryRequirementStateEnum.IN_USE:
                 if req.upholstery_inventory_id is not None:
                     await finish_in_use(
@@ -73,6 +81,7 @@ async def mark_requirements_completed(ctx: ServiceContext) -> dict:
                         upholstery_inventory_id=req.upholstery_inventory_id,
                         quantity=req.amount_meters,
                         source=req.source,
+                        movement=req_movement,
                     )
             elif req.state == ItemUpholsteryRequirementStateEnum.AVAILABLE:
                 if req.upholstery_inventory_id is not None:
@@ -82,6 +91,7 @@ async def mark_requirements_completed(ctx: ServiceContext) -> dict:
                         upholstery_inventory_id=req.upholstery_inventory_id,
                         quantity=req.amount_meters,
                         source=req.source,
+                        movement=req_movement,
                     )
             req.state = ItemUpholsteryRequirementStateEnum.COMPLETED
             req.completed_at = now

@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import load_only
 
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
+from beyo_manager.services.commands.upholstery._inventory_history import InventoryMovementContext
 from beyo_manager.domain.items.enums import ItemUpholsterySourceEnum
 from beyo_manager.domain.items.location_push import needs_fixing_for_task_type
 from beyo_manager.domain.items.upholstery_selection import should_defer_requirement_creation
@@ -440,6 +442,9 @@ async def create_task(ctx: ServiceContext) -> dict:
                 ctx,
                 item_id=item_id,
                 data=request.item_upholstery.model_dump(exclude_unset=True),
+                movement=InventoryMovementContext.from_service(
+                    ctx, InventoryMovementTriggerEnum.TASK_CREATED, task_id=task.client_id
+                ),
             )
 
         created_steps: list[TaskStep] = []

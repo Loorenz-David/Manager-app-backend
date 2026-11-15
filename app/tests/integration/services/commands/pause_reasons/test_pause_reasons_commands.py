@@ -180,7 +180,7 @@ async def test_seed_pause_reason_links_assigns_requested_workers_and_is_idempote
 ):
     workspace, _ = await _seed_identity(db_session)
     workers = {}
-    for worker_name in ("Vitalii", "Nazar", "Roman"):
+    for worker_name in ("Vitalii", "Nazar", "Roman", "Andrii", "Feruza"):
         worker = User(
             client_id=f"usr_{worker_name.lower()}_{uuid4().hex[:8]}",
             username=worker_name,
@@ -232,6 +232,16 @@ async def test_seed_pause_reason_links_assigns_requested_workers_and_is_idempote
     }
     assert links_by_reason[pause_reason_ids["pause_searching_upholstery"]] == {
         workers["Roman"]
+    }
+    assert links_by_reason[pause_reason_ids["pause_organize_space"]] == {
+        workers["Andrii"]
+    }
+    assert links_by_reason[pause_reason_ids["pause_assembling_clamp"]] == {
+        workers["Andrii"]
+    }
+    assert links_by_reason[pause_reason_ids["waiting_for_upholstery"]] == {
+        workers["Roman"],
+        workers["Feruza"],
     }
     assert pause_reason_ids["pause_workspace_cleaning"] not in links_by_reason
 

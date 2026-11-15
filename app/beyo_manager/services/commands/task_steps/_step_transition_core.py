@@ -36,6 +36,8 @@ from datetime import datetime
 
 from sqlalchemy import select
 
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
+from beyo_manager.services.commands.upholstery._inventory_history import InventoryMovementContext
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.step_transition import StepTransitionPayload
 from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES, TIME_BEARING_STATES
@@ -281,6 +283,12 @@ async def _apply_step_transition(
         new_state=new_state,
         actor_id=ctx.user_id,
         now=now,
+        movement=InventoryMovementContext.from_service(
+            ctx,
+            InventoryMovementTriggerEnum.STEP_TRANSITION,
+            task_id=task.client_id,
+            task_step_id=step.client_id,
+        ),
     )
 
     # Per-step outbox event for analytics worker (atomic with domain write)

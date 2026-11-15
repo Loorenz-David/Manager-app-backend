@@ -22,3 +22,22 @@ def serialize_history_record_with_link(record, link) -> dict:
         "entity_type": _value(link.entity_type),
         "entity_client_id": link.entity_client_id,
     }
+
+
+def serialize_record_actor(user, created_by_id: str | None, username_snapshot: str | None = None) -> dict | None:
+    """Actor shape shared by timeline-style endpoints (task flow records, inventory history):
+    ``{client_id, username, profile_picture}``; falls back to the username snapshot when the
+    user row is gone, and is ``None`` for system-written records."""
+    if created_by_id is None:
+        return None
+    if user is not None:
+        return {
+            "client_id": user.client_id,
+            "username": user.username,
+            "profile_picture": user.profile_picture,
+        }
+    return {
+        "client_id": created_by_id,
+        "username": username_snapshot,
+        "profile_picture": None,
+    }

@@ -43,6 +43,7 @@ from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
 from beyo_manager.models.tables.items.item_upholstery_requirement import ItemUpholsteryRequirement
 from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_step import TaskStep
+from beyo_manager.services.commands.upholstery._inventory_history import InventoryMovementContext
 from beyo_manager.services.commands.upholstery._inventory_mutations import (
     complete_available_direct,
     consume_to_in_use,
@@ -67,7 +68,10 @@ async def apply_upholstery_installation_side_effect(
     new_state: TaskStepStateEnum,
     actor_id: str,
     now: datetime,
+    movement: InventoryMovementContext,
 ) -> list[WorkspaceEvent]:
+    """``movement`` names the caller (step transition / forced ready / script) on the
+    inventory ledger rows; it should already carry ``task_id`` and ``task_step_id``."""
     if new_state not in (TaskStepStateEnum.WORKING, TaskStepStateEnum.COMPLETED):
         return []
     section_name = (step.working_section_name_snapshot or "").strip().lower()
@@ -114,6 +118,11 @@ async def apply_upholstery_installation_side_effect(
             target_state=target_state,
             actor_id=actor_id,
             now=now,
+            movement=movement.with_refs(
+                task_id=movement.task_id or task_id,
+                task_step_id=movement.task_step_id or step.client_id,
+                item_id=primary_task_item.item_id,
+            ),
         )
         if changed:
             events.append(
@@ -135,6 +144,7 @@ async def _promote_requirements(
     target_state: ItemUpholsteryRequirementStateEnum,
     actor_id: str,
     now: datetime,
+    movement: InventoryMovementContext,
 ) -> bool:
     source_states = (
         _PROMOTABLE_TO_IN_USE
@@ -156,7 +166,13 @@ async def _promote_requirements(
 
     for req in requirements:
         if req.upholstery_inventory_id is not None:
-            await _apply_inventory_mutation(session, req, target_state, workspace_id)
+            await _apply_inventory_mutation(
+                session,
+                req,
+                target_state,
+                workspace_id,
+                movement=movement.for_requirement(req, to_state=target_state),
+            )
         req.state = target_state
         req.updated_by_id = actor_id
         if target_state == ItemUpholsteryRequirementStateEnum.IN_USE:
@@ -171,6 +187,8 @@ async def _apply_inventory_mutation(
     req: ItemUpholsteryRequirement,
     target_state: ItemUpholsteryRequirementStateEnum,
     workspace_id: str,
+    *,
+    movement: InventoryMovementContext,
 ) -> None:
     if target_state == ItemUpholsteryRequirementStateEnum.IN_USE:
         await consume_to_in_use(
@@ -178,6 +196,7 @@ async def _apply_inventory_mutation(
             workspace_id=workspace_id,
             upholstery_inventory_id=req.upholstery_inventory_id,
             quantity=req.amount_meters,
+            movement=movement,
         )
         return
 
@@ -188,6 +207,7 @@ async def _apply_inventory_mutation(
             upholstery_inventory_id=req.upholstery_inventory_id,
             quantity=req.amount_meters,
             source=req.source,
+            movement=movement,
         )
     else:
         await complete_available_direct(
@@ -196,4 +216,5 @@ async def _apply_inventory_mutation(
             upholstery_inventory_id=req.upholstery_inventory_id,
             quantity=req.amount_meters,
             source=req.source,
+            movement=movement,
         )

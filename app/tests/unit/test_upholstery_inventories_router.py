@@ -85,3 +85,44 @@ async def test_route_list_upholstery_inventories_passes_filter_query_params(monk
         "favorite": True,
         "in_stock": False,
     }
+
+
+@pytest.mark.unit
+async def test_route_get_upholstery_inventory_history_passes_cursor_and_limit(monkeypatch):
+    captured = {}
+
+    async def _fake_run_service(command, ctx):
+        captured["command"] = command
+        captured["ctx"] = ctx
+        return SimpleNamespace(success=True, data={"records": []}, error=None)
+
+    monkeypatch.setattr(upholstery_inventories_router, "run_service", _fake_run_service)
+
+    result = await upholstery_inventories_router.route_get_upholstery_inventory_history(
+        client_id="uin_123",
+        claims={"user_id": "usr_1", "role_name": "worker"},
+        session=object(),
+        limit=5,
+        cursor="abc",
+    )
+
+    assert result.status_code == 200
+    assert json.loads(result.body)["data"] == {"records": []}
+    assert captured["command"] is upholstery_inventories_router.get_upholstery_inventory_history
+    assert captured["ctx"].incoming_data == {"client_id": "uin_123"}
+    assert captured["ctx"].query_params == {"limit": 5, "cursor": "abc"}
+
+
+@pytest.mark.unit
+async def test_route_get_upholstery_inventory_history_allows_same_roles_as_detail() -> None:
+    def _dependency(endpoint):
+        route = next(
+            r for r in upholstery_inventories_router.router.routes if getattr(r, "endpoint", None) is endpoint
+        )
+        return route.dependant.dependencies[0].call
+
+    history_dep = _dependency(upholstery_inventories_router.route_get_upholstery_inventory_history)
+    for role in ("admin", "manager", "worker"):
+        assert await history_dep({"role_name": role, "user_id": "usr_1"})
+    with pytest.raises(HTTPException):
+        await history_dep({"role_name": "seller", "user_id": "usr_1"})

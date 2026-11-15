@@ -29,12 +29,26 @@ class _Begin:
         return False
 
 
+@pytest.fixture(autouse=True)
+def _stub_inventory_ledger(monkeypatch):
+    """Recording inventory creation needs a real session; covered by the ledger integration tests."""
+
+    async def _record_inventory_created(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(
+        "beyo_manager.services.commands.upholstery.create_upholstery.record_inventory_created",
+        _record_inventory_created,
+    )
+
+
 class _Session:
     def __init__(self, *, get_results: list[Any] | None = None, execute_results: list[Any] | None = None):
         self.get_results = list(get_results or [])
         self.execute_results = list(execute_results or [])
         self.added: list[Any] = []
         self.flush_calls = 0
+        self.info: dict = {}
 
     def begin(self):
         return _Begin()

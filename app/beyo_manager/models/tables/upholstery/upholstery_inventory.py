@@ -62,7 +62,21 @@ class UpholsteryInventory(IdentityMixin, Base):
     total_upholstery_used_surplus_meters: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
     total_upholstery_surplus_meters: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
     low_stock_threshold_meters: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
-    latest_projection_history_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Pointer to the newest upholstery_inventory_history_records row. Updated in the same
+    # transaction as the ledger append (see services/commands/upholstery/_inventory_history.py).
+    # Deferred: the ledger row and this pointer are written in one flush.
+    latest_projection_history_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey(
+            "upholstery_inventory_history_records.client_id",
+            use_alter=True,
+            name="fk_upholstery_inventory_latest_projection_history",
+            ondelete="SET NULL",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )

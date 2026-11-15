@@ -6,6 +6,7 @@
 |---|---|---|---|
 | `upholstery.py` | `upholsteries` | `uph` | Workspace-scoped upholstery catalog registry |
 | `upholstery_inventory.py` | `upholstery_inventory` | `uin` | Planning/projection-oriented inventory state per upholstery |
+| `upholstery_inventory_history_record.py` | `upholstery_inventory_history_records` | `uih` | Append-only ledger of every inventory movement (the projection's history) |
 | `upholstery_inventory_threshold_policy.py` | `upholstery_inventory_threshold_policies` | `utp` | Workspace-scoped inventory warning and escalation policies |
 
 ---
@@ -43,7 +44,19 @@ If these values diverge from append-only history reconstruction, **append-only l
 A synthesized operational visibility projection (`AVAILABLE`, `LOW_STOCK`, `OUT_OF_STOCK`). Derived deterministically from projected quantity, demand, and threshold-policy evaluation. Prefer domain-derived deterministic projection over arbitrary manual mutation. Precedence: `OUT_OF_STOCK` overrides `LOW_STOCK` when both conditions are satisfied.
 
 ### `latest_projection_history_id`
-Plain `String(64)`, **no FK constraint** in this phase — `upholstery_inventory_history_records` table is deferred. A future migration will add the FK when that table is introduced.
+FK → `upholstery_inventory_history_records.client_id` (`use_alter`, `DEFERRABLE INITIALLY DEFERRED`, `ON DELETE SET NULL`). Points at the newest ledger row and is advanced in the same flush as the ledger append.
+
+---
+
+## `upholstery_inventory_history_records` — key rules
+
+- **Append-only, one writer.** Rows are written only by `services/commands/upholstery/_inventory_history.py`, called from the helpers in `_inventory_mutations.py` (every quantity write goes through them; each takes a required `movement: InventoryMovementContext`). Exceptions: the migration baseline (`opening_balance`) and `scripts/backfill/backfill_upholstery_inventory_history.py` (`is_reconstructed = true`). `tests/unit/services/commands/upholstery/test_inventory_mutation_choke_point_guard.py` enforces that no other code assigns a quantity column or skips `movement=`.
+- **Snapshots.** Each movement stores `before_*` / `after_*` for all eight quantity buckets; `previous_record_id` chains it to the inventory's previous latest row. `before` ≠ previous `after` (a *chain break*) or current totals ≠ latest `after` (*drift*) means the totals changed outside the recorded paths.
+- **Nesting.** Requirement state changes caused by a movement (allocation promotions/demotions) are child rows (`parent_record_id`, `requirement_state_changed`, no snapshot, no chain advance). State-only commands write a zero-delta `allocation_run` parent.
+- **Soft references.** `requirement_id`, `item_upholstery_id`, `item_id`, `task_id`, `task_step_id`, `upholstery_order_id` carry no FK (the requirement may be inserted after its ledger row; the ledger outlives deletes).
+- **`movement_type`** is a Postgres enum (new values need `ALTER TYPE … ADD VALUE`); **`trigger`** is a plain string backed by `InventoryMovementTriggerEnum`, so new command origins need no migration.
+- **Anomalies.** `in_need_clamped_at_zero` marks a movement whose need reduction hit the 0 floor (the projection already held less need than the requirement accounted for).
+- Read via `GET /api/v1/upholstery-inventories/{client_id}/history`.
 
 ### `projected_inventory_value_minor` / `currency`
 Operational planning/reference valuation only. Not authoritative accounting truth. Currency represents the current planning context, not procurement costing truth.
@@ -81,7 +94,6 @@ Threshold-policy evaluation must remain deterministic and replay-compatible. Ide
 
 ## Deferred
 
-- `upholstery_inventory_history_records` (history/audit table; FK on `latest_projection_history_id` is deferred)
 - Warehouse movement logs, reservation/lock engines
 - Warehouse-specific and location-specific threshold segmentation
 - `upholstery_supplier_links` and procurement order lifecycle

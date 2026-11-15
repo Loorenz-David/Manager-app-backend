@@ -5,12 +5,22 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.items.enums import ItemUpholsteryRequirementStateEnum
-from beyo_manager.domain.upholstery.condition_evaluation import evaluate_inventory_condition
-from beyo_manager.errors.not_found import NotFound
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
 from beyo_manager.models.tables.items.item_upholstery_requirement import ItemUpholsteryRequirement
 from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
+from beyo_manager.services.commands.upholstery._inventory_history import (
+    InventoryMovementContext,
+    RequirementStateTracker,
+    allocation_details,
+    record_requirement_transitions,
+)
+from beyo_manager.services.commands.upholstery._inventory_mutations import (
+    load_inventory_for_update,
+    set_stored_amount,
+)
 from beyo_manager.services.commands.upholstery._pooled_requirement_allocation import (
     allocate_pooled_requirements,
+    calculate_pooled_requirement_pool,
     fetch_earliest_ready_by_at,
 )
 from beyo_manager.services.commands.upholstery.requests import (
@@ -28,25 +38,21 @@ async def set_current_stored_amount_inventory(ctx: ServiceContext) -> dict:
     demoted_ids: list[str] = []
 
     async with ctx.session.begin():
-        inv_result = await ctx.session.execute(
-            select(UpholsteryInventory).where(
-                UpholsteryInventory.workspace_id == ctx.workspace_id,
-                UpholsteryInventory.client_id == request.client_id,
-                UpholsteryInventory.is_deleted.is_(False),
-            )
+        inventory = await load_inventory_for_update(
+            ctx.session, ctx.workspace_id, request.client_id
         )
-        inventory = inv_result.scalar_one_or_none()
-        if inventory is None:
-            raise NotFound("UpholsteryInventory not found.")
 
         if request.current_stored_amount_meters == inventory.current_stored_amount_meters:
             return {}
 
-        inventory.current_stored_amount_meters = request.current_stored_amount_meters
-        inventory.inventory_condition = evaluate_inventory_condition(
-            inventory.current_stored_amount_meters,
-            inventory.current_amount_in_need_meters,
-            inventory.low_stock_threshold_meters,
+        movement = InventoryMovementContext.from_service(
+            ctx, InventoryMovementTriggerEnum.MANUAL_STORED_SET
+        )
+        stored_record = await set_stored_amount(
+            ctx.session,
+            inventory,
+            request.current_stored_amount_meters,
+            movement=movement,
         )
 
         available_candidates = await _load_requirement_candidates(
@@ -75,6 +81,10 @@ async def set_current_stored_amount_inventory(ctx: ServiceContext) -> dict:
             ),
         )
 
+        # Diff requirement states across demotion + promotion; a requirement demoted and then
+        # re-promoted in this same command nets to "no change" and records no child row.
+        tracker = RequirementStateTracker.capture(available_candidates + forward_seed_candidates)
+
         demoted_ids = _demote_available_requirements(
             candidates=available_candidates,
             new_stored_amount_meters=request.current_stored_amount_meters,
@@ -97,6 +107,26 @@ async def set_current_stored_amount_inventory(ctx: ServiceContext) -> dict:
             candidates=forward_candidates,
             ready_by_at_map=ready_by_at_map,
             actor_id=ctx.user_id,
+        )
+
+        touched = list(available_candidates) + list(forward_seed_candidates) + list(forward_candidates)
+        await record_requirement_transitions(
+            ctx.session,
+            parent=stored_record,
+            transitions=tracker.transitions(touched),
+            movement=movement,
+        )
+        stored_record.details = allocation_details(
+            pool_meters=calculate_pooled_requirement_pool(inventory, list(forward_candidates), "stored"),
+            resolved=[
+                r for r in forward_candidates
+                if r.state == ItemUpholsteryRequirementStateEnum.AVAILABLE
+            ],
+            unresolved=[
+                r for r in forward_candidates
+                if r.state != ItemUpholsteryRequirementStateEnum.AVAILABLE
+            ],
+            target_state=ItemUpholsteryRequirementStateEnum.AVAILABLE,
         )
 
         now = datetime.now(timezone.utc)

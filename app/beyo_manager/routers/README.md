@@ -134,6 +134,7 @@
 | PUT | /api/v1/upholstery-inventories | upholstery-inventories | route_create_upholstery_inventory_api_v1_upholstery_inventories_put |
 | DELETE | /api/v1/upholstery-inventories/{client_id} | upholstery-inventories | route_delete_upholstery_inventory_api_v1_upholstery_inventories__client_id__delete |
 | GET | /api/v1/upholstery-inventories/{client_id} | upholstery-inventories | route_get_upholstery_inventory_api_v1_upholstery_inventories__client_id__get |
+| GET | /api/v1/upholstery-inventories/{client_id}/history | upholstery-inventories | route_get_upholstery_inventory_history_api_v1_upholstery_inventories__client_id__history_get |
 | PATCH | /api/v1/upholstery-inventories/{client_id} | upholstery-inventories | route_update_upholstery_inventory_api_v1_upholstery_inventories__client_id__patch |
 | POST | /api/v1/upholstery-inventories/{client_id}/add-ordered | upholstery-inventories | route_add_ordered_api_v1_upholstery_inventories__client_id__add_ordered_post |
 | POST | /api/v1/upholstery-inventories/{client_id}/confirm-ordered | upholstery-inventories | route_confirm_ordered_api_v1_upholstery_inventories__client_id__confirm_ordered_post |
@@ -3594,6 +3595,53 @@ None
 | detail[].msg | string | Yes |  |
 | detail[].type | string | Yes |  |
 
+
+### GET /api/v1/upholstery-inventories/{client_id}/history
+- **Tag**: upholstery-inventories
+- **OperationId**: route_get_upholstery_inventory_history_api_v1_upholstery_inventories__client_id__history_get
+- **Roles**: ADMIN, MANAGER, WORKER
+
+Change history of one inventory from the append-only ledger `upholstery_inventory_history_records`. Top-level movements come newest first, and each carries the requirement state changes it caused in `children`. Pagination uses a keyset: pass `pagination.next_cursor` back as `cursor`. `integrity` is only present on the first page (no cursor). It compares the current totals with the latest recorded after-snapshot, with `drift` = current − expected.
+
+#### Parameters
+| Name | In | Required | Type |
+| --- | --- | --- | --- |
+| client_id | path | Yes | string |
+| limit | query | No | integer (1–100, default 20) |
+| cursor | query | No | string (opaque) |
+
+#### Request Body
+None
+
+#### Responses
+- **200**: Successful Response
+  - Content-Type: application/json
+| Field Path | Type | Required | Enum |
+| --- | --- | --- | --- |
+| ok | boolean | Yes |  |
+| data.records[].client_id | string | Yes |  |
+| data.records[].movement_type | string | Yes | opening_balance, inventory_created, need_added, need_adjusted, reserved_for_use, use_finished, used_direct, use_rolled_back, order_placed, order_received, surplus_added, stored_set, allocation_run, requirement_state_changed |
+| data.records[].trigger | string | Yes | see `InventoryMovementTriggerEnum` |
+| data.records[].created_at | string (ISO 8601) | Yes |  |
+| data.records[].is_reconstructed | boolean | Yes |  |
+| data.records[].created_by | {client_id, username, profile_picture} \| null | Yes |  |
+| data.records[].quantity_meters | decimal string \| null | Yes |  |
+| data.records[].before / after / delta | {stored, in_use, in_need, ordered, total_used, total_used_inventory, total_used_surplus, total_surplus} \| null | Yes |  |
+| data.records[].requirement | {client_id, from_state, to_state} \| null | Yes |  |
+| data.records[].task | {client_id, task_scalar_id, title, state, is_deleted} \| null | Yes |  |
+| data.records[].task_resolution | string \| null | Yes | recorded, inferred |
+| data.records[].item | {client_id, article_number, sku, item_category_snapshot} \| null | Yes |  |
+| data.records[].upholstery_order | {client_id, state, order_amount_meters, received_amount_meters} \| null | Yes |  |
+| data.records[].anomaly | string \| null | Yes | in_need_clamped_at_zero |
+| data.records[].note | string \| null | Yes |  |
+| data.records[].details | object \| null | Yes |  |
+| data.records[].chain_break | boolean | Yes |  |
+| data.records[].children[] | same as a record, without `children` | Yes |  |
+| data.integrity | {status, latest_record_id, pointer_matches, expected, current, drift} \| null | Yes | status: consistent, drift, no_baseline |
+| data.pagination | {limit, has_more, next_cursor} | Yes |  |
+| warnings[] | string | Yes |  |
+- **404**: inventory not found in the workspace
+- **422**: invalid cursor or limit
 ### PATCH /api/v1/upholstery-inventories/{client_id}
 - **Tag**: upholstery-inventories
 - **OperationId**: route_update_upholstery_inventory_api_v1_upholstery_inventories__client_id__patch

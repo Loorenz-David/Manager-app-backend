@@ -17,6 +17,8 @@ from beyo_manager.services.commands.items.cancel_upholstery_requirements import 
     cancel_unfinished_item_requirements_in_session,
     lock_and_filter_items_without_active_tasks,
 )
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
+from beyo_manager.services.commands.upholstery._inventory_history import InventoryMovementContext
 from beyo_manager.models.tables.stock_report.stock_task_assignment import (
     StockTaskAssignment,
 )
@@ -99,6 +101,9 @@ async def delete_task(ctx: ServiceContext) -> dict:
             item_ids=cancellable_item_ids,
             actor_id=ctx.user_id,
             now=now,
+            movement=InventoryMovementContext.from_service(
+                ctx, InventoryMovementTriggerEnum.TASK_DELETED, task_id=task.client_id
+            ),
         )
         cancelled_item_upholstery_ids = sorted(
             {row.item_upholstery_id for row in cancelled}

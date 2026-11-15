@@ -14,6 +14,13 @@ from beyo_manager.services.commands.items.requests import parse_apply_surplus_re
 from beyo_manager.services.commands.items.update_and_delete_item_upholstery import (
     ensure_requirement_actions_are_available,
 )
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
+from beyo_manager.services.commands.upholstery._inventory_history import (
+    InventoryMovementContext,
+    RequirementTransition,
+    record_requirement_transitions,
+)
+from beyo_manager.models.base.identity import generate_id
 from beyo_manager.services.commands.upholstery._inventory_mutations import add_stored_surplus
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
@@ -63,14 +70,22 @@ async def apply_surplus_to_requirement(ctx: ServiceContext) -> dict:
                 "Surplus amount cannot exceed requirement amount_meters."
             )
 
-        await add_stored_surplus(
+        full_cover = request.surplus_amount_meters == active_req.amount_meters
+        movement = InventoryMovementContext.from_service(
+            ctx, InventoryMovementTriggerEnum.SURPLUS_APPLIED, item_id=iup.item_id
+        )
+        surplus_record = await add_stored_surplus(
             session=ctx.session,
             workspace_id=ctx.workspace_id,
             upholstery_inventory_id=active_req.upholstery_inventory_id,
             quantity=request.surplus_amount_meters,
+            movement=movement.for_requirement(
+                active_req,
+                to_state=ItemUpholsteryRequirementStateEnum.AVAILABLE if full_cover else active_req.state,
+            ),
         )
 
-        if request.surplus_amount_meters == active_req.amount_meters:
+        if full_cover:
             # Case A: full cover
             active_req.source = ItemUpholsteryRequirementSourceEnum.SURPLUS
             active_req.state = ItemUpholsteryRequirementStateEnum.AVAILABLE
@@ -78,6 +93,7 @@ async def apply_surplus_to_requirement(ctx: ServiceContext) -> dict:
         else:
             # Case B: partial - create SURPLUS requirement
             surplus_req = ItemUpholsteryRequirement(
+                client_id=generate_id(ItemUpholsteryRequirement.CLIENT_ID_PREFIX),
                 workspace_id=ctx.workspace_id,
                 item_upholstery_id=iup.client_id,
                 upholstery_inventory_id=active_req.upholstery_inventory_id,
@@ -87,6 +103,18 @@ async def apply_surplus_to_requirement(ctx: ServiceContext) -> dict:
                 created_by_id=ctx.user_id,
             )
             ctx.session.add(surplus_req)
+            await record_requirement_transitions(
+                ctx.session,
+                parent=surplus_record,
+                transitions=[
+                    RequirementTransition(
+                        requirement=surplus_req,
+                        from_state=None,
+                        to_state=ItemUpholsteryRequirementStateEnum.AVAILABLE,
+                    )
+                ],
+                movement=movement,
+            )
 
             active_req.amount_meters = (active_req.amount_meters or Decimal("0")) - request.surplus_amount_meters
             active_req.updated_by_id = ctx.user_id

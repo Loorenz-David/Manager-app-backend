@@ -31,6 +31,9 @@ from beyo_manager.services.commands.history.message_builder import (
 )
 from beyo_manager.services.commands.items.requests import parse_create_item_upholstery_request
 from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
+from beyo_manager.models.base.identity import generate_id
+from beyo_manager.services.commands.upholstery._inventory_history import InventoryMovementContext
 from beyo_manager.services.commands.upholstery._inventory_mutations import check_and_inject_need
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
@@ -56,22 +59,37 @@ async def _create_initial_requirement_for_item_upholstery(
     amount_meters: Decimal | None,
     source: ItemUpholsterySourceEnum,
     user_id: str | None,
+    *,
+    movement: InventoryMovementContext,
 ) -> str:
     """Create and attach a new active requirement for an existing ItemUpholstery."""
     if amount_meters is not None and source != ItemUpholsterySourceEnum.CUSTOMER:
+        # The ledger row is written before the requirement exists; pre-generate its id so the
+        # row references the requirement that is about to be inserted.
+        requirement_id = generate_id(ItemUpholsteryRequirement.CLIENT_ID_PREFIX)
         inv_result = await check_and_inject_need(
             session=session,
             workspace_id=workspace_id,
             upholstery_id=item_upholstery.upholstery_id,
             quantity=amount_meters,
             inject=True,
+            movement=movement.with_refs(
+                requirement_id=requirement_id,
+                item_upholstery_id=item_upholstery.client_id,
+                item_id=item_upholstery.item_id,
+                from_state=None,
+                to_state=None,
+            ),
         )
         state = (
             ItemUpholsteryRequirementStateEnum.AVAILABLE
             if inv_result["sufficient"]
             else ItemUpholsteryRequirementStateEnum.NEEDS_ORDERING
         )
+        if inv_result["history_record"] is not None:
+            inv_result["history_record"].requirement_to_state = state
         req = ItemUpholsteryRequirement(
+            client_id=requirement_id,
             workspace_id=workspace_id,
             item_upholstery_id=item_upholstery.client_id,
             upholstery_inventory_id=inv_result["inventory_id"],
@@ -119,6 +137,8 @@ async def _create_item_upholstery_in_session(
     time_to_fix_in_seconds: int | None,
     user_id: str | None,
     client_id: str | None = None,
+    *,
+    movement: InventoryMovementContext,
 ) -> str:
     """Create ItemUpholstery and its initial requirement inside an open transaction."""
     iup_kwargs: dict[str, str] = {}
@@ -152,6 +172,7 @@ async def _create_item_upholstery_in_session(
             amount_meters=amount_meters,
             source=source,
             user_id=user_id,
+            movement=movement,
         )
     return iup.client_id
 
@@ -161,13 +182,21 @@ async def ensure_item_upholstery_in_session(
     *,
     item_id: str,
     data: dict,
+    movement: InventoryMovementContext | None = None,
 ) -> tuple[str, bool]:
     """Create or update the current item upholstery inside the caller's transaction.
 
     A non-terminal upholstery context is reused. Completed or failed contexts are
     archived and replaced with a new context so their sourcing history remains
     immutable while the item still has at most one current context.
+
+    ``movement`` carries the inventory-ledger trigger (e.g. ``task_created``); it defaults to
+    ``item_upholstery_set``. Nested quantity / swap updates record under their own triggers.
     """
+    if movement is None:
+        movement = InventoryMovementContext.from_service(
+            ctx, InventoryMovementTriggerEnum.ITEM_UPHOLSTERY_SET
+        )
     item_result = await ctx.session.execute(
         select(Item)
         .where(
@@ -212,6 +241,7 @@ async def ensure_item_upholstery_in_session(
                 time_to_fix_in_seconds=data.get("time_to_fix_in_seconds"),
                 user_id=ctx.user_id,
                 client_id=requested_client_id,
+                movement=movement,
             ),
             True,
         )
@@ -269,6 +299,7 @@ async def ensure_item_upholstery_in_session(
                     time_to_fix_in_seconds=data.get("time_to_fix_in_seconds"),
                     user_id=ctx.user_id,
                     client_id=None,
+                    movement=movement,
                 ),
                 True,
             )

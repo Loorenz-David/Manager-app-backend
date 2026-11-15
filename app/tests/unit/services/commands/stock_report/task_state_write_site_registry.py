@@ -97,33 +97,33 @@ REGISTRY: dict[tuple[str, int], dict] = {
     ("beyo_manager/services/commands/task_customer_coordination/complete_task_customer_coordination.py", 66): {"classification": NOT_TASK, "model": "TaskCustomerCoordination"},
     ("beyo_manager/services/commands/task_customer_coordination/fail_task_customer_coordination.py", 89): {"classification": NOT_TASK, "model": "TaskCustomerCoordination"},
     ("beyo_manager/services/commands/task_customer_coordination/_transition_coordination_to_coordinating_in_session.py", 28): {"classification": NOT_TASK, "model": "TaskCustomerCoordination"},
-    ("beyo_manager/services/commands/task_steps/_upholstery_installation_side_effect.py", 160): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
-    ("beyo_manager/services/commands/task_steps/transition_step_state.py", 305): {"classification": NOT_TASK, "model": "TaskStep"},
-    ("beyo_manager/services/commands/task_steps/transition_step_state.py", 388): {"classification": NOT_TASK, "model": "TaskStep"},
+    ("beyo_manager/services/commands/task_steps/_upholstery_installation_side_effect.py", 176): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
+    ("beyo_manager/services/commands/task_steps/transition_step_state.py", 307): {"classification": NOT_TASK, "model": "TaskStep"},
+    ("beyo_manager/services/commands/task_steps/transition_step_state.py", 390): {"classification": NOT_TASK, "model": "TaskStep"},
     ("beyo_manager/services/commands/task_steps/remove_task_step.py", 135): {"classification": NOT_TASK, "model": "TaskStep"},
-    ("beyo_manager/services/commands/task_steps/_step_transition_core.py", 157): {"classification": NOT_TASK, "model": "TaskStep"},
-    ("beyo_manager/services/commands/task_steps/_step_transition_core.py", 232): {"classification": NOT_TASK, "model": "TaskStep"},
+    ("beyo_manager/services/commands/task_steps/_step_transition_core.py", 159): {"classification": NOT_TASK, "model": "TaskStep"},
+    ("beyo_manager/services/commands/task_steps/_step_transition_core.py", 234): {"classification": NOT_TASK, "model": "TaskStep"},
     ("beyo_manager/services/commands/task_post_handling/_sync_post_handling_state_in_session.py", 54): {"classification": NOT_TASK, "model": "TaskPostHandling"},
     ("beyo_manager/services/commands/task_post_handling/complete_task_post_handling.py", 134): {"classification": NOT_TASK, "model": "TaskPostHandling"},
     ("beyo_manager/services/commands/cases/update_case_state.py", 29): {"classification": NOT_TASK, "model": "Case"},
     ("beyo_manager/services/commands/stock_report/_move_assignment.py", 214): {"classification": NOT_TASK, "model": "StockTaskAssignment"},
     ("beyo_manager/services/commands/stock_report/_move_assignment.py", 221): {"classification": NOT_TASK, "model": "StockTaskAssignment"},
     ("beyo_manager/services/commands/stock_report/_move_assignment.py", 337): {"classification": NOT_TASK, "model": "StockTaskAssignment"},
-    ("beyo_manager/services/commands/upholstery/set_current_stored_amount_inventory.py", 184): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
-    ("beyo_manager/services/commands/upholstery/receive_upholstery_order.py", 64): {"classification": NOT_TASK, "model": "UpholsteryOrder"},
-    ("beyo_manager/services/commands/items/complete_single_and_reallocate.py", 50): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
-    ("beyo_manager/services/commands/items/complete_single_and_reallocate.py", 91): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
-    ("beyo_manager/services/commands/items/apply_surplus_to_requirement.py", 76): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
-    ("beyo_manager/services/commands/items/update_requirement_quantity.py", 95): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
-    ("beyo_manager/services/commands/items/update_requirement_quantity.py", 107): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
-    ("beyo_manager/services/commands/items/update_requirement_quantity.py", 134): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
-    ("beyo_manager/services/commands/items/cancel_upholstery_requirements.py", 104): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
+    ("beyo_manager/services/commands/upholstery/set_current_stored_amount_inventory.py", 214): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
+    ("beyo_manager/services/commands/upholstery/receive_upholstery_order.py", 69): {"classification": NOT_TASK, "model": "UpholsteryOrder"},
+    ("beyo_manager/services/commands/items/complete_single_and_reallocate.py", 59): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
+    ("beyo_manager/services/commands/items/complete_single_and_reallocate.py", 104): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
+    ("beyo_manager/services/commands/items/apply_surplus_to_requirement.py", 91): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
+    ("beyo_manager/services/commands/items/update_requirement_quantity.py", 97): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
+    ("beyo_manager/services/commands/items/update_requirement_quantity.py", 114): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
+    ("beyo_manager/services/commands/items/update_requirement_quantity.py", 147): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
+    ("beyo_manager/services/commands/items/cancel_upholstery_requirements.py", 115): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
     ("beyo_manager/services/commands/items/_allocation_algorithm.py", 48): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
-    ("beyo_manager/services/commands/items/mark_requirements_in_use.py", 69): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
-    ("beyo_manager/services/commands/items/mark_requirements_completed.py", 86): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
+    ("beyo_manager/services/commands/items/mark_requirements_in_use.py", 77): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
+    ("beyo_manager/services/commands/items/mark_requirements_completed.py", 96): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
     # ------------------------------------------------------------------
     # setattr — 2 real Task writers (both excluded from the direct-field set) +
-    # 16 non-Task targets
+    # 17 non-Task targets
     # ------------------------------------------------------------------
     ("beyo_manager/services/commands/tasks/update_task.py", 70): {
         "classification": NO_SYNC,
@@ -134,6 +134,7 @@ REGISTRY: dict[tuple[str, int], dict] = {
         "reason": "_DIRECT_FIELDS excludes state, same guarantee as update_task.py",
     },
     ("beyo_manager/services/commands/app_update_presentations/update_presentation.py", 36): {"classification": NOT_TASK, "model": "Presentation"},
+    ("beyo_manager/services/commands/upholstery/_inventory_history.py", 312): {"classification": NOT_TASK, "model": "UpholsteryInventoryHistoryRecord"},
     ("beyo_manager/services/commands/app_update_slide_media/update_slide_media.py", 46): {"classification": NOT_TASK, "model": "SlideMedia"},
     ("beyo_manager/services/commands/app_update_slides/update_slide.py", 53): {"classification": NOT_TASK, "model": "Slide"},
     ("beyo_manager/services/commands/customers/update_customer.py", 42): {"classification": NOT_TASK, "model": "Customer"},
@@ -157,19 +158,19 @@ REGISTRY: dict[tuple[str, int], dict] = {
         "reason": "writes is_stock_assignment, not state (phase 3, APPROVED, "
         "master plan §6.5 _task_flag.py row)",
     },
-    ("beyo_manager/services/commands/tasks/create_task.py", 115): {
+    ("beyo_manager/services/commands/tasks/create_task.py", 117): {
         "classification": NO_SYNC,
         "reason": "creation — no assignment can reference a task that does not exist yet (§5B)",
     },
     # ------------------------------------------------------------------
     # helper_call — calls to the 4 named functions (13 sites)
     # ------------------------------------------------------------------
-    ("beyo_manager/services/commands/task_steps/transition_step_state.py", 413): {
+    ("beyo_manager/services/commands/task_steps/transition_step_state.py", 415): {
         "classification": TASK_WRITE,
         "sync_functions": ["transition_step_state"],
         "note": "S1 (maybe_advance_task_to_working call)",
     },
-    ("beyo_manager/services/commands/task_steps/transition_step_state.py", 424): {
+    ("beyo_manager/services/commands/task_steps/transition_step_state.py", 426): {
         "classification": TASK_WRITE,
         "sync_functions": ["transition_step_state"],
         "note": "S1 (maybe_evaluate_task_ready call)",
@@ -189,7 +190,7 @@ REGISTRY: dict[tuple[str, int], dict] = {
         "sync_functions": ["remove_task_step", "remove_task_steps"],
         "note": "S8 (maybe_evaluate_task_ready call inside the shared helper)",
     },
-    ("beyo_manager/services/commands/task_steps/_step_transition_core.py", 256): {
+    ("beyo_manager/services/commands/task_steps/_step_transition_core.py", 258): {
         "classification": TASK_WRITE,
         "sync_functions": ["force_task_ready", "transition_step_state_batch"],
         "note": "the shared core's maybe_advance_task_to_working call — covered by "
@@ -197,17 +198,17 @@ REGISTRY: dict[tuple[str, int], dict] = {
         "paused-driver callers never reach this branch (new_state=PAUSED is "
         "neither WORKING nor terminal)",
     },
-    ("beyo_manager/services/commands/task_steps/_step_transition_core.py", 261): {
+    ("beyo_manager/services/commands/task_steps/_step_transition_core.py", 263): {
         "classification": TASK_WRITE,
         "sync_functions": ["force_task_ready", "transition_step_state_batch"],
         "note": "the shared core's maybe_evaluate_task_ready call — same as above",
     },
-    ("beyo_manager/services/commands/tasks/force_task_ready.py", 165): {
+    ("beyo_manager/services/commands/tasks/force_task_ready.py", 167): {
         "classification": TASK_WRITE,
         "sync_functions": ["force_task_ready"],
         "note": "S3 (_apply_step_transition call, new_state=SKIPPED)",
     },
-    ("beyo_manager/services/commands/tasks/force_task_ready.py", 220): {
+    ("beyo_manager/services/commands/tasks/force_task_ready.py", 228): {
         "classification": TASK_WRITE,
         "sync_functions": ["force_task_ready"],
         "note": "S3 (maybe_evaluate_task_ready call, allow_stepless=True)",

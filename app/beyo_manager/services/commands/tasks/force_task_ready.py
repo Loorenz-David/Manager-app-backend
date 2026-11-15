@@ -40,6 +40,8 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
+from beyo_manager.services.commands.upholstery._inventory_history import InventoryMovementContext
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
 from beyo_manager.domain.history.enums import HistoryRecordChangeTypeEnum, HistoryRecordEntityTypeEnum
@@ -210,6 +212,12 @@ async def force_task_ready(ctx: ServiceContext) -> dict:
                     new_state=TaskStepStateEnum.COMPLETED,
                     actor_id=ctx.user_id,
                     now=now,
+                    movement=InventoryMovementContext.from_service(
+                        ctx,
+                        InventoryMovementTriggerEnum.TASK_FORCED_READY,
+                        task_id=task.client_id,
+                        task_step_id=step.client_id,
+                    ),
                 )
             )
 

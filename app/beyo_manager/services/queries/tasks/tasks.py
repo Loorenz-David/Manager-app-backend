@@ -91,10 +91,19 @@ def _build_order_by(
         tiebreaker,
     ]
 
+    filtered_states = {state.strip().lower() for state in (task_states or [])}
+
+    # A list filtered to completed work only (ready and/or resolved) answers "what was finished
+    # last", not "what is due next", so its default is the `recently_completed` ordering.
+    # Requires *every* filtered state to be a completion state — in a mixed cohort most rows
+    # carry a NULL completed_at and the due-date default is the right one. Clients that send
+    # `order_by=recently_completed` get the same result; this covers the ones that don't (older
+    # cached app builds, direct API callers).
+    if filtered_states and filtered_states <= _COMPLETED_TASK_STATE_VALUES:
+        default_clauses = [Task.completed_at.desc().nulls_last(), tiebreaker]
+
     if not order_by:
         return default_clauses
-
-    filtered_states = {state.strip().lower() for state in (task_states or [])}
 
     def _derived_column(field: str):
         """Keys computed from other tables rather than stored on `tasks`.

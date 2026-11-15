@@ -65,6 +65,8 @@ from typing import Annotated
 import typer
 from sqlalchemy import select
 
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
+from beyo_manager.services.commands.upholstery._inventory_history import InventoryMovementContext
 from beyo_manager.domain.items.enums import ItemUpholsteryRequirementStateEnum
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum
@@ -310,6 +312,14 @@ async def run_backfill(
                     new_state=simulated_state,
                     actor_id=actor_id,
                     now=as_of,
+                    movement=InventoryMovementContext.system(
+                        session,
+                        InventoryMovementTriggerEnum.MAINTENANCE_SCRIPT,
+                        actor_id=actor_id,
+                        task_id=step.task_id,
+                        task_step_id=step.client_id,
+                        note="backfill_stuck_requirements",
+                    ),
                 )
                 if dry_run:
                     raise _DryRunRollback()

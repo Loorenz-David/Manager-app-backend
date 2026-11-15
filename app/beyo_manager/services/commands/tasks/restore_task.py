@@ -2,6 +2,8 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
+from beyo_manager.services.commands.upholstery._inventory_history import InventoryMovementContext
 from beyo_manager.domain.history.enums import HistoryRecordChangeTypeEnum, HistoryRecordEntityTypeEnum
 from beyo_manager.domain.items.enums import ItemUpholsteryRequirementStateEnum
 from beyo_manager.errors.not_found import NotFound
@@ -133,7 +135,9 @@ async def restore_task(ctx: ServiceContext) -> dict:
             )
             for item_id in revivable_item_ids:
                 item_events.extend(
-                    await _revive_upholstery_need(ctx, item_id=item_id, deleted_at=deleted_at)
+                    await _revive_upholstery_need(
+                        ctx, item_id=item_id, deleted_at=deleted_at, task_id=task.client_id
+                    )
                 )
 
     # `task:updated` already refreshes the detail and every task list in all apps.
@@ -147,6 +151,7 @@ async def _revive_upholstery_need(
     *,
     item_id: str,
     deleted_at: datetime,
+    task_id: str | None = None,
 ) -> list[WorkspaceEvent]:
     current_rows = (
         await ctx.session.execute(
@@ -191,6 +196,9 @@ async def _revive_upholstery_need(
             "source": current.source,
             "time_to_fix_in_seconds": current.time_to_fix_in_seconds,
         },
+        movement=InventoryMovementContext.from_service(
+            ctx, InventoryMovementTriggerEnum.TASK_RESTORED, task_id=task_id
+        ),
     )
 
     username = ctx.identity.get("username")

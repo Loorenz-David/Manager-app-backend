@@ -93,6 +93,7 @@ _TASK_KEYS = {
 
 _ITEM_KEYS = {
     "article_number",
+    "can_have_upholstery",
     "client_id",
     "item_category_id",
     "item_position",

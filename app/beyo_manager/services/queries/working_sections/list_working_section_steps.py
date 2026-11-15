@@ -105,14 +105,27 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
         order_by_clauses.append(
             case((TaskStep.client_id.in_(reassigned_step_ids), 0), else_=1)
         )
-    # Among steps due at the same time, those of a stock-assignment task come first.
-    order_by_clauses.extend(
-        [
-            Task.ready_by_at.asc().nullslast(),
-            Task.is_stock_assignment.desc(),
-            TaskStep.client_id.desc(),
-        ]
-    )
+    if record_step_states and all(s in TERMINAL_STEP_STATES for s in record_step_states):
+        # A finished-work view (e.g. the "completed" filter) answers "what did we do last",
+        # not "what is due next": newest close first. Every entry into a terminal state stamps
+        # `closed_at`, so it is the step's latest completion. NULLS LAST keeps any legacy row
+        # without a stamp from claiming the top. The reassigned-first key above is inert here
+        # — it only ever matches non-terminal steps.
+        order_by_clauses.extend(
+            [
+                TaskStep.closed_at.desc().nullslast(),
+                TaskStep.client_id.desc(),
+            ]
+        )
+    else:
+        # Among steps due at the same time, those of a stock-assignment task come first.
+        order_by_clauses.extend(
+            [
+                Task.ready_by_at.asc().nullslast(),
+                Task.is_stock_assignment.desc(),
+                TaskStep.client_id.desc(),
+            ]
+        )
 
     stmt = (
         select(TaskStep.client_id)

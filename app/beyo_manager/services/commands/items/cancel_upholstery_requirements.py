@@ -22,6 +22,7 @@ from beyo_manager.models.tables.items.item_upholstery_requirement import (
 )
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
+from beyo_manager.services.commands.upholstery._inventory_history import InventoryMovementContext
 from beyo_manager.services.commands.upholstery._inventory_mutations import (
     adjust_need,
     rollback_in_use_to_stored,
@@ -71,8 +72,12 @@ async def cancel_requirements_in_session(
     requirements: Iterable[ItemUpholsteryRequirement],
     actor_id: str | None,
     now: datetime | None = None,
+    movement: InventoryMovementContext,
 ) -> list[CancelledRequirement]:
-    """Fail unfinished requirements and reverse their inventory projections."""
+    """Fail unfinished requirements and reverse their inventory projections.
+
+    ``movement`` names the cancelling command (swap / delete / task deletion) on the ledger rows.
+    """
 
     failed_at = now or datetime.now(timezone.utc)
     cancelled: list[CancelledRequirement] = []
@@ -92,6 +97,9 @@ async def cancel_requirements_in_session(
                     workspace_id=workspace_id,
                     upholstery_inventory_id=inventory_id,
                     delta=-amount_meters,
+                    movement=movement.for_requirement(
+                        requirement, to_state=ItemUpholsteryRequirementStateEnum.FAILED
+                    ),
                 )
             elif previous_state == ItemUpholsteryRequirementStateEnum.IN_USE:
                 await rollback_in_use_to_stored(
@@ -99,6 +107,9 @@ async def cancel_requirements_in_session(
                     workspace_id=workspace_id,
                     upholstery_inventory_id=inventory_id,
                     quantity=amount_meters,
+                    movement=movement.for_requirement(
+                        requirement, to_state=ItemUpholsteryRequirementStateEnum.FAILED
+                    ),
                 )
 
         requirement.state = ItemUpholsteryRequirementStateEnum.FAILED
@@ -127,6 +138,7 @@ async def cancel_unfinished_item_requirements_in_session(
     item_ids: Iterable[str],
     actor_id: str | None,
     now: datetime | None = None,
+    movement: InventoryMovementContext,
 ) -> list[CancelledRequirement]:
     """Load and cancel every unfinished requirement for active item contexts."""
 
@@ -147,6 +159,7 @@ async def cancel_unfinished_item_requirements_in_session(
         requirements=requirements,
         actor_id=actor_id,
         now=now,
+        movement=movement,
     )
 
 

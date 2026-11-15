@@ -17,6 +17,8 @@ from beyo_manager.services.commands.items.requests import parse_mark_in_use_requ
 from beyo_manager.services.commands.items.update_and_delete_item_upholstery import (
     ensure_requirement_actions_are_available,
 )
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
+from beyo_manager.services.commands.upholstery._inventory_history import InventoryMovementContext
 from beyo_manager.services.commands.upholstery._inventory_mutations import consume_to_in_use
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
@@ -58,6 +60,9 @@ async def mark_requirements_in_use(ctx: ServiceContext) -> dict:
             )
 
         now = datetime.now(timezone.utc)
+        movement = InventoryMovementContext.from_service(
+            ctx, InventoryMovementTriggerEnum.REQUIREMENT_MARKED_IN_USE, item_id=iup.item_id
+        )
         for req in requirements:
             if req.upholstery_inventory_id is not None:
                 await consume_to_in_use(
@@ -65,6 +70,9 @@ async def mark_requirements_in_use(ctx: ServiceContext) -> dict:
                     workspace_id=ctx.workspace_id,
                     upholstery_inventory_id=req.upholstery_inventory_id,
                     quantity=req.amount_meters,
+                    movement=movement.for_requirement(
+                        req, to_state=ItemUpholsteryRequirementStateEnum.IN_USE
+                    ),
                 )
             req.state = ItemUpholsteryRequirementStateEnum.IN_USE
             req.in_use_at = now

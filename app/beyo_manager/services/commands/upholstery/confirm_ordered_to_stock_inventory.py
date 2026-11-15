@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 
 from beyo_manager.services.commands.upholstery.requests import parse_confirm_ordered_request
 from beyo_manager.services.commands.upholstery._inventory_mutations import confirm_ordered_to_stock
+from beyo_manager.services.commands.upholstery._inventory_history import InventoryMovementContext
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
 from beyo_manager.services.context import ServiceContext
 
 
@@ -17,6 +19,9 @@ async def confirm_ordered_to_stock_inventory(ctx: ServiceContext) -> dict:
             workspace_id=ctx.workspace_id,
             upholstery_inventory_id=request.client_id,
             quantity=request.quantity,
+            movement=InventoryMovementContext.from_service(
+                ctx, InventoryMovementTriggerEnum.MANUAL_CONFIRM_ORDERED
+            ),
         )
 
     return {}

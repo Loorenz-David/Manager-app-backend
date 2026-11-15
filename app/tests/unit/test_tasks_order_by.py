@@ -149,6 +149,32 @@ def test_recently_completed_always_sorts_nulls_last(order_by) -> None:
     assert "NULLS LAST" in _rendered(order_by, task_states=["ready"])[0]
 
 
+_COMPLETION_DEFAULT = ["tasks.completed_at DESC NULLS LAST", "tasks.client_id ASC"]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("task_states", [["ready"], ["resolved"], ["ready", "resolved"], [" READY "]])
+@pytest.mark.parametrize("order_by", [None, "", "   ", "bogus"])
+def test_completion_only_cohort_defaults_to_newest_completion_first(task_states, order_by) -> None:
+    """A ready/resolved-only list shows what was finished last even when the client sends no
+    (or an unusable) order_by — e.g. an older cached app build."""
+    assert _rendered(order_by, task_states=task_states) == _COMPLETION_DEFAULT
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("task_states", [None, [], ["working"], ["working", "ready"]])
+def test_mixed_or_open_cohort_keeps_the_due_date_default(task_states) -> None:
+    assert _rendered(None, task_states=task_states) == _DEFAULT
+
+
+@pytest.mark.unit
+def test_explicit_order_by_still_wins_in_a_completion_only_cohort() -> None:
+    assert _rendered("ready_by_at", task_states=["ready"]) == [
+        "tasks.ready_by_at ASC NULLS LAST",
+        "tasks.client_id ASC",
+    ]
+
+
 @pytest.mark.unit
 def test_recently_completed_composes_with_a_legacy_key() -> None:
     assert _rendered("created_at:desc,recently_completed", task_states=["ready"]) == [

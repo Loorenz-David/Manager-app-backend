@@ -4,6 +4,11 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
+from beyo_manager.services.commands.upholstery._inventory_history import (
+    InventoryMovementContext,
+    record_inventory_created,
+)
 from beyo_manager.domain.upholstery.enums import UpholsteryInventoryConditionEnum
 from beyo_manager.errors.validation import ConflictError
 from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
@@ -61,5 +66,12 @@ async def create_upholstery_inventory(ctx: ServiceContext) -> dict:
             created_by_id=ctx.user_id,
         )
         ctx.session.add(inv)
+        await record_inventory_created(
+            ctx.session,
+            inv,
+            movement=InventoryMovementContext.from_service(
+                ctx, InventoryMovementTriggerEnum.INVENTORY_CREATED
+            ),
+        )
 
     return {"client_id": inv.client_id}

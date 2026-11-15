@@ -84,13 +84,18 @@ _PAUSE_REASONS = (
     ("pause_workspace_cleaning", "Workspace cleaning", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/workspace-cleaning.webp"),
     ("pause_material_tools_search", "Material/tools search", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/material-tools-search.webp"),
     ("pause_in_out_store", "In/out store", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/in-out-store.webp"),
+    ("pause_organize_space", "Organize space", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/organize-space.webp"),
+    ("pause_assembling_clamp", "Assembling clamp", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/assembling-clamp.webp"),
 )
 
 # These associations are bootstrap-managed along with the rows above. An empty tuple means the
 # seeded reason is unrestricted by worker, so ``pause_workspace_cleaning`` is available to everyone.
 # ``pause_moving_furniture`` intentionally has two workers and remains one shared reason.
 # ``pause_material_tools_search`` and ``pause_in_out_store`` are personal to Nazar.
+# ``pause_organize_space`` and ``pause_assembling_clamp`` are personal to Andrii.
+# ``waiting_for_upholstery`` is restricted to Roman and Feruza.
 _PAUSE_REASON_WORKER_LINKS: dict[str, tuple[str, ...]] = {
+    "waiting_for_upholstery": ("Roman", "Feruza"),
     "pause_price_tags": ("Vitalii",),
     "pause_descriptions": ("Vitalii",),
     "pause_photo_editing": ("Vitalii",),
@@ -99,6 +104,8 @@ _PAUSE_REASON_WORKER_LINKS: dict[str, tuple[str, ...]] = {
     "pause_workspace_cleaning": (),
     "pause_material_tools_search": ("Nazar",),
     "pause_in_out_store": ("Nazar",),
+    "pause_organize_space": ("Andrii",),
+    "pause_assembling_clamp": ("Andrii",),
 }
 
 

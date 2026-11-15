@@ -5,6 +5,12 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
+from beyo_manager.services.commands.upholstery._inventory_history import (
+    InventoryMovementContext,
+    RequirementStateTracker,
+    record_allocation_runs,
+)
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
 from beyo_manager.domain.items.enums import ItemUpholsteryRequirementStateEnum
@@ -47,6 +53,7 @@ async def mark_requirements_ordered(ctx: ServiceContext) -> dict:
 
         # Filter to upholstery inventory IDs
         candidates = [r for r in all_candidates if r.upholstery_inventory_id in valid_inventory_ids]
+        tracker = RequirementStateTracker.capture(candidates)
 
         # Sort: priority first, then oldest
         priority_set = set(request.priority_item_upholstery_ids)
@@ -73,6 +80,18 @@ async def mark_requirements_ordered(ctx: ServiceContext) -> dict:
         for req in ordered_candidates:
             if req.item_upholstery_id in modified_ids:
                 req.updated_by_id = ctx.user_id
+
+        await record_allocation_runs(
+            ctx.session,
+            workspace_id=ctx.workspace_id,
+            movement=InventoryMovementContext.from_service(
+                ctx, InventoryMovementTriggerEnum.REQUIREMENTS_MARKED_ORDERED
+            ),
+            tracker=tracker,
+            candidates=candidates,
+            target_state=ItemUpholsteryRequirementStateEnum.ORDERED,
+            pool_meters=request.ordered_quantity,
+        )
 
         resolved_ids_for_notif = result_dict["resolved"]
         if resolved_ids_for_notif:

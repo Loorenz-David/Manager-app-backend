@@ -4,6 +4,12 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
+from beyo_manager.services.commands.upholstery._inventory_history import (
+    InventoryMovementContext,
+    RequirementStateTracker,
+    record_allocation_runs,
+)
 from beyo_manager.domain.items.enums import ItemUpholsteryRequirementStateEnum
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ValidationError
@@ -45,6 +51,9 @@ async def complete_single_requirement(ctx: ServiceContext) -> dict:
                 upholstery_inventory_id=req.upholstery_inventory_id,
                 quantity=req.amount_meters,
                 source=req.source,
+                movement=InventoryMovementContext.from_service(
+                    ctx, InventoryMovementTriggerEnum.REQUIREMENT_COMPLETED_SINGLE
+                ).for_requirement(req, to_state=ItemUpholsteryRequirementStateEnum.COMPLETED),
             )
 
         req.state = ItemUpholsteryRequirementStateEnum.COMPLETED
@@ -84,6 +93,10 @@ async def reallocate_stock(ctx: ServiceContext) -> dict:
             )
         )
         donors = donor_result.scalars().all()
+        tracker = RequirementStateTracker.capture(donors)
+        movement = InventoryMovementContext.from_service(
+            ctx, InventoryMovementTriggerEnum.STOCK_REALLOCATED
+        )
 
         # Mark donors as NEEDS_ORDERING
         now = datetime.now(timezone.utc)
@@ -101,6 +114,7 @@ async def reallocate_stock(ctx: ServiceContext) -> dict:
             )
         )
         all_needs = needs_result.scalars().all()
+        tracker.add(all_needs)
 
         # Calculate pool: donors' amounts
         from decimal import Decimal
@@ -109,6 +123,13 @@ async def reallocate_stock(ctx: ServiceContext) -> dict:
             pool += donor.amount_meters or Decimal("0")
 
         if pool <= Decimal("0"):
+            await record_allocation_runs(
+                ctx.session,
+                workspace_id=ctx.workspace_id,
+                movement=movement,
+                tracker=tracker,
+                candidates=list(donors),
+            )
             return {"allocated": [], "unallocated": []}
 
         # Sort: priority + oldest
@@ -138,5 +159,16 @@ async def reallocate_stock(ctx: ServiceContext) -> dict:
         for req in ordered_candidates:
             if req.item_upholstery_id in modified_ids:
                 req.updated_by_id = ctx.user_id
+
+        # Donor demotions and recipient promotions nest under one allocation_run row.
+        await record_allocation_runs(
+            ctx.session,
+            workspace_id=ctx.workspace_id,
+            movement=movement,
+            tracker=tracker,
+            candidates=list(donors) + list(all_needs),
+            target_state=ItemUpholsteryRequirementStateEnum.AVAILABLE,
+            pool_meters=pool,
+        )
 
     return {"allocated": result_dict["resolved"], "unallocated": result_dict["unresolved"]}

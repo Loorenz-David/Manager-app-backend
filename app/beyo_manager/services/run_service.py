@@ -8,6 +8,8 @@ from beyo_manager.services.outcome import StatusOutcome
 
 logger = logging.getLogger(__name__)
 
+_DEPTH_KEY = "run_service_depth"
+
 # Non-sensitive entity identifiers worth surfacing when a service blows up.
 # Deliberately excludes anything credential-bearing: no tokens, presigned URLs,
 # passwords, auth headers or free-text user content.
@@ -36,9 +38,22 @@ async def run_service(
 
     Catches DomainError and returns a failed StatusOutcome.
     Catches unexpected exceptions, logs the traceback, and returns a generic error.
+
+    The outermost run on a session also owns the inventory-ledger scope: one correlation id
+    for everything it writes, and one ``upholstery:inventory-updated`` event per inventory it
+    touched, dispatched only after success.
     """
+    session = getattr(ctx, "session", None)
+    info = getattr(session, "info", None)
+    if not isinstance(info, dict):  # mocked sessions in unit tests
+        info = None
+    outermost = info is not None and info.get(_DEPTH_KEY, 0) == 0
+    if info is not None:
+        info[_DEPTH_KEY] = info.get(_DEPTH_KEY, 0) + 1
     try:
         data = await fn(ctx)
+        if outermost:
+            await _dispatch_inventory_events(session)
         return StatusOutcome(success=True, data=data)
     except DomainError as exc:
         # A refusal is an outcome, not a crash — but it used to leave no trace at
@@ -86,3 +101,25 @@ async def run_service(
             success=False,
             error=DomainError("An unexpected internal error occurred."),
         )
+    finally:
+        if info is not None:
+            info[_DEPTH_KEY] = info.get(_DEPTH_KEY, 1) - 1
+            if outermost:
+                _reset_inventory_scope(session)
+
+
+async def _dispatch_inventory_events(session) -> None:
+    from beyo_manager.services.infra.events.inventory_realtime import (
+        dispatch_touched_inventory_events,
+    )
+
+    try:
+        await dispatch_touched_inventory_events(session)
+    except Exception:
+        logger.exception("inventory realtime dispatch failed")
+
+
+def _reset_inventory_scope(session) -> None:
+    from beyo_manager.services.commands.upholstery._inventory_history import reset_movement_scope
+
+    reset_movement_scope(session)

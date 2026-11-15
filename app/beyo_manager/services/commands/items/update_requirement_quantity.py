@@ -18,6 +18,8 @@ from beyo_manager.services.commands.items.update_and_delete_item_upholstery impo
 from beyo_manager.services.commands.items.requests import (
     parse_update_requirement_quantity_request,
 )
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
+from beyo_manager.services.commands.upholstery._inventory_history import InventoryMovementContext
 from beyo_manager.services.commands.upholstery._inventory_mutations import (
     adjust_need,
     check_and_inject_need,
@@ -101,6 +103,11 @@ async def update_requirement_quantity(ctx: ServiceContext) -> dict:
                     upholstery_id=iup.upholstery_id,
                     quantity=request.amount_meters,
                     inject=True,
+                    movement=InventoryMovementContext.from_service(
+                        ctx,
+                        InventoryMovementTriggerEnum.REQUIREMENT_QUANTITY_CHANGED,
+                        item_id=iup.item_id,
+                    ).for_requirement(active_req),
                 )
                 active_req.amount_meters = request.amount_meters
                 active_req.upholstery_inventory_id = inv_result["inventory_id"]
@@ -109,6 +116,7 @@ async def update_requirement_quantity(ctx: ServiceContext) -> dict:
                     if inv_result["sufficient"]
                     else ItemUpholsteryRequirementStateEnum.NEEDS_ORDERING
                 )
+                inv_result["history_record"].requirement_to_state = active_req.state
                 active_req.updated_by_id = ctx.user_id
 
             else:
@@ -128,6 +136,11 @@ async def update_requirement_quantity(ctx: ServiceContext) -> dict:
                     workspace_id=ctx.workspace_id,
                     upholstery_inventory_id=active_req.upholstery_inventory_id,
                     delta=delta,
+                    movement=InventoryMovementContext.from_service(
+                        ctx,
+                        InventoryMovementTriggerEnum.REQUIREMENT_QUANTITY_CHANGED,
+                        item_id=iup.item_id,
+                    ).for_requirement(active_req),
                 )
 
                 active_req.amount_meters = request.amount_meters
@@ -136,6 +149,7 @@ async def update_requirement_quantity(ctx: ServiceContext) -> dict:
                     if inv_result["sufficient"]
                     else ItemUpholsteryRequirementStateEnum.NEEDS_ORDERING
                 )
+                inv_result["history_record"].requirement_to_state = active_req.state
                 active_req.updated_by_id = ctx.user_id
 
     events = [

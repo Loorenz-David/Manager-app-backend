@@ -25,6 +25,8 @@ from beyo_manager.services.commands.items.cancel_upholstery_requirements import 
     load_unfinished_item_requirements,
     lock_and_filter_items_without_active_tasks,
 )
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
+from beyo_manager.services.commands.upholstery._inventory_history import InventoryMovementContext
 
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
@@ -186,6 +188,13 @@ async def reconcile_deleted_task_upholstery_requirements(
                         workspace_id=candidate_workspace_id,
                         item_ids=[item_id],
                         actor_id=candidate.actor_id,
+                        movement=InventoryMovementContext.system(
+                            session,
+                            InventoryMovementTriggerEnum.MAINTENANCE_SCRIPT,
+                            actor_id=candidate.actor_id,
+                            task_id=candidate.task_id,
+                            note="reconcile_deleted_task_upholstery_requirements",
+                        ),
                     )
                 )
 

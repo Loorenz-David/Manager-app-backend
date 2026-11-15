@@ -8,7 +8,7 @@ from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
 from beyo_manager.domain.items.enums import ItemUpholsteryRequirementStateEnum
 from beyo_manager.domain.items.notification_targets import resolve_upholstery_notification_targets
-from beyo_manager.domain.upholstery.enums import UpholsteryOrderStateEnum
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum, UpholsteryOrderStateEnum
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
@@ -20,6 +20,11 @@ from beyo_manager.models.tables.upholstery.upholstery_inventory import Upholster
 from beyo_manager.models.tables.upholstery.upholstery_order import UpholsteryOrder
 from beyo_manager.models.tables.upholstery.upholstery_order_history_record import UpholsteryOrderHistoryRecord
 from beyo_manager.models.tables.upholstery.upholstery_supplier_link import UpholsterySupplierLink
+from beyo_manager.services.commands.upholstery._inventory_history import (
+    InventoryMovementContext,
+    RequirementStateTracker,
+    record_allocation_outcome,
+)
 from beyo_manager.services.commands.upholstery._inventory_mutations import add_ordered
 from beyo_manager.services.commands.upholstery._pooled_requirement_allocation import (
     allocate_pooled_requirements,
@@ -129,11 +134,17 @@ async def create_upholstery_order(ctx: ServiceContext) -> dict:
 
         allocated_item_upholstery_ids: list[str] = []
         if request.state == UpholsteryOrderStateEnum.ORDERED:
-            await add_ordered(
+            movement = InventoryMovementContext.from_service(
+                ctx,
+                InventoryMovementTriggerEnum.ORDER_CREATED,
+                upholstery_order_id=order.client_id,
+            )
+            order_record = await add_ordered(
                 session=ctx.session,
                 workspace_id=ctx.workspace_id,
                 upholstery_inventory_id=inventory.client_id,
                 quantity=request.order_amount_meters,
+                movement=movement,
             )
             allocated_item_upholstery_ids = await _allocate_requirements(
                 session=ctx.session,
@@ -141,6 +152,8 @@ async def create_upholstery_order(ctx: ServiceContext) -> dict:
                 inventory=inventory,
                 priority_item_upholstery_ids=request.priority_item_upholstery_ids,
                 actor_id=ctx.user_id,
+                parent_record=order_record,
+                movement=movement,
             )
             if allocated_item_upholstery_ids:
                 target_user_ids = list(
@@ -201,6 +214,8 @@ async def _allocate_requirements(
     inventory: UpholsteryInventory,
     priority_item_upholstery_ids: list[str],
     actor_id: str,
+    parent_record=None,
+    movement: InventoryMovementContext | None = None,
 ) -> list[str]:
     req_result = await session.execute(
         select(ItemUpholsteryRequirement).where(
@@ -211,7 +226,14 @@ async def _allocate_requirements(
         )
     )
     candidates = req_result.scalars().all()
+    tracker = RequirementStateTracker.capture(candidates)
     if not candidates:
+        if parent_record is not None and movement is not None:
+            await record_allocation_outcome(
+                session, parent=parent_record, movement=movement, inventory=inventory,
+                candidates=[], tracker=tracker,
+                target_state=ItemUpholsteryRequirementStateEnum.ORDERED, mode="ordered",
+            )
         return []
 
     item_upholstery_ids = [req.item_upholstery_id for req in candidates]
@@ -267,7 +289,7 @@ async def _allocate_requirements(
     )
     ordered_candidates = tier1 + tier2_and_3
 
-    return allocate_pooled_requirements(
+    allocated = allocate_pooled_requirements(
         inventory=inventory,
         ordered_candidates=ordered_candidates,
         target_state=ItemUpholsteryRequirementStateEnum.ORDERED,
@@ -275,3 +297,10 @@ async def _allocate_requirements(
         actor_id=actor_id,
         timestamp_field="ordered_at",
     )
+    if parent_record is not None and movement is not None:
+        await record_allocation_outcome(
+            session, parent=parent_record, movement=movement, inventory=inventory,
+            candidates=list(candidates), tracker=tracker,
+            target_state=ItemUpholsteryRequirementStateEnum.ORDERED, mode="ordered",
+        )
+    return allocated

@@ -36,6 +36,8 @@ from beyo_manager.services.commands.items.create_item_upholstery import (
 from beyo_manager.services.commands.items.cancel_upholstery_requirements import (
     cancel_requirements_in_session,
 )
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
+from beyo_manager.services.commands.upholstery._inventory_history import InventoryMovementContext
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import event_bus
@@ -122,6 +124,14 @@ async def _update_item_upholstery_in_session(
     )
 
     if swap_requested:
+        # Cancelling the old requirement and creating the new one touch two inventories;
+        # both ledger rows share this command's correlation id.
+        swap_movement = InventoryMovementContext.from_service(
+            ctx,
+            InventoryMovementTriggerEnum.UPHOLSTERY_SWAPPED,
+            item_upholstery_id=iup.client_id,
+            item_id=iup.item_id,
+        )
         if iup.active_requirement_id is None:
             iup.upholstery_id = resolved_upholstery_id
             iup.source = resolved_source
@@ -141,6 +151,7 @@ async def _update_item_upholstery_in_session(
                     amount_meters=iup.amount_meters,
                     source=iup.source,
                     user_id=ctx.user_id,
+                    movement=swap_movement,
                 )
         else:
             active_req_result = await ctx.session.execute(
@@ -164,6 +175,7 @@ async def _update_item_upholstery_in_session(
                 requirements=[active_req],
                 actor_id=ctx.user_id,
                 now=now,
+                movement=swap_movement,
             )
 
             if (
@@ -188,6 +200,7 @@ async def _update_item_upholstery_in_session(
                 amount_meters=iup.amount_meters,
                 source=iup.source,
                 user_id=ctx.user_id,
+                movement=swap_movement,
             )
     else:
         if "name" in fields_set:
@@ -294,6 +307,12 @@ async def delete_item_upholstery(ctx: ServiceContext) -> dict:
                     requirements=[active_req],
                     actor_id=ctx.user_id,
                     now=now,
+                    movement=InventoryMovementContext.from_service(
+                        ctx,
+                        InventoryMovementTriggerEnum.ITEM_UPHOLSTERY_DELETED,
+                        item_upholstery_id=iup.client_id,
+                        item_id=iup.item_id,
+                    ),
                 )
 
         iup.is_deleted = True

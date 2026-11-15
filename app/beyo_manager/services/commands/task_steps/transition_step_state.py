@@ -5,6 +5,8 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
+from beyo_manager.services.commands.upholstery._inventory_history import InventoryMovementContext
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
 from beyo_manager.domain.execution.payloads.step_transition import StepTransitionPayload
@@ -447,6 +449,12 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
             new_state=request.new_state,
             actor_id=ctx.user_id,
             now=now,
+            movement=InventoryMovementContext.from_service(
+                ctx,
+                InventoryMovementTriggerEnum.STEP_TRANSITION,
+                task_id=task.client_id,
+                task_step_id=step.client_id,
+            ),
         )
 
         # 9. Publish outbox event for analytics worker (atomic with domain write)

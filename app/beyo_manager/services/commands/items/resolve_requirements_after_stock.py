@@ -5,6 +5,12 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
+from beyo_manager.domain.upholstery.enums import InventoryMovementTriggerEnum
+from beyo_manager.services.commands.upholstery._inventory_history import (
+    InventoryMovementContext,
+    RequirementStateTracker,
+    record_allocation_runs,
+)
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
 from beyo_manager.domain.items.enums import ItemUpholsteryRequirementStateEnum
@@ -54,6 +60,7 @@ async def resolve_requirements_after_stock(ctx: ServiceContext) -> dict:
 
         if not candidates:
             return {"resolved": [], "unresolved": []}
+        tracker = RequirementStateTracker.capture(candidates)
 
         # Calculate available pool: stored - (in_need excluding candidates)
         total_candidate_need = sum(
@@ -94,6 +101,18 @@ async def resolve_requirements_after_stock(ctx: ServiceContext) -> dict:
         for req in ordered_candidates:
             if req.item_upholstery_id in modified_ids:
                 req.updated_by_id = ctx.user_id
+
+        await record_allocation_runs(
+            ctx.session,
+            workspace_id=ctx.workspace_id,
+            movement=InventoryMovementContext.from_service(
+                ctx, InventoryMovementTriggerEnum.REQUIREMENTS_RESOLVED_AFTER_STOCK
+            ),
+            tracker=tracker,
+            candidates=candidates,
+            target_state=ItemUpholsteryRequirementStateEnum.AVAILABLE,
+            pool_meters=running_pool,
+        )
 
         resolved_ids_for_notif = result_dict["resolved"]
         if resolved_ids_for_notif:

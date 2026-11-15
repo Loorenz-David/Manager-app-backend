@@ -21,6 +21,9 @@ from beyo_manager.services.commands.upholstery.set_current_stored_amount_invento
 from beyo_manager.services.commands.upholstery.update_upholstery_inventory import update_upholstery_inventory
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.upholstery.get_upholstery_inventory import get_upholstery_inventory
+from beyo_manager.services.queries.upholstery.get_upholstery_inventory_history import (
+    get_upholstery_inventory_history,
+)
 from beyo_manager.services.queries.upholstery.list_upholstery_inventories import list_upholstery_inventories
 from beyo_manager.services.run_service import run_service
 
@@ -106,6 +109,27 @@ async def route_get_upholstery_inventory(
 ):
     ctx = ServiceContext(incoming_data={"client_id": client_id}, identity=claims, session=session)
     outcome = await run_service(get_upholstery_inventory, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/{client_id}/history")
+async def route_get_upholstery_inventory_history(
+    client_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+    limit: int = Query(20, ge=1, le=100),
+    cursor: str | None = Query(None),
+):
+    """Change history (ledger timeline) of one inventory, newest first, keyset-paginated."""
+    ctx = ServiceContext(
+        incoming_data={"client_id": client_id},
+        query_params={"limit": limit, "cursor": cursor},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(get_upholstery_inventory_history, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)

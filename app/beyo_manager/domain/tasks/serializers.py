@@ -2,6 +2,7 @@
 
 from datetime import datetime
 
+from beyo_manager.domain.history.serializers import serialize_record_actor
 from beyo_manager.domain.images.serializers import serialize_image
 from beyo_manager.domain.pause_reasons.serializers import serialize_pause_reason
 from beyo_manager.domain.roles.enums import RoleNameEnum
@@ -293,20 +294,9 @@ def serialize_note_with_images(
     }
 
 
-def _serialize_flow_record_user(user: User | None, created_by_id: str | None, username_snapshot: str | None = None) -> dict | None:
-    if created_by_id is None:
-        return None
-    if user is not None:
-        return {
-            "client_id": user.client_id,
-            "username": user.username,
-            "profile_picture": user.profile_picture,
-        }
-    return {
-        "client_id": created_by_id,
-        "username": username_snapshot,
-        "profile_picture": None,
-    }
+# Shared with the upholstery inventory history timeline; kept under the old private name
+# for the existing call sites in this module.
+_serialize_flow_record_user = serialize_record_actor
 
 
 def serialize_history_flow_record(record: HistoryRecord, link: HistoryRecordLink, users_map: dict) -> dict:
@@ -436,6 +426,9 @@ def serialize_item_worker_light(
         "quantity": item.quantity,
         "item_position": item.item_position,
         "item_zone": item.item_zone,
+        # False = the item was explicitly marked as having no upholstery ("None"), which is
+        # different from upholstery not yet assigned (no requirement on an item that can have one).
+        "can_have_upholstery": item.can_have_upholstery,
         "upholstery_requirement": [
             {
                 "client_id": req.client_id,

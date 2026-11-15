@@ -97,6 +97,9 @@ from beyo_manager.models.tables.upholstery import upholstery_supplier_link  # no
 from beyo_manager.models.tables.upholstery import upholstery_order  # noqa: F401
 from beyo_manager.models.tables.upholstery import upholstery_order_history_record  # noqa: F401
 
+# --- Upholstery inventory ledger (depends on upholstery_inventory; use_alter FK back from it) ---
+from beyo_manager.models.tables.upholstery import upholstery_inventory_history_record  # noqa: F401
+
 # --- Customers ---
 from beyo_manager.models.tables.customers import customer  # noqa: F401
 
