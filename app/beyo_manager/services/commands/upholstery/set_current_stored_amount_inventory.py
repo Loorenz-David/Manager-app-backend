@@ -20,6 +20,7 @@ from beyo_manager.services.commands.upholstery._inventory_mutations import (
 )
 from beyo_manager.services.commands.upholstery._pooled_requirement_allocation import (
     allocate_pooled_requirements,
+    demotion_sort_key as _demotion_sort_key,
     calculate_pooled_requirement_pool,
     fetch_earliest_ready_by_at,
 )
@@ -180,18 +181,6 @@ async def _load_requirement_candidates(
         )
     )
     return result.scalars().all()
-
-
-def _demotion_sort_key(
-    req: ItemUpholsteryRequirement,
-    ready_by_at_map: dict[str, datetime | None],
-) -> tuple[bool, float, float]:
-    ready_by_at = ready_by_at_map.get(req.item_upholstery_id)
-    return (
-        ready_by_at is not None,
-        -(ready_by_at.timestamp() if ready_by_at else 0),
-        -req.created_at.timestamp(),
-    )
 
 
 def _demote_available_requirements(

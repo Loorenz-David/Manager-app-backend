@@ -264,6 +264,39 @@ async def add_ordered(
     )
 
 
+async def adjust_ordered(
+    session: AsyncSession,
+    workspace_id: str,
+    upholstery_inventory_id: str,
+    delta: Decimal,
+    *,
+    movement: InventoryMovementContext,
+) -> UpholsteryInventoryHistoryRecord:
+    """
+    Add a signed ``delta`` to current_amount_ordered_meters: an existing order's amount
+    was edited. No condition re-evaluation (ordered never feeds it, as in ``add_ordered``).
+    Guard: raises ValidationError if ordered would go negative — the order rows and this
+    bucket disagree, and silently clamping would hide it.
+    """
+    inv = await _load_inventory(session, workspace_id, upholstery_inventory_id)
+    before = BucketSnapshot.of(inv)
+    new_ordered = (inv.current_amount_ordered_meters or Decimal("0")) + delta
+    if new_ordered < Decimal("0"):
+        raise ValidationError(
+            "This change would make the inventory's ordered amount negative — "
+            "the inventory and its orders disagree; check the inventory first."
+        )
+    inv.current_amount_ordered_meters = new_ordered
+    return await record_movement(
+        session,
+        inv,
+        InventoryMovementTypeEnum.ORDER_AMOUNT_CHANGED,
+        before=before,
+        movement=movement,
+        quantity=delta,
+    )
+
+
 # ---------------------------------------------------------------------------
 # CMD-5 — confirm_ordered_to_stock
 # ---------------------------------------------------------------------------

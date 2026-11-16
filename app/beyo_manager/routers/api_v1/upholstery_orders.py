@@ -12,6 +12,9 @@ from beyo_manager.routers.utils.jwt_dep import require_roles
 from beyo_manager.routers.utils.roles import ADMIN, MANAGER
 from beyo_manager.services.commands.upholstery.create_upholstery_order import create_upholstery_order
 from beyo_manager.services.commands.upholstery.receive_upholstery_order import receive_upholstery_order
+from beyo_manager.services.commands.upholstery.update_upholstery_order_amount import (
+    update_upholstery_order_amount,
+)
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.upholstery.upholstery_orders_query import (
     get_upholstery_orders_count,
@@ -44,6 +47,10 @@ class _ReceiveBody(BaseModel):
     received_at: datetime | None = None
 
 
+class _UpdateAmountBody(BaseModel):
+    order_amount_meters: Decimal
+
+
 @router.put("")
 async def route_create_upholstery_order(
     body: _CreateBody,
@@ -65,6 +72,25 @@ async def route_receive_upholstery_order(
 ):
     ctx = ServiceContext(incoming_data=body.model_dump(), identity=claims, session=session)
     outcome = await run_service(receive_upholstery_order, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.patch("/{client_id}/amount")
+async def route_update_upholstery_order_amount(
+    client_id: str,
+    body: _UpdateAmountBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    """Change an order's amount; ordered requirements and the inventory follow."""
+    ctx = ServiceContext(
+        incoming_data={"client_id": client_id, **body.model_dump()},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(update_upholstery_order_amount, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)

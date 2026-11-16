@@ -44,7 +44,17 @@ async def receive_upholstery_order(ctx: ServiceContext) -> dict:
     allocated_item_upholstery_ids: list[str] = []
 
     async with ctx.session.begin():
-        order = await ctx.session.get(UpholsteryOrder, request.client_id)
+        # Locked: the cap check below reads order_amount_meters, which
+        # `update_upholstery_order_amount` can lower concurrently (it takes the same
+        # order -> inventory lock order).
+        order = (
+            await ctx.session.execute(
+                select(UpholsteryOrder)
+                .where(UpholsteryOrder.client_id == request.client_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
         if order is None or order.workspace_id != ctx.workspace_id or order.is_deleted:
             raise NotFound("Upholstery order not found.")
 

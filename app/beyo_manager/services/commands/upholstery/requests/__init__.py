@@ -583,3 +583,28 @@ def parse_receive_upholstery_order_request(data: dict) -> ReceiveUpholsteryOrder
         first_error = exc.errors()[0]
         field = ".".join(str(loc) for loc in first_error["loc"])
         raise ValidationError(f"{field}: {first_error['msg']}") from exc
+
+
+
+class UpdateUpholsteryOrderAmountRequest(BaseModel):
+    client_id: str
+    order_amount_meters: Decimal
+
+    @field_validator("order_amount_meters")
+    @classmethod
+    def amount_must_be_positive(cls, v: Decimal) -> Decimal:
+        normalized = _normalize_meters(v)
+        if normalized <= Decimal("0"):
+            raise ValueError("order_amount_meters must be > 0.")
+        return normalized
+
+
+def parse_update_upholstery_order_amount_request(data: dict) -> UpdateUpholsteryOrderAmountRequest:
+    from pydantic import ValidationError as PydanticValidationError
+
+    try:
+        return UpdateUpholsteryOrderAmountRequest.model_validate(data)
+    except PydanticValidationError as exc:
+        first_error = exc.errors()[0]
+        field = ".".join(str(loc) for loc in first_error["loc"])
+        raise ValidationError(f"{field}: {first_error['msg']}") from exc

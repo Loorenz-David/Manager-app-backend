@@ -49,6 +49,7 @@ class InventoryMovementTypeEnum(enum.Enum):
     USE_ROLLED_BACK = "use_rolled_back"
     ORDER_PLACED = "order_placed"
     ORDER_RECEIVED = "order_received"
+    ORDER_AMOUNT_CHANGED = "order_amount_changed"
     SURPLUS_ADDED = "surplus_added"
     STORED_SET = "stored_set"
     ALLOCATION_RUN = "allocation_run"
@@ -81,6 +82,7 @@ class InventoryMovementTriggerEnum(enum.Enum):
     # ordering / manual inventory edits
     ORDER_CREATED = "order_created"
     ORDER_RECEIVED = "order_received"
+    ORDER_AMOUNT_CHANGED = "order_amount_changed"
     MANUAL_ADD_ORDERED = "manual_add_ordered"
     MANUAL_CONFIRM_ORDERED = "manual_confirm_ordered"
     MANUAL_STORED_SET = "manual_stored_set"
