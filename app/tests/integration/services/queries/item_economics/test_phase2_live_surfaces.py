@@ -65,6 +65,17 @@ def _ctx(
     )
 
 
+async def _settle_task_for_final(db_session, task) -> None:
+    """``final`` is served only once the task's time is settled (READY or terminal).
+
+    The fixture's result row alone no longer makes it final: the row is also
+    rewritten while a task is WORKING (re-commit, reopen), and serving it then
+    labelled a live task closed.
+    """
+    task.state = TaskStateEnum.READY
+    await db_session.flush()
+
+
 async def _make_live_fixture(db_session):
     values = await _seed(db_session)
     workspace, user, section, task, _unevaluated_task, _item, _task_item, _group, _basis, _model, evaluation, steps, _foreign_task, _foreign_workspace = values
@@ -551,6 +562,7 @@ async def test_c2_c3_c7_live_payloads_reconcile_and_worker_face_stays_money_free
 async def test_c1_ep_final_freezes_while_budget_percent_ticks(db_session):
     values, now = await _make_live_fixture(db_session)
     workspace, _user, _section, task, *_ = values
+    await _settle_task_for_final(db_session, task)
     entered_at = now - timedelta(minutes=10)
 
     pre_open = await get_task_production_time(
@@ -591,6 +603,7 @@ async def test_c2_worker_result_percent_uses_frozen_result_figures(db_session):
 async def test_c3_recommit_changes_live_denominator_not_frozen_percent(db_session):
     values, now = await _make_live_fixture(db_session)
     workspace, _user, _section, task, *_ = values
+    await _settle_task_for_final(db_session, task)
     result = await db_session.scalar(
         select(ItemCostResult).where(ItemCostResult.task_id == task.client_id)
     )
@@ -674,6 +687,7 @@ async def test_c4c_worker_top_level_percent_still_ticks(db_session):
 async def test_c6a_frozen_percent_survives_infeasible_current_evaluation(db_session):
     values, now = await _make_live_fixture(db_session)
     workspace, _user, _section, task, *_ = values
+    await _settle_task_for_final(db_session, task)
     result = await db_session.scalar(
         select(ItemCostResult).where(ItemCostResult.task_id == task.client_id)
     )
@@ -703,6 +717,7 @@ async def test_c6a_frozen_percent_survives_infeasible_current_evaluation(db_sess
 async def test_c6b_frozen_non_positive_allowance_returns_null_percent(db_session):
     values, now = await _make_live_fixture(db_session)
     workspace, _user, _section, task, *_ = values
+    await _settle_task_for_final(db_session, task)
     result = await db_session.scalar(
         select(ItemCostResult).where(ItemCostResult.task_id == task.client_id)
     )
@@ -733,6 +748,7 @@ async def test_c6b_frozen_non_positive_allowance_returns_null_percent(db_session
 async def test_c6c_frozen_percent_preserves_over_budget_region(db_session):
     values, now = await _make_live_fixture(db_session)
     workspace, _user, _section, task, *_ = values
+    await _settle_task_for_final(db_session, task)
     result = await db_session.scalar(
         select(ItemCostResult).where(ItemCostResult.task_id == task.client_id)
     )

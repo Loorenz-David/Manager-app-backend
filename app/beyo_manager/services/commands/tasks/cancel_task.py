@@ -20,6 +20,9 @@ from beyo_manager.services.commands.history.message_builder import build_state_c
 from beyo_manager.services.commands.stock_report.sync_task_stock_assignments import (
     sync_task_stock_assignments,
 )
+from beyo_manager.services.commands.items.settle_finished_task_upholstery import (
+    settle_finished_task_upholstery,
+)
 from beyo_manager.services.commands.tasks.requests import parse_terminal_task_request
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
@@ -73,6 +76,16 @@ async def cancel_task(ctx: ServiceContext) -> dict:
             actor_user_id=ctx.user_id,
             now=now,
         )
+        # Release fabric a now-finished task never got (needs_ordering/ordered ->
+        # cancelled); same `changed` list and same command-level placement as the sync.
+        upholstery_settle_events = await settle_finished_task_upholstery(
+            ctx.session,
+            [(task, original_state_enum)],
+            workspace_id=ctx.workspace_id,
+            actor_user_id=ctx.user_id,
+            now=now,
+            username=ctx.identity.get("username"),
+        )
 
         username = ctx.identity.get("username")
         await _create_history_record_in_session(
@@ -125,5 +138,6 @@ async def cancel_task(ctx: ServiceContext) -> dict:
         build_workspace_event(task, "task:state-changed", extra={"new_state": TaskStateEnum.CANCELLED.value}),
     ]
     events.extend(stock_report_events)
+    events.extend(upholstery_settle_events)
     await event_bus.dispatch(events)
     return {"client_id": task.client_id}

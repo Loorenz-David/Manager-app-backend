@@ -88,7 +88,8 @@ async def _seed_golden_fixture(db_session) -> dict[str, str]:
         workspace_id=workspace.client_id,
         task_scalar_id=902,
         task_type=TaskTypeEnum.INTERNAL,
-        state=TaskStateEnum.ASSIGNED,
+        # Settled, so its result row is served as `final` (the row alone is not).
+        state=TaskStateEnum.RESOLVED,
         created_by_id=user.client_id,
     )
     idle_item = Item(

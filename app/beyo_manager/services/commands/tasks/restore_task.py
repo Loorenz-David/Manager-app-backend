@@ -25,6 +25,9 @@ from beyo_manager.services.commands.items.cancel_upholstery_requirements import 
 from beyo_manager.services.commands.items.create_item_upholstery import (
     ensure_item_upholstery_in_session,
 )
+from beyo_manager.services.commands.items.settle_finished_task_upholstery import (
+    FINISHED_TASK_STATES,
+)
 from beyo_manager.services.commands.task_steps._pause_task_working_steps import (
     pause_task_working_steps_in_session,
 )
@@ -46,6 +49,9 @@ async def restore_task(ctx: ServiceContext) -> dict:
     revived the way any ended upholstery context is: archived and replaced by a fresh
     context whose requirement is re-checked against today's stock (`available` or
     `needs_ordering`). An item whose upholstery moved on since the deletion is left alone.
+    A task that is already finished (ready / resolved / cancelled / failed) gets no
+    revival: its work is done, so a revived need would sit in the ordering list with
+    nothing left to settle it (see `settle_finished_task_upholstery`).
 
     A task deleted before `delete_task` paused working steps may still hold a step whose
     WORKING record never closed; it is paused as of the deletion, so the deleted period
@@ -133,6 +139,8 @@ async def restore_task(ctx: ServiceContext) -> dict:
             paused_step_ids = await pause_task_working_steps_in_session(
                 ctx, task, paused_at=deleted_at
             )
+            if task.state in FINISHED_TASK_STATES:
+                revivable_item_ids = []
             for item_id in revivable_item_ids:
                 item_events.extend(
                     await _revive_upholstery_need(

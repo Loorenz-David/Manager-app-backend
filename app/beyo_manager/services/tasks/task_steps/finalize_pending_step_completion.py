@@ -22,6 +22,9 @@ from beyo_manager.models.tables.tasks.task_step_dependency import TaskStepDepend
 from beyo_manager.services.commands.stock_report.sync_task_stock_assignments import (
     sync_task_stock_assignments,
 )
+from beyo_manager.services.commands.items.settle_finished_task_upholstery import (
+    settle_finished_task_upholstery,
+)
 from beyo_manager.services.commands.tasks._task_state_transitions import maybe_evaluate_task_ready
 from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.build_event import build_workspace_event
@@ -269,6 +272,15 @@ async def handle_finalize_pending_step_completion(payload: dict, task_client_id:
             if old_task_state is not None and task.state != old_task_state:
                 pending_events.extend(
                     await sync_task_stock_assignments(
+                        session,
+                        [(task, old_task_state)],
+                        workspace_id=workspace_id,
+                        actor_user_id=performed_by,
+                        now=now,
+                    )
+                )
+                pending_events.extend(
+                    await settle_finished_task_upholstery(
                         session,
                         [(task, old_task_state)],
                         workspace_id=workspace_id,

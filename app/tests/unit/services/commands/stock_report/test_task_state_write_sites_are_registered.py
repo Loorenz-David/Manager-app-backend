@@ -234,3 +234,30 @@ def test_c4i_no_sync_call_inside_the_task_state_helpers_or_the_shared_core():
             "never inside a helper that flips an intermediate state (§5B "
             "'why command level')"
         )
+
+
+# Upholstery settlement (2026-11-16, PRE-ORDER 29 incident). A task that ends finished
+# must release fabric it never got (`settle_finished_task_upholstery`). It rides the
+# same command-level contract as the sync: every registered sync function calls it,
+# and none of the intermediate-state helpers do (a helper-level call could cancel a
+# requirement for a READY the transaction then leaves, e.g. `remove_task_step`).
+_SETTLE = "settle_finished_task_upholstery"
+
+
+def test_every_task_write_sync_function_also_settles_finished_task_upholstery():
+    for key, entry in REGISTRY.items():
+        if entry["classification"] != TASK_WRITE:
+            continue
+        for function_name in entry["sync_functions"]:
+            assert function_contains_call(key[0], function_name, _SETTLE), (
+                f"{key}: {function_name!r} syncs stock assignments but never calls "
+                f"{_SETTLE} — a task it finishes would keep fabric in the ordering list"
+            )
+
+
+def test_settle_is_not_called_inside_the_task_state_helpers_or_the_shared_core():
+    for helper in _NO_SYNC_INSIDE_HELPERS:
+        assert not function_contains_call(None, helper, _SETTLE), (
+            f"{helper}: calls {_SETTLE} directly — it runs at command level only, "
+            "on the net task state"
+        )

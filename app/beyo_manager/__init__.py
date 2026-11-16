@@ -109,6 +109,13 @@ def create_app() -> FastAPI:
     # Timeout: hard deadline, returns 504 on breach
     app.add_middleware(TimeoutMiddleware)
 
+    # The only exception handler: it logs which fields a 422 refused (never their values)
+    # and then answers with FastAPI's own handler, so the response is unchanged. Domain
+    # errors still never reach FastAPI — run_service returns them.
+    from fastapi.exceptions import RequestValidationError
+    from beyo_manager.routers.http.validation_logging import log_request_validation_error
+    app.add_exception_handler(RequestValidationError, log_request_validation_error)
+
     _register_routers(app)
     if settings.storage_provider == 'local':
         from beyo_manager.routers.dev.storage import router as _dev_storage_router

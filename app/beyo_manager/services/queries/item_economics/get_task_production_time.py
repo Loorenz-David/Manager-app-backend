@@ -26,7 +26,8 @@ from beyo_manager.domain.item_economics.typical_filters import (
     project_typical_seconds,
     reconcile_task_typicals,
 )
-from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES
+from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES, TERMINAL_TASK_STATES
+from beyo_manager.domain.tasks.enums import TaskStateEnum
 from beyo_manager.domain.tasks.serializers import include_monetary_step_fields
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
@@ -38,6 +39,15 @@ from beyo_manager.services.queries.working_sections.get_working_section_typical_
     typical_times_statement,
     unfiltered_evidence_from_row,
 )
+
+
+# The states in which the task's time is settled: every step is terminal (READY)
+# or the task itself is. These are the transitions that write the result row as
+# a closing figure (`process_step_transition`). The row is ALSO rewritten while
+# the task is WORKING — by a re-commit and by a reopen — so its existence alone
+# is not "final", and serving it then labels a live task closed and freezes its
+# headline (intention M3.8: `final` is null while the task is open).
+_FINAL_TASK_STATES = frozenset({TaskStateEnum.READY, *TERMINAL_TASK_STATES})
 
 
 async def get_task_production_time(ctx: ServiceContext) -> dict:
@@ -176,7 +186,9 @@ async def get_task_production_time(ctx: ServiceContext) -> dict:
             "production_budget_minor": status.production_budget_minor,
             "consumed_cost_minor": status.consumed_cost_minor,
             "variance_cost_minor": status.variance_cost_minor,
-            "result": status.result,
+            "result": (
+                status.result if status.task_state in _FINAL_TASK_STATES else None
+            ),
             "division": division,
             "pressure_ratio": pressure.pressure_ratio,
             "pressure_method": PRESSURE_METHOD,

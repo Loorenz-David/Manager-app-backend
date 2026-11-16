@@ -65,6 +65,9 @@ from beyo_manager.services.commands.task_steps._upholstery_installation_side_eff
 from beyo_manager.services.commands.stock_report.sync_task_stock_assignments import (
     sync_task_stock_assignments,
 )
+from beyo_manager.services.commands.items.settle_finished_task_upholstery import (
+    settle_finished_task_upholstery,
+)
 from beyo_manager.services.commands.tasks._task_state_transitions import maybe_evaluate_task_ready
 from beyo_manager.services.commands.tasks.requests import parse_force_task_ready_request
 from beyo_manager.services.commands.utils.transaction import maybe_begin
@@ -248,6 +251,16 @@ async def force_task_ready(ctx: ServiceContext) -> dict:
             actor_user_id=ctx.user_id,
             now=now,
         )
+        # Release fabric a now-finished task never got (needs_ordering/ordered ->
+        # cancelled); same `changed` list and same command-level placement as the sync.
+        upholstery_settle_events = await settle_finished_task_upholstery(
+            ctx.session,
+            [(task, original_state_enum)],
+            workspace_id=ctx.workspace_id,
+            actor_user_id=ctx.user_id,
+            now=now,
+            username=ctx.identity.get("username"),
+        )
 
         username = ctx.identity.get("username")
         actor = username or "Someone"
@@ -314,6 +327,7 @@ async def force_task_ready(ctx: ServiceContext) -> dict:
     )
     pending_events.extend(upholstery_events)
     pending_events.extend(stock_report_events)
+    pending_events.extend(upholstery_settle_events)
     await event_bus.dispatch(pending_events)
 
     return {

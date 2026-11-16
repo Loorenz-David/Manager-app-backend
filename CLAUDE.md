@@ -135,4 +135,23 @@ on purpose; the cause is in the log as `stock_webhook.auth_refused`.
 
 Every service goes through `run_service` (`services/run_service.py`), the single error boundary.
 A `DomainError` is a refusal and is returned, not raised; anything else is logged with a traceback
-and rendered as a generic 500. There are **no FastAPI exception handlers** anywhere.
+and rendered as a generic 500. The **only** FastAPI exception handler is for `RequestValidationError`
+(`routers/http/validation_logging.py`, 2026-11-16): it logs each refused field's location and
+error type as `request.validation_error` — never values, `input`, `msg` or the query string — and
+then returns FastAPI's own 422, unchanged. Before it, a 422 left only an access-log line.
+
+## Looking at production data
+
+`prod-db` (on PATH; source `managerbeyo-deployment/scripts/prod-db`, setup and revocation in
+`managerbeyo-deployment/docs/agent-db-access.md`) runs read-only SQL against production:
+`prod-db "select …"` or `prod-db -f file.sql`. Each call opens its own SSM tunnel through
+`mb-prod-host` as the `agent_readonly` role, and terminates the session on exit. It rides the
+owner's AWS SSO session; if it says the session expired, ask the owner to run
+`aws sso login --sso-session beyo`. It needs network access, so run it outside the Bash sandbox.
+
+- The role is read-only by privilege (`pg_read_all_data` only), with a 30 s statement timeout
+  and 2 connections; it **can** read PII, password hashes and encrypted credentials, so select
+  named columns, never `to_jsonb(row)` or `select *` on tasks/customers/users.
+- `tasks.title` is usually null: "PRE-ORDER 29" in the UI is not stored — find tasks by
+  `task_scalar_id`, `client_id`, or a join.
+- The legacy EC2 (`manager-app-beyo`, 16.16.19.181) is stopped; anything that SSHes there is stale.

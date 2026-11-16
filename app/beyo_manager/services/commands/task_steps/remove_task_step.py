@@ -16,6 +16,9 @@ from beyo_manager.services.commands.tasks._task_state_transitions import maybe_e
 from beyo_manager.services.commands.stock_report.sync_task_stock_assignments import (
     sync_task_stock_assignments,
 )
+from beyo_manager.services.commands.items.settle_finished_task_upholstery import (
+    settle_finished_task_upholstery,
+)
 from beyo_manager.services.commands.task_steps.requests import (
     parse_remove_task_step_request,
     parse_remove_task_steps_request,
@@ -330,6 +333,18 @@ async def remove_task_step(ctx: ServiceContext) -> dict:
                 actor_user_id=ctx.user_id,
                 now=ctx.now,
             )
+            # Release fabric a now-finished task never got (needs_ordering/ordered ->
+            # cancelled); same `changed` list and same command-level placement as the sync.
+            upholstery_settle_events = await settle_finished_task_upholstery(
+                ctx.session,
+                [(task, old_task_state)],
+                workspace_id=ctx.workspace_id,
+                actor_user_id=ctx.user_id,
+                now=ctx.now,
+                username=ctx.identity.get("username"),
+            )
+            # The dispatcher takes one post-commit list; settle events ride along with it.
+            stock_report_events = [*stock_report_events, *upholstery_settle_events]
 
     await _dispatch_remove_step_events(
         ctx=ctx,
@@ -371,6 +386,18 @@ async def remove_task_steps(ctx: ServiceContext) -> dict:
                 actor_user_id=ctx.user_id,
                 now=ctx.now,
             )
+            # Release fabric a now-finished task never got (needs_ordering/ordered ->
+            # cancelled); same `changed` list and same command-level placement as the sync.
+            upholstery_settle_events = await settle_finished_task_upholstery(
+                ctx.session,
+                [(task, old_task_state)],
+                workspace_id=ctx.workspace_id,
+                actor_user_id=ctx.user_id,
+                now=ctx.now,
+                username=ctx.identity.get("username"),
+            )
+            # The dispatcher takes one post-commit list; settle events ride along with it.
+            stock_report_events = [*stock_report_events, *upholstery_settle_events]
 
     await _dispatch_remove_step_events(
         ctx=ctx,

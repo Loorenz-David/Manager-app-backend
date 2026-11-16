@@ -154,6 +154,7 @@ def test_C1_task_budget_status_appends_defaulted_spec_after_result():
         "primary_item_quantity",
         "item_category_names",
         "item_properties",
+        "task_state",
     ]
     task_budget_fields = fields(manager_module.TaskBudgetStatus)
     assert task_budget_fields[13].name == "result"  # zero-based index

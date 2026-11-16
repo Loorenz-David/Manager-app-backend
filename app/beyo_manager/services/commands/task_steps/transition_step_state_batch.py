@@ -33,6 +33,9 @@ from beyo_manager.services.commands.task_steps.requests import parse_batch_trans
 from beyo_manager.services.commands.stock_report.sync_task_stock_assignments import (
     sync_task_stock_assignments,
 )
+from beyo_manager.services.commands.items.settle_finished_task_upholstery import (
+    settle_finished_task_upholstery,
+)
 from beyo_manager.services.commands.task_steps.transition_step_state import (
     _ALLOWED_TRANSITIONS,
     _completed_the_whole_task,
@@ -247,6 +250,16 @@ async def transition_step_state_batch(ctx: ServiceContext) -> dict:
             actor_user_id=ctx.user_id,
             now=now,
         )
+        # Release fabric a now-finished task never got (needs_ordering/ordered ->
+        # cancelled); same `changed` list and same command-level placement as the sync.
+        upholstery_settle_events = await settle_finished_task_upholstery(
+            ctx.session,
+            [(t, old_task_states.get(t.client_id)) for t in changed_tasks],
+            workspace_id=ctx.workspace_id,
+            actor_user_id=ctx.user_id,
+            now=now,
+            username=ctx.identity.get("username"),
+        )
 
         for task in changed_tasks:
             task_pin_user_ids = list(
@@ -299,6 +312,7 @@ async def transition_step_state_batch(ctx: ServiceContext) -> dict:
         )
     pending_events.extend(upholstery_events)
     pending_events.extend(stock_report_events)
+    pending_events.extend(upholstery_settle_events)
     await event_bus.dispatch(pending_events)
 
     return {"items": result_items}

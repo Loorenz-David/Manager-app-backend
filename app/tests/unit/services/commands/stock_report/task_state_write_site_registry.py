@@ -34,27 +34,27 @@ REGISTRY: dict[tuple[str, int], dict] = {
     # ------------------------------------------------------------------
     # attr_state — the 8 real Task.state assignments (master plan §5B audit)
     # ------------------------------------------------------------------
-    ("beyo_manager/services/commands/tasks/fail_task.py", 60): {
+    ("beyo_manager/services/commands/tasks/fail_task.py", 63): {
         "classification": TASK_WRITE,
         "sync_functions": ["fail_task"],
         "note": "S5",
     },
-    ("beyo_manager/services/commands/tasks/cancel_task.py", 60): {
+    ("beyo_manager/services/commands/tasks/cancel_task.py", 63): {
         "classification": TASK_WRITE,
         "sync_functions": ["cancel_task"],
         "note": "S6",
     },
-    ("beyo_manager/services/commands/tasks/resolve_task.py", 60): {
+    ("beyo_manager/services/commands/tasks/resolve_task.py", 63): {
         "classification": TASK_WRITE,
         "sync_functions": ["resolve_task"],
         "note": "S4",
     },
-    ("beyo_manager/services/commands/task_steps/add_task_steps.py", 162): {
+    ("beyo_manager/services/commands/task_steps/add_task_steps.py", 166): {
         "classification": TASK_WRITE,
         "sync_functions": ["add_task_steps"],
         "note": "S7 (pending -> assigned)",
     },
-    ("beyo_manager/services/commands/task_steps/remove_task_step.py", 228): {
+    ("beyo_manager/services/commands/task_steps/remove_task_step.py", 231): {
         "classification": TASK_WRITE,
         "sync_functions": ["remove_task_step", "remove_task_steps"],
         "note": "S8 (-> pending, no remaining steps); both public callers of "
@@ -93,14 +93,14 @@ REGISTRY: dict[tuple[str, int], dict] = {
     ("beyo_manager/services/infra/schedulers/delayed_scheduler_runner.py", 126): {"classification": NOT_TASK, "model": "DelayedScheduler"},
     ("beyo_manager/services/infra/schedulers/delayed_scheduler_runner.py", 150): {"classification": NOT_TASK, "model": "DelayedScheduler"},
     ("beyo_manager/services/commands/task_steps/cancel_pending_step_completion.py", 46): {"classification": NOT_TASK, "model": "DelayedScheduler"},
-    ("beyo_manager/services/tasks/task_steps/finalize_pending_step_completion.py", 132): {"classification": NOT_TASK, "model": "TaskStep"},
+    ("beyo_manager/services/tasks/task_steps/finalize_pending_step_completion.py", 135): {"classification": NOT_TASK, "model": "TaskStep"},
     ("beyo_manager/services/commands/task_customer_coordination/complete_task_customer_coordination.py", 66): {"classification": NOT_TASK, "model": "TaskCustomerCoordination"},
     ("beyo_manager/services/commands/task_customer_coordination/fail_task_customer_coordination.py", 89): {"classification": NOT_TASK, "model": "TaskCustomerCoordination"},
     ("beyo_manager/services/commands/task_customer_coordination/_transition_coordination_to_coordinating_in_session.py", 28): {"classification": NOT_TASK, "model": "TaskCustomerCoordination"},
     ("beyo_manager/services/commands/task_steps/_upholstery_installation_side_effect.py", 176): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
-    ("beyo_manager/services/commands/task_steps/transition_step_state.py", 307): {"classification": NOT_TASK, "model": "TaskStep"},
-    ("beyo_manager/services/commands/task_steps/transition_step_state.py", 390): {"classification": NOT_TASK, "model": "TaskStep"},
-    ("beyo_manager/services/commands/task_steps/remove_task_step.py", 135): {"classification": NOT_TASK, "model": "TaskStep"},
+    ("beyo_manager/services/commands/task_steps/transition_step_state.py", 311): {"classification": NOT_TASK, "model": "TaskStep"},
+    ("beyo_manager/services/commands/task_steps/transition_step_state.py", 394): {"classification": NOT_TASK, "model": "TaskStep"},
+    ("beyo_manager/services/commands/task_steps/remove_task_step.py", 138): {"classification": NOT_TASK, "model": "TaskStep"},
     ("beyo_manager/services/commands/task_steps/_step_transition_core.py", 159): {"classification": NOT_TASK, "model": "TaskStep"},
     ("beyo_manager/services/commands/task_steps/_step_transition_core.py", 234): {"classification": NOT_TASK, "model": "TaskStep"},
     ("beyo_manager/services/commands/task_post_handling/_sync_post_handling_state_in_session.py", 54): {"classification": NOT_TASK, "model": "TaskPostHandling"},
@@ -165,27 +165,27 @@ REGISTRY: dict[tuple[str, int], dict] = {
     # ------------------------------------------------------------------
     # helper_call — calls to the 4 named functions (13 sites)
     # ------------------------------------------------------------------
-    ("beyo_manager/services/commands/task_steps/transition_step_state.py", 415): {
+    ("beyo_manager/services/commands/task_steps/transition_step_state.py", 419): {
         "classification": TASK_WRITE,
         "sync_functions": ["transition_step_state"],
         "note": "S1 (maybe_advance_task_to_working call)",
     },
-    ("beyo_manager/services/commands/task_steps/transition_step_state.py", 426): {
+    ("beyo_manager/services/commands/task_steps/transition_step_state.py", 430): {
         "classification": TASK_WRITE,
         "sync_functions": ["transition_step_state"],
         "note": "S1 (maybe_evaluate_task_ready call)",
     },
-    ("beyo_manager/services/commands/task_steps/transition_step_state_batch.py", 176): {
+    ("beyo_manager/services/commands/task_steps/transition_step_state_batch.py", 179): {
         "classification": TASK_WRITE,
         "sync_functions": ["transition_step_state_batch"],
         "note": "S2 (_apply_step_transition call)",
     },
-    ("beyo_manager/services/commands/task_steps/add_task_steps.py", 186): {
+    ("beyo_manager/services/commands/task_steps/add_task_steps.py", 190): {
         "classification": TASK_WRITE,
         "sync_functions": ["add_task_steps"],
         "note": "S7 (maybe_reopen_task_to_working call)",
     },
-    ("beyo_manager/services/commands/task_steps/remove_task_step.py", 232): {
+    ("beyo_manager/services/commands/task_steps/remove_task_step.py", 235): {
         "classification": TASK_WRITE,
         "sync_functions": ["remove_task_step", "remove_task_steps"],
         "note": "S8 (maybe_evaluate_task_ready call inside the shared helper)",
@@ -203,17 +203,17 @@ REGISTRY: dict[tuple[str, int], dict] = {
         "sync_functions": ["force_task_ready", "transition_step_state_batch"],
         "note": "the shared core's maybe_evaluate_task_ready call — same as above",
     },
-    ("beyo_manager/services/commands/tasks/force_task_ready.py", 167): {
+    ("beyo_manager/services/commands/tasks/force_task_ready.py", 170): {
         "classification": TASK_WRITE,
         "sync_functions": ["force_task_ready"],
         "note": "S3 (_apply_step_transition call, new_state=SKIPPED)",
     },
-    ("beyo_manager/services/commands/tasks/force_task_ready.py", 228): {
+    ("beyo_manager/services/commands/tasks/force_task_ready.py", 231): {
         "classification": TASK_WRITE,
         "sync_functions": ["force_task_ready"],
         "note": "S3 (maybe_evaluate_task_ready call, allow_stepless=True)",
     },
-    ("beyo_manager/services/tasks/task_steps/finalize_pending_step_completion.py", 178): {
+    ("beyo_manager/services/tasks/task_steps/finalize_pending_step_completion.py", 181): {
         "classification": TASK_WRITE,
         "sync_functions": ["handle_finalize_pending_step_completion"],
         "note": "S9 (maybe_evaluate_task_ready call)",

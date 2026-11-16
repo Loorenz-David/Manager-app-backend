@@ -43,6 +43,9 @@ from beyo_manager.services.commands.task_steps._settle_step_time import settle_c
 from beyo_manager.services.commands.stock_report.sync_task_stock_assignments import (
     sync_task_stock_assignments,
 )
+from beyo_manager.services.commands.items.settle_finished_task_upholstery import (
+    settle_finished_task_upholstery,
+)
 from beyo_manager.services.commands.task_steps._user_working_record import fetch_open_user_working_record
 from beyo_manager.services.commands.task_steps.mark_step_time_inaccurate import (
     _apply_inaccurate_time_flag,
@@ -137,6 +140,7 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
     request = parse_transition_step_state_request(ctx.incoming_data)
     old_task_state = None
     stock_report_events: list = []
+    upholstery_settle_events: list = []
     auto_paused_step: TaskStep | None = None
     # True when this transition is the one that flipped the whole task to READY
     # (i.e. it closed the last still-open step). See the response's `was_final_step`.
@@ -543,6 +547,16 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
                 actor_user_id=ctx.user_id,
                 now=now,
             )
+            # Release fabric a now-finished task never got (needs_ordering/ordered ->
+            # cancelled); same `changed` list and same command-level placement as the sync.
+            upholstery_settle_events = await settle_finished_task_upholstery(
+                ctx.session,
+                [(task, old_task_state)],
+                workspace_id=ctx.workspace_id,
+                actor_user_id=ctx.user_id,
+                now=now,
+                username=ctx.identity.get("username"),
+            )
 
     state_changed_items = [
         {
@@ -579,6 +593,7 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
         )
     pending_events.extend(upholstery_events)
     pending_events.extend(stock_report_events)
+    pending_events.extend(upholstery_settle_events)
     await event_bus.dispatch(pending_events)
     return {
         "step_id": step.client_id,

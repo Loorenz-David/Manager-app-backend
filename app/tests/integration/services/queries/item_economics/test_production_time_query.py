@@ -285,6 +285,39 @@ async def test_c14_c16_flat_time_only_degradation_and_tenant_boundary(db_session
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize(
+    "task_state",
+    [TaskStateEnum.PENDING, TaskStateEnum.ASSIGNED, TaskStateEnum.WORKING, TaskStateEnum.STALLED],
+)
+async def test_open_task_with_a_result_row_serves_no_final(db_session, task_state):
+    """A re-commit or a reopen rewrites the result row while the task is open.
+
+    The row's presence is not "final": serving it labelled a WORKING task closed,
+    froze its headline, and withdrew the manager's time/cost tap (M3.8).
+    """
+    values = await _seed(db_session)
+    workspace, user, section, task, *_ = values
+    evaluation = values[10]
+    result = ItemCostResult(
+        client_id=f"icr_open_{task.client_id}", workspace_id=workspace.client_id, task_id=task.client_id,
+        item_id=values[5].client_id, evaluation_id=evaluation.client_id, actual_worker_seconds=1200,
+        actual_worker_minutes=Decimal("20.00"), consumed_cost_minor=3, variance_worker_minutes=Decimal("80.00"),
+        variance_cost_minor=4, task_closed_at=None, task_state_snapshot=TaskStateEnum.WORKING,
+        calculation_version=1, computed_at=datetime.now(timezone.utc),
+    )
+    db_session.add(result)
+    task.state = task_state
+    await db_session.flush()
+    try:
+        body = await get_task_production_time(_ctx(db_session, workspace.client_id, task.client_id))
+        assert body["final"] is None
+        assert isinstance(body["budget"]["consumed_cost_minor"], int)
+    finally:
+        await db_session.execute(delete(ItemCostResult).where(ItemCostResult.client_id == result.client_id))
+        await _cleanup(db_session, values)
+
+
+@pytest.mark.integration
 # The asserted equality is fixture coincidence after D9: frozen 20.00 / 80.00 reconstructs 100.00, matching live 20.00 / 100.00.
 async def test_c17_frozen_final_uses_live_percent_without_money(db_session):
     values = await _seed(db_session)
@@ -298,6 +331,8 @@ async def test_c17_frozen_final_uses_live_percent_without_money(db_session):
         calculation_version=1, computed_at=datetime.now(timezone.utc),
     )
     db_session.add(result)
+    # `final` is served for a settled task only, never on the row's presence.
+    task.state = TaskStateEnum.RESOLVED
     await db_session.flush()
     try:
         body = await get_task_production_time(_ctx(db_session, workspace.client_id, task.client_id))

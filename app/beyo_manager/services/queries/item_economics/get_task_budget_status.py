@@ -23,7 +23,7 @@ from beyo_manager.domain.item_economics.typical_filters import (
     TypicalFilterSpec,
     derive_spec_from_primary_item,
 )
-from beyo_manager.domain.tasks.enums import TaskItemRoleEnum
+from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.item_economics.item_cost_evaluation import ItemCostEvaluation
 from beyo_manager.models.tables.item_economics.item_cost_result import ItemCostResult
@@ -68,6 +68,11 @@ class TaskBudgetStatus:
     # whenever the spec carries no signature, because then no properties took
     # part in the match and publishing them would imply they had.
     item_properties: Mapping[str, object] | None = None
+    # The task's CURRENT state, read off the row already loaded here. The stored
+    # result row is not evidence the task is closed: a re-commit and a reopen
+    # both rewrite it while the task is WORKING, so a reader that means "final"
+    # must ask the task, not the row.
+    task_state: TaskStateEnum | None = None
 
 
 async def _load_task_and_item(ctx: ServiceContext) -> tuple[Task, Item | None]:
@@ -292,6 +297,7 @@ async def _build_evaluated_status(
         item_id=evaluation.item_id,
         result=result,
         typical_filter_spec=typical_filter_spec,
+        task_state=task.state,
         primary_item_quantity=None if item is None else item.quantity,
         item_category_names=dict(item_category_names or {}),
         item_properties=item_properties,

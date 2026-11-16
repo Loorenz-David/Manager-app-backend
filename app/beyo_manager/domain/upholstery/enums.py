@@ -77,6 +77,7 @@ class InventoryMovementTriggerEnum(enum.Enum):
     TASK_DELETED = "task_deleted"
     STEP_TRANSITION = "step_transition"
     TASK_FORCED_READY = "task_forced_ready"
+    TASK_FINISHED = "task_finished"
     # ordering / manual inventory edits
     ORDER_CREATED = "order_created"
     ORDER_RECEIVED = "order_received"
