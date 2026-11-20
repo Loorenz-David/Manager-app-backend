@@ -25,6 +25,7 @@ from beyo_manager.routers.api_v1 import (
     location_tracker_webhooks,
     notifications,
     pause_reasons,
+    pricing_api,
     reset,
     shopify,
     shopify_webhooks,
@@ -77,6 +78,7 @@ def register_v1_routers(app: FastAPI) -> None:
     app.include_router(stock_report.router, prefix="/api/v1/stock-report", tags=["stock-report"])
     app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
     app.include_router(pause_reasons.router, prefix="/api/v1/pause-reasons", tags=["pause-reasons"])
+    app.include_router(pricing_api.router, prefix="/api/v1/pricing", tags=["pricing-api"])
     app.include_router(sku_templates.router)
     app.include_router(
         working_sections.router,

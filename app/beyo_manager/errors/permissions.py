@@ -22,3 +22,13 @@ class RefreshTokenRejected(PermissionDenied):
     def __init__(self, message: str, reason: str) -> None:
         self.reason = reason
         super().__init__(message, code="auth_refresh_rejected")
+
+
+class PricingApiAuthError(DomainError):
+    """Any refusal of the pricing app's API key. Always the same body — the cause
+    is logged by `verify_pricing_api_request`, never returned."""
+
+    http_status = 401
+
+    def __init__(self, message: str = "Unauthorized.") -> None:
+        super().__init__(message)
