@@ -22,6 +22,7 @@ from beyo_manager.services.commands.items.update_item import update_item
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.items.get_item_issues import get_item_issues
 from beyo_manager.services.queries.items.lookup_item_by_article_number import lookup_item_by_article_number
+from beyo_manager.services.queries.items.suggest_item_sku import suggest_item_sku
 from beyo_manager.services.queries.items.items import (
     get_item,
     list_item_upholstery_by_item_id,
@@ -298,6 +299,25 @@ async def route_lookup_item_by_article_number(
         session=session,
     )
     outcome = await run_service(lookup_item_by_article_number, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/sku-suggestion")
+async def route_suggest_item_sku(
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+    item_category_id: str = Query(..., min_length=1, max_length=64),
+    date_code: str = Query(..., pattern=r"^\d{6}$"),
+):
+    ctx = ServiceContext(
+        incoming_data={},
+        query_params={"item_category_id": item_category_id, "date_code": date_code},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(suggest_item_sku, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)
